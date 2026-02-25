@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfraScan - Advanced Infrastructure Auditor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="soldevelo-brand">
+                    <a href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=header-logo"
+                        target="_blank">
+                        <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                            class="header-logo">
+                    </a>
+                    <span class="brand-divider"></span>
+                </div>
+                <a href="{{ url_for('index') }}" class="logo-link">
+                    <h1>InfraScan</h1>
+                </a>
+            </div>
+            <p class="subtitle">An Advanced Infrastructure Auditor by <strong>SolDevelo</strong></p>
+
+            <div class="landing-info">
+                <div class="info-card">
+                    <div class="info-icon">💰</div>
+                    <h4>Reduce Costs</h4>
+                    <p>Identify expensive mistakes like oversized instances, unmanaged disks, or missing lifecycle
+                        rules.</p>
+                    <a href="https://soldevelo.com/services/aws-cost-optimization/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-reduce-costs"
+                        target="_blank" class="card-link">
+                        Learn how we help <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">🛡️</div>
+                    <h4>Fix Security</h4>
+                    <p>Scan for open ports, unencrypted storage, and risky IAM policies before deploying to production.
+                    </p>
+                    <a href="https://soldevelo.com/services/security-audit-and-hardening/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-fix-security"
+                        target="_blank" class="card-link">
+                        Our security approach <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">⚡</div>
+                    <h4>GitHub Ready</h4>
+                    <p>Just paste your repository URL. No complex setup or cloud credentials required for the initial
+                        scan.</p>
+                    <a href="https://soldevelo.com/contact/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-contact"
+                        target="_blank" class="card-link">
+                        Get expert advice <span>→</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="github">Scan GitHub Repo</button>
+                <button class="tab-btn" data-tab="release-notes">Release Notes</button>
+            </div>
+
+            <div class="tab-content active" id="github-tab">
+                <div id="scan-input-container">
+                    <div class="input-group">
+                        <label for="repo-url">GitHub Repository URL</label>
+                        <input type="text" id="repo-url" placeholder="https://github.com/username/repo">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="report-recipient">Report For (Optional)</label>
+                        <input type="text" id="report-recipient" placeholder="Organization or team name (optional)">
+                        <small class="help-text">Add a recipient name to identify who this report is for</small>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="scanner-type">Analysis Scope</label>
+                        <select id="scanner-type">
+                            <option value="comprehensive" selected>Comprehensive (Cost + Security + Containers)</option>
+                            <option value="regex">Fast (Cost Optimization Only)</option>
+                            <option value="containers">Containers (Container Vulnerabilities Only)</option>
+                            <option value="checkov">Security (IaC Security Only)</option>
+                        </select>
+                        <small class="help-text"><strong>Comprehensive</strong> scans for AWS cost antipatterns, IaC security issues (Checkov), and container vulnerabilities.</small>
+                    </div>
+
+
+                    <button class="action-btn" id="scan-repo-btn">
+                        <span>🔍</span> Scan Repository & Get Report
+                    </button>
+
+                    <div class="supported-tech">
+                        <span>Supported:</span>
+                        <span class="tech-tag">Terraform</span>
+                        <span class="tech-tag">AWS</span>
+                        <span class="tech-tag">Kubernetes</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="release-notes-tab">
+                <div class="release-notes-container">
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.1</span>
+                            <span class="date">February 4, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Enhanced "One-Pager" dashboard with dynamic container expansion (up to 1400px)</li>
+                            <li>Two-column optimized layout: side-by-side Cost and Security findings</li>
+                            <li>Branding refresh: Integrated SolDevelo logo and detailed service value propositions</li>
+                            <li>Intelligent UX: Automatic feedback request triggered by report engagement (scroll-based)
+                            </li>
+                            <li>Added "Scroll to Top" functionality for easier navigation of long reports</li>
+                            <li>Improved result persistence when switching between application tabs</li>
+                            <li>User-friendly terminology: rebranded technical terms to "Cost" and "Security" focus</li>
+                            <li>Fixed feedback modal accessibility and closing logic</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.0</span>
+                            <span class="date">January 21, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Advanced dual-engine analysis: Real-time pattern matching and deep security inspection
+                            </li>
+                            <li>Comprehensive rule set covering cost, security, and compliance best practices</li>
+                            <li>Multi-tier scanning: Rapid assessment or deep infrastructure audit</li>
+                            <li>Enterprise features: Budget tracking, spot instance optimization, and S3 lifecycle
+                                management</li>
+                            <li>Intelligent repository analysis with automated risk grouping</li>
+                            <li>Professional dashboard with severity-based prioritization</li>
+                            <li>Optimized for modern AWS and Terraform architectures</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>Scanning infrastructure...</p>
+            </div>
+
+            <div id="results-area" class="hidden">
+                <div class="results-header">
+                    <h2>Scan Results</h2>
+                    <div class="results-actions">
+                        <button class="secondary-btn" id="new-scan-btn">New Scan</button>
+                        <button class="secondary-btn" id="share-btn">Share Results</button>
+                    </div>
+                </div>
+
+                <div class="soft-sell">
+                    <h3>Need help implementing these fixes?</h3>
+                    <p>Hire our experts at <a
+                            href="https://soldevelo.com/contact?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=results-soft-sell"
+                            target="_blank">SolDevelo</a>.
+                        Mention 'InfraScan' for a free initial consultation.</p>
+                </div>
+
+                <div id="share-link-container" class="hidden">
+                    <p>Share this link with your team:</p>
+                    <div class="share-input-group">
+                        <input type="text" id="share-url" readonly>
+                        <button id="copy-share-btn">Copy</button>
+                    </div>
+                </div>
+
+                <div id="results-content"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p class="footer-feedback">
+                <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
+            </p>
+
+            <p>InfraScan v1.0.1 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+
+            <p>Made with &hearts; by <a
+                    href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=footer-logo"
+                    target="_blank">
+                    <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                        class="footer-logo">
+                </a>.
+            </p>
+
+            <p style="font-size: 0.8rem; opacity: 0.7; margin-top: 5px;">Designed & Built by the SolDevelo Cloud
+                Engineering Team</p>
+        </footer>
+
+        <button id="scroll-to-top" class="scroll-top-btn hidden" title="Go to top">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 15l-6-6-6 6"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Share Your Feedback</h2>
+                <button class="close-btn" id="close-feedback-btn">&times;</button>
+            </div>
+            <p class="modal-subtitle">Help us shape the future of InfraScan.</p>
+
+            <div class="feedback-form">
+                <div class="rating-group">
+                    <label>How would you rate InfraScan?</label>
+                    <div class="star-rating" id="star-rating">
+                        <span class="star" data-value="1">&#9733;</span>
+                        <span class="star" data-value="2">&#9733;</span>
+                        <span class="star" data-value="3">&#9733;</span>
+                        <span class="star" data-value="4">&#9733;</span>
+                        <span class="star" data-value="5">&#9733;</span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-review">Your Review & Suggestions</label>
+                    <textarea id="feedback-review" placeholder="What should we add? What can be improved?"
+                        rows="4"></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-contact">Contact Info (Optional)</label>
+                    <input type="text" id="feedback-contact" placeholder="Email or name">
+                </div>
+
+                <button class="action-btn" id="submit-feedback-btn">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='app.js') }}?v={{ static_version }}"></script>
+</body>
+
+</html>

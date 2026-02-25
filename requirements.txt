@@ -1,0 +1,9 @@
+python-hcl2==4.3.2
+colorama==0.4.6
+flask
+gitpython
+checkov>=3.0.0  # Optional: Advanced security and compliance scanning
+PyYAML  # Required for Docker Compose file parsing
+gunicorn
+requests
+python-dotenv

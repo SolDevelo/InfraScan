@@ -1,0 +1,16 @@
+.git
+.gitignore
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+.pytest_cache
+.vscode
+.idea
+
+# Exclude data directories that might have restricted permissions
+certbot/
+scan_results/
+feedback/
