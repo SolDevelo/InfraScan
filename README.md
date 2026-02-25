@@ -126,6 +126,12 @@ Contributions welcome! Focus areas:
 - Support for more IaC frameworks
 - Performance improvements
 
+## 💬 Community
+
+Join our community on Slack to ask questions, share feedback, and get help:
+
+https://infrascancommunity.slack.com
+
 ## License
 
 Apache 2.0
