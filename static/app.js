@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSummary = null;
     let currentMetadata = null;
     let currentGradeReport = null;
+    let currentScanId = null;
     let hasAutoOpenedFeedback = false;
 
     // Pagination State for Recent Scans
@@ -97,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentResults = data.results;
                 currentSummary = data.summary;
                 currentMetadata = data.metadata || {};
+                currentScanId = scanId;
 
                 // Reconstruct grade report from saved data
                 if (data.overall) {
@@ -217,6 +219,14 @@ document.addEventListener('DOMContentLoaded', () => {
         shareBtn.textContent = 'Saving...';
 
         try {
+            if (currentScanId) {
+                const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${currentScanId}`;
+                shareUrlInput.value = shareUrl;
+                shareLinkContainer.classList.remove('hidden');
+                shareBtn.textContent = 'Results Shared';
+                return;
+            }
+
             const response = await fetch('/api/results/save', {
                 method: 'POST',
                 headers: {
@@ -238,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) throw new Error(data.error || 'Failed to save results');
 
+            currentScanId = data.id;
             const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${data.id}`;
             shareUrlInput.value = shareUrl;
             shareLinkContainer.classList.remove('hidden');
@@ -279,6 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsArea.classList.add('hidden');
         if (scanInputContainer) scanInputContainer.classList.add('hidden'); // Hide input
         resultsContent.innerHTML = '';
+        currentScanId = null;
 
         try {
             const response = await fetch(url, options);
@@ -320,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function autoSaveScan(data) {
         try {
-            await fetch('/api/results/save', {
+            const response = await fetch('/api/results/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -335,6 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     is_private: data.metadata ? data.metadata.is_private : false
                 })
             });
+            const result = await response.json();
+            if (result.id) {
+                currentScanId = result.id;
+            }
         } catch (e) {
             // Silent fail – auto-save is best-effort
             console.warn('Auto-save failed:', e);
