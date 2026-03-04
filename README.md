@@ -130,7 +130,7 @@ Contributions welcome! Focus areas:
 
 Join our community on Slack to ask questions, share feedback, and get help:
 
-https://infrascancommunity.slack.com
+[Click here to join!](https://join.slack.com/t/infrascancommunity/shared_invite/zt-2m7416b50-0319~857~686)
 
 ## License
 
