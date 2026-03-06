@@ -303,7 +303,8 @@ class ReportGenerator:
     def generate_report(self,
                        findings: List[Dict[str, Any]],
                        resource_count: int = 0,
-                       scanner_type: str = 'comprehensive') -> ScanReport:
+                       scanner_type: str = 'comprehensive',
+                       extra_recommendations: List[str] = None) -> ScanReport:
         """
         Generate complete scan report.
         
@@ -311,6 +312,7 @@ class ReportGenerator:
             findings: All scan findings
             resource_count: Number of resources scanned
             scanner_type: Type of scanner used
+            extra_recommendations: Additional recommendations to include
             
         Returns:
             Complete ScanReport object
@@ -357,6 +359,11 @@ class ReportGenerator:
         recommendations = self._generate_recommendations(
             cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
         )
+        
+        # Add extra recommendations if provided
+        if extra_recommendations:
+            recommendations.extend(extra_recommendations)
+        
         top_issues = self._identify_top_issues(findings)
         
         # Additional metrics (extensible)

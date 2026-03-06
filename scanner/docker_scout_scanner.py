@@ -120,6 +120,29 @@ def normalize_fix_version(fix_version: Any, description: str = '') -> Optional[s
     return None
 
 
+def get_image_recommendation(image: str) -> Optional[str]:
+    """
+    Get recommendation for switching from Bitnami images to Soldevelo's images.
+    
+    Args:
+        image: Docker image name
+    
+    Returns:
+        Recommendation string or None if not applicable
+    """
+    image_lower = image.lower()
+    
+    # Check for bitnamilegacy
+    if 'bitnamilegacy' in image_lower:
+        return "🐳 Consider switching to Soldevelo's container images as an alternative to Bitnami Legacy (https://github.com/SolDevelo/containers) for better security and support."
+    
+    # Check for bitnami
+    if 'bitnami' in image_lower:
+        return "🐳 Consider switching to Soldevelo's container images as an alternative to Bitnami (https://github.com/SolDevelo/containers) for cost reduction and enhanced support."
+    
+    return None
+
+
 def create_finding_dict(
     file_path: str,
     rule_id: str,
@@ -140,11 +163,21 @@ def create_finding_dict(
         Finding dictionary in internal format
     """
     short_desc = f"{description[:200]}..." if len(description) > 200 else description
-    remediation = (
+    
+    # Build base remediation for package update
+    base_remediation = (
         f"Update {package_name} from {package_version} to {fix_version}" 
         if fix_version 
         else f"Review {package_name}@{package_version} - no fix available"
     )
+    
+    # Check if image requires switching recommendation
+    image_recommendation = get_image_recommendation(image)
+    
+    # Combine remediation with image recommendation if applicable
+    remediation = base_remediation
+    if image_recommendation:
+        remediation = f"{base_remediation}. {image_recommendation}"
     
     return {
         'file': file_path,
@@ -243,7 +276,7 @@ def docker_login() -> bool:
 # Main Scanning Functions
 # ============================================================================
 
-def run_docker_scout_scan(directory_path: str) -> List[Dict[str, Any]]:
+def run_docker_scout_scan(directory_path: str) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
     Run Docker Scout scan on Docker Compose files and images in a directory.
     
@@ -251,7 +284,9 @@ def run_docker_scout_scan(directory_path: str) -> List[Dict[str, Any]]:
         directory_path: Path to directory containing Docker files
     
     Returns:
-        List of findings in a normalized format
+        Tuple of (findings, extra_recommendations):
+        - findings: List of vulnerability findings in normalized format
+        - extra_recommendations: List of additional recommendations
     """
     if not is_docker_scout_available():
         raise ImportError(
@@ -262,6 +297,7 @@ def run_docker_scout_scan(directory_path: str) -> List[Dict[str, Any]]:
     docker_login()
     
     findings = []
+    extra_recommendations = []
     scanned_images = set()  # Cache to avoid scanning same image multiple times
     images_to_cleanup = set()  # Track images pulled during scan for cleanup
     
@@ -300,6 +336,11 @@ def run_docker_scout_scan(directory_path: str) -> List[Dict[str, Any]]:
                     print(f"  Found {len(image_findings)} vulnerabilities in {image}")
                 else:
                     print(f"  No vulnerabilities found or image unavailable: {image}")
+
+                recommendation = get_image_recommendation(image)
+                if recommendation and recommendation not in extra_recommendations:
+                    extra_recommendations.append(recommendation)
+                    print(f"  Added recommendation for Bitnami image: {image}")
                 
                 # Track for cleanup if image was pulled during scan and cleanup is enabled
                 if cleanup_enabled and not image_existed_before and check_image_exists(image):
@@ -318,7 +359,7 @@ def run_docker_scout_scan(directory_path: str) -> List[Dict[str, Any]]:
             except Exception as e:
                 print(f"Warning: Failed to cleanup image {image}: {e}")
     
-    return findings
+    return findings, extra_recommendations
 
 
 def find_compose_files(directory_path: str) -> List[str]:

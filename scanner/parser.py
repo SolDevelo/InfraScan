@@ -111,6 +111,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform'):
             print("Warning: Checkov is not installed. Install with: pip install checkov")
     
     # Run container security scanner (Docker Scout or Grype based on config)
+    extra_recommendations = []  # Track extra recommendations from container scanner
     if scanner_type in ['containers', 'comprehensive']:
         container_scanner = get_container_scanner()
         
@@ -130,11 +131,12 @@ def scan_directory(path, scanner_type='regex', framework='terraform'):
         else:  # docker-scout (default)
             if is_docker_scout_available():
                 try:
-                    scout_results = run_docker_scout_scan(path)
+                    scout_results, scout_recommendations = run_docker_scout_scan(path)
                     # Add scanner tag
                     for result in scout_results:
                         result['scanner'] = 'docker-scout'
                     results.extend(scout_results)
+                    extra_recommendations.extend(scout_recommendations)
                 except Exception as e:
                     print(f"Warning: Docker Scout scan failed: {e}")
             else:
@@ -153,7 +155,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform'):
                 # Fallback if path is on a different drive or something
                 pass
     
-    return results, resource_count
+    return results, resource_count, extra_recommendations
 
 def scan_file(filepath):
     """

@@ -174,14 +174,15 @@ def scan_github():
             raise clone_error
         
         # Scan directory and get results with resource count
-        results, resource_count = scan_directory(temp_dir, scanner_type=scanner_type, framework='terraform')
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='terraform')
         
         # Generate comprehensive report with grades
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
             findings=results,
             resource_count=resource_count,
-            scanner_type=scanner_type
+            scanner_type=scanner_type,
+            extra_recommendations=recommendations
         )
         
         # Extract repository name from URL for display
