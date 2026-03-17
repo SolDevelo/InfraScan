@@ -241,7 +241,7 @@ def scan_github():
         # Legacy compatibility: keep old format fields
         regex_results = [r for r in results if r.get('scanner') == 'regex']
         checkov_results = [r for r in results if r.get('scanner') == 'checkov']
-        container_results = [r for r in results if r.get('scanner') == 'docker-scout']
+        container_results = [r for r in results if r.get('scanner') in ['docker-scout', 'grype']]
         
         report_dict['results'] = results
         report_dict['summary'] = {

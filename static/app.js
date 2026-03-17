@@ -612,8 +612,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             `;
-            resultsContent.innerHTML = metadataHtml + gradeHtml + summaryHtml;
         }
+
+        resultsContent.innerHTML = metadataHtml + gradeHtml + (summary ? summaryHtml : '');
 
         if (results.length === 0) {
             resultsContent.innerHTML += `
@@ -722,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `}).join('')}
                 </div>
                 <div class="finding-detail">
-                    <strong>Fix:</strong> <span>${linkifyUrls(first.remediation, 80)}</span>
+                    <strong>Fix:</strong> <span>${linkifyUrls(first.remediation, 500)}</span>
                 </div>
             </div>
         `;
@@ -848,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                         </div>
                                                         ${v.remediation ? `
                                                             <div class="cve-detail-section">
-                                                                <strong>${v.fix_version && v.fix_version !== 'N/A' && v.fix_version !== null ? 'Fix' : 'Status'}:</strong> <span>${linkifyUrls(v.remediation, 100)}</span>
+                                                                <strong>${v.fix_version && v.fix_version !== 'N/A' && v.fix_version !== null ? 'Fix' : 'Status'}:</strong> <span>${linkifyUrls(v.remediation, 500)}</span>
                                                             </div>
                                                         ` : ''}
                                                     </div>

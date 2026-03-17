@@ -320,7 +320,7 @@ class ReportGenerator:
         # Separate findings by scanner type
         cost_findings = [f for f in findings if f.get('scanner') == 'regex']
         security_findings = [f for f in findings if f.get('scanner') == 'checkov']
-        container_findings = [f for f in findings if f.get('scanner') == 'docker-scout']
+        container_findings = [f for f in findings if f.get('scanner') in ['docker-scout', 'grype']]
 
         # For security and container, score only the most severe finding per resource
         security_scoring_findings = self._most_severe_per_resource(security_findings)
