@@ -580,8 +580,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add summary if available
+        let summaryHtml = '';
         if (summary) {
-            const summaryHtml = `
+            summaryHtml = `
                 <div class="summary-grid">
                     <div class="stat-card total">
                         <div class="stat-value">${summary.total}</div>
@@ -614,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
-        resultsContent.innerHTML = metadataHtml + gradeHtml + (summary ? summaryHtml : '');
+        resultsContent.innerHTML = metadataHtml + gradeHtml + summaryHtml;
 
         if (results.length === 0) {
             resultsContent.innerHTML += `
