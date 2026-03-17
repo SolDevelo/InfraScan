@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             body: JSON.stringify({
                 url,
-                scanner,
+                scanner: scannerTypeSelect ? scannerTypeSelect.value : 'comprehensive',
                 recipient,
                 is_private: isPrivate
             })
@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="scan-history-meta">
                 <span class="scan-date">🕐 ${escapeHtml(scan.scan_timestamp)}</span>
-                <span class="scan-type">🔬 ${escapeHtml(scannerLabel)}</span>
+                <span class="scan-type">🔬 ${escapeHtml(formatScannerName(scan.scanner_type))}</span>
                 <span class="scan-findings">⚠️ ${scan.total_findings} findings</span>
                 ${recipientBadge}
             </div>
@@ -1179,7 +1179,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!name) return 'Unknown';
         if (name === 'regex') return 'Cost';
         if (name === 'checkov') return 'Security';
-        if (name === 'both') return 'Full Audit';
+        if (name === 'containers') return 'Containers';
+        if (name === 'comprehensive' || name === 'both') return 'Comprehensive';
         return name;
     }
 
