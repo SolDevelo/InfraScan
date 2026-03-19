@@ -12,6 +12,9 @@ services:
       - FLASK_ENV=production
       - DOCKER_HUB_USERNAME=${DOCKER_HUB_USERNAME}
       - DOCKER_HUB_PASSWORD=${DOCKER_HUB_PASSWORD}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - CONTAINER_SCANNER=${CONTAINER_SCANNER:-docker-scout}
+      - CLEANUP_SCANNED_IMAGES=${CLEANUP_SCANNED_IMAGES:-true}
     volumes:
       - ./static:/opt/infrascan/static
       - ./feedback:/opt/infrascan/feedback
