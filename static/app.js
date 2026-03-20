@@ -1058,10 +1058,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="grade-percentage">${grade.percentage}%</div>
                     <div class="grade-details">
                         <div class="grade-detail-item">
-                            <span class="grade-detail-label">Risk Level:</span>
-                            <span class="grade-detail-value">${getRiskIcon(grade.risk_level)} ${grade.risk_level}</span>
-                        </div>
-                        <div class="grade-detail-item">
                             <span class="grade-detail-label">${violationsLabel}</span>
                             <span class="grade-detail-value">${grade.violations}</span>
                         </div>
