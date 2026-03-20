@@ -79,7 +79,7 @@ header {
     height: 18px;
     width: 1px;
     background: var(--border);
-    margin: 0 0.5rem 0 0.75rem;
+    margin: 0 0.75rem 0 0;
 }
 
 .logo-link {

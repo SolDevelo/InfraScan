@@ -15,17 +15,17 @@
     <div class="container">
         <header>
             <div class="logo">
+                <a href="{{ url_for('index') }}" class="logo-link">
+                    <h1>InfraScan</h1>
+                </a>
                 <div class="soldevelo-brand">
+                    <span class="brand-divider"></span>
                     <a href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=header-logo"
                         target="_blank">
                         <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
                             class="header-logo">
                     </a>
-                    <span class="brand-divider"></span>
                 </div>
-                <a href="{{ url_for('index') }}" class="logo-link">
-                    <h1>InfraScan</h1>
-                </a>
             </div>
             <p class="subtitle">Open Source Infrastructure Auditor by <strong>SolDevelo</strong></p>
 
