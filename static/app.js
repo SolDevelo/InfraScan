@@ -1196,44 +1196,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return name;
     }
 
-    function toggleImageCard(imageId) {
-        const content = document.getElementById(imageId);
-        const icon = document.getElementById(`${imageId}-icon`);
-
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            icon.textContent = '▼';
-        } else {
-            content.style.display = 'none';
-            icon.textContent = '▶';
-        }
-    }
-
-    function toggleSeverityGroup(severityGroupId) {
-        const content = document.getElementById(severityGroupId);
-        const icon = document.getElementById(`${severityGroupId}-icon`);
-
-        if (content.style.display === 'none') {
-            content.style.display = 'flex';
-            icon.textContent = '▼';
-        } else {
-            content.style.display = 'none';
-            icon.textContent = '▶';
-        }
-    }
-
-    function toggleCVE(cveId) {
-        const details = document.getElementById(cveId);
-        const icon = document.getElementById(`${cveId}-icon`);
-
-        if (details.style.display === 'none') {
-            details.style.display = 'block';
-            icon.textContent = '▲';
-        } else {
-            details.style.display = 'none';
-            icon.textContent = '▼';
-        }
-    }
 
     // Newsletter Event Listeners
     if (closeNewsletterBtn) {
@@ -1288,3 +1250,42 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 });
+
+function toggleImageCard(imageId) {
+    const content = document.getElementById(imageId);
+    const icon = document.getElementById(`${imageId}-icon`);
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
+function toggleSeverityGroup(severityGroupId) {
+    const content = document.getElementById(severityGroupId);
+    const icon = document.getElementById(`${severityGroupId}-icon`);
+
+    if (content.style.display === 'none') {
+        content.style.display = 'flex';
+        if (icon) icon.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
+function toggleCVE(cveId) {
+    const details = document.getElementById(cveId);
+    const icon = document.getElementById(`${cveId}-icon`);
+
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        if (icon) icon.textContent = '▲';
+    } else {
+        details.style.display = 'none';
+        if (icon) icon.textContent = '▼';
+    }
+}
