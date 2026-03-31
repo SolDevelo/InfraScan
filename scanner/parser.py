@@ -136,12 +136,26 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         else:  # docker-scout (default)
             if is_docker_scout_available():
                 try:
-                    scout_results, scout_recommendations = run_docker_scout_scan(path)
-                    # Add scanner tag
-                    for result in scout_results:
-                        result['scanner'] = 'docker-scout'
-                    results.extend(scout_results)
-                    extra_recommendations.extend(scout_recommendations)
+                    scout_results, scout_recommendations, auth_failed = run_docker_scout_scan(path)
+                    
+                    if auth_failed and is_grype_available() and not scout_results:
+                        print("\n[i] Falling back to Grype scanner (no Docker Hub login detected)...")
+                        try:
+                            from scanner.grype_scanner import run_grype_scan
+                            grype_results = run_grype_scan(path)
+                            # Add scanner tag
+                            for result in grype_results:
+                                result['scanner'] = 'grype'
+                            results.extend(grype_results)
+                            print(f"    Grype scan completed with {len(grype_results)} findings.")
+                        except Exception as grype_e:
+                            print(f"    Grype fallback failed: {grype_e}")
+                    else:
+                        # Add scanner tag
+                        for result in scout_results:
+                            result['scanner'] = 'docker-scout'
+                        results.extend(scout_results)
+                        extra_recommendations.extend(scout_recommendations)
                 except Exception as e:
                     print(f"Warning: Docker Scout scan failed: {e}")
             else:
