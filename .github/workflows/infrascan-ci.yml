@@ -29,6 +29,7 @@ jobs:
       - name: Run Scan on Repository
         run: |
           mkdir -p artifacts
+          chmod 777 artifacts
           docker run --rm \
             -v ${{ github.workspace }}:/scan \
             infrascan:test \
