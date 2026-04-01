@@ -51,9 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check for CLI Injected Data (Standalone HTML Report)
     if (window.CLI_INJECTED_DATA) {
         const data = window.CLI_INJECTED_DATA;
+
+        // Hide all web app specific UI parts
         if (scanInputContainer) scanInputContainer.style.display = 'none';
         if (document.querySelector('.tabs')) document.querySelector('.tabs').style.display = 'none';
         if (landingInfo) landingInfo.style.display = 'none';
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        if (newsletterModal) newsletterModal.style.display = 'none';
+        if (feedbackModal) feedbackModal.style.display = 'none';
 
         const gradeReport = {
             overall: data.overall,
@@ -68,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide elements that don't make sense in standalone report
         if (newScanBtn) newScanBtn.style.display = 'none';
         if (shareBtn) shareBtn.style.display = 'none';
+
+        // Ensure container is correctly styled for full-width report
+        if (mainContainer) mainContainer.classList.add('expanded');
 
         return; // Skip normal web app initialization
     }

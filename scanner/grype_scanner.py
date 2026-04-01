@@ -64,6 +64,7 @@ def run_grype_scan(directory_path: str) -> List[Dict[str, Any]]:
         
     # Extract images from compose files and scan them
     for image, compose_file in all_images_map.items():
+        print(f"Scanning image with Grype: {image}")
         try:
             image_findings = scan_image(image, compose_file, directory_path)
             findings.extend(image_findings)

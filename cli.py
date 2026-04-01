@@ -172,11 +172,14 @@ def main():
         }
         
         # Output Results
-        if args.out:
+        if args.out and args.format == 'json':
             with open(args.out, 'w') as f:
                 json.dump(report_dict, f, indent=2)
-            if args.format == 'text':
-                print(f"Full JSON report saved to {args.out}")
+        elif args.out and args.format == 'text':
+            # Save a background JSON even in text mode if --out is specified
+            with open(args.out, 'w') as f:
+                json.dump(report_dict, f, indent=2)
+            print(f"Full JSON report saved to {args.out}")
                 
         if args.format == 'json':
             print(json.dumps(report_dict, indent=2))
