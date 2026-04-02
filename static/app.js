@@ -94,6 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function checkScannerStatus() {
         try {
             const response = await fetch('/api/scanner/status');
+            if (!response.ok) return;
+
             const status = await response.json();
 
             const helpText = document.querySelector('.help-text');
@@ -137,9 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
             loading.classList.remove('hidden');
             try {
                 const response = await fetch(`/api/results/${scanId}`);
-                const data = await response.json();
 
-                if (!response.ok) throw new Error(data.error || 'Failed to load results');
+                let data = {};
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    data = await response.json();
+                }
+
+                if (!response.ok) throw new Error(data.error || `Failed to load results (${response.status})`);
 
                 currentResults = data.results;
                 currentSummary = data.summary;
@@ -289,9 +295,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     is_private: currentMetadata ? currentMetadata.is_private : false
                 })
             });
-            const data = await response.json();
+            let data = {};
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                data = await response.json();
+            }
 
-            if (!response.ok) throw new Error(data.error || 'Failed to save results');
+            if (!response.ok) throw new Error(data.error || `Server error (${response.status})`);
 
             currentScanId = data.id;
             const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${data.id}`;
@@ -339,10 +348,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(url, options);
-            const data = await response.json();
+
+            let data = {};
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                data = await response.json();
+            }
 
             if (!response.ok) {
-                throw new Error(data.error || 'Scan failed');
+                throw new Error(data.error || `Scan failed (${response.status})`);
             }
 
             currentResults = data.results;
@@ -392,6 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     is_private: data.metadata ? data.metadata.is_private : false
                 })
             });
+            if (!response.ok) {
+                console.warn(`Auto-save failed with status ${response.status}`);
+                return;
+            }
+
             const result = await response.json();
             if (result.id) {
                 currentScanId = result.id;
@@ -417,6 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch('/api/scans/recent');
+            if (!response.ok) throw new Error(`Server error (${response.status})`);
+
             const data = await response.json();
             allRecentScans = data.scans || [];
             recentScansCurrentPage = 1;
@@ -1149,9 +1169,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
 
-            const data = await response.json();
+            let data = {};
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                data = await response.json();
+            }
 
-            if (!response.ok) throw new Error(data.error || 'Failed to send feedback');
+            if (!response.ok) throw new Error(data.error || `Failed to send feedback (${response.status})`);
 
             showToast('Thank you for your feedback!', 'success');
             feedbackModal.classList.add('hidden');
@@ -1240,14 +1263,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ email: email })
                 });
 
-                const data = await response.json();
+                let data = {};
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    data = await response.json();
+                }
 
                 if (response.ok) {
                     showToast(data.message || 'Thank you for subscribing!', 'success');
                     newsletterModal.classList.add('hidden');
                     localStorage.setItem('newsletter_closed', 'true');
                 } else {
-                    throw new Error(data.error || 'Subscription failed');
+                    throw new Error(data.error || `Subscription failed (${response.status})`);
                 }
             } catch (e) {
                 showToast(e.message || 'Subscription failed. Please try again.');
