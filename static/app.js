@@ -944,8 +944,8 @@ function initApp() {
     }
 
     function escapeHtml(text) {
-        if (!text) return '';
-        return text
+        if (text === null || text === undefined) return '';
+        return String(text)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
@@ -954,15 +954,18 @@ function initApp() {
     }
 
     function truncateText(text, maxLength = 100) {
-        if (!text || text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
+        if (text === null || text === undefined) return '';
+        const str = String(text);
+        if (str.length <= maxLength) return str;
+        return str.substring(0, maxLength) + '...';
     }
 
     function linkifyUrls(text, maxLength = null) {
-        if (!text) return '';
+        if (text === null || text === undefined) return '';
+        const str = String(text);
 
         // First escape HTML to prevent XSS
-        let escaped = escapeHtml(text);
+        let escaped = escapeHtml(str);
 
         // Find URLs and replace them with links
         const urlPattern = /(https?:\/\/[^\s<]+)/g;
@@ -975,8 +978,8 @@ function initApp() {
         });
 
         // If the whole text (not just URLs) needs truncating
-        if (maxLength && text.length > maxLength && !text.match(urlPattern)) {
-            escaped = truncateText(text, maxLength);
+        if (maxLength && str.length > maxLength && !str.match(urlPattern)) {
+            escaped = truncateText(str, maxLength);
         }
 
         return escaped;
