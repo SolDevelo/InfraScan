@@ -47,8 +47,9 @@ def setup_args():
     
     parser.add_argument(
         "--fail-on",
-        choices=["any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f"],
-        help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, or overall grade at or below the specified level)"
+        choices=["any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f",
+                 "priority_critical", "priority_high", "priority_medium", "priority_low", "priority_info"],
+        help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, grade threshold, or priority threshold)"
     )
     
     parser.add_argument(
@@ -140,6 +141,20 @@ def should_fail(args, report_dict, results):
                 return True
         except ValueError:
             pass # Should not happen due to argparse choices
+            
+    if args.fail_on.startswith('priority_'):
+        severity_weights = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1, 'info': 0.5}
+        fail_priority = args.fail_on.split('_')[1]
+        threshold_weight = severity_weights.get(fail_priority, 0)
+        
+        findings_at_or_above = [
+            r for r in results 
+            if severity_weights.get(r.get('severity', 'info').lower(), 0.5) >= threshold_weight
+        ]
+        
+        if findings_at_or_above:
+            print(f"\n[ERROR] Build failed: {len(findings_at_or_above)} findings with priority {fail_priority} or higher detected and --fail-on={args.fail_on} specified.", file=sys.stderr)
+            return True
             
     return False
 
