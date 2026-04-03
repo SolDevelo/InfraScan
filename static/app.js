@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
     const tabs = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
     const scanRepoBtn = document.getElementById('scan-repo-btn');
@@ -1283,7 +1283,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 
 function toggleImageCard(imageId) {
     const content = document.getElementById(imageId);

@@ -35,7 +35,7 @@ def generate_standalone_html(report_dict):
         return f"<html><body><h1>Error generating HTML report</h1><p>{str(e)}</p></body></html>"
 
     # Convert JSON data to string and escape closing script tags to avoid breaking the HTML
-    json_data_str = json.dumps(report_dict).replace("</script>", "<\\/script>")
+    json_data_str = json.dumps(report_dict, indent=2).replace("</script>", "<\\/script>")
 
     # Replace template tags with inline content using regex for robustness
     
