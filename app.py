@@ -124,10 +124,12 @@ def scan_github():
     # Strip query parameters and hash fragments from URL
     repo_url = repo_url.split('?')[0].split('#')[0]
     
-    # Validate scanner type
-    valid_scanners = ['regex', 'fast', 'checkov', 'containers', 'comprehensive', 'both']  # 'both' for backwards compatibility
-    if scanner_type not in valid_scanners:
-        return jsonify({'error': f'Invalid scanner type. Must be one of: {valid_scanners}'}), 400
+    # Validate scanner type(s)
+    valid_scanners = ['regex', 'fast', 'checkov', 'containers', 'comprehensive', 'both']
+    incoming_scanners = [s.strip() for s in scanner_type.split(',')]
+    for s in incoming_scanners:
+        if s not in valid_scanners:
+            return jsonify({'error': f'Invalid scanner: {s}. Must be one of: {valid_scanners}'}), 400
     
     # Normalize 'both' to 'comprehensive' for backwards compatibility
     if scanner_type == 'both':

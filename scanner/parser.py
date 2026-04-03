@@ -67,18 +67,32 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     """
     results = []
     
-    # Normalize scanner type names (maintain backward compatibility)
-    if scanner_type == 'fast':
-        scanner_type = 'regex'
-    elif scanner_type == 'both':  # Backwards compatibility for old shared reports
-        scanner_type = 'comprehensive'
-    # 'comprehensive' is the new standard name
+    # Handle multiple scanners if provided (e.g. "regex,containers")
+    if isinstance(scanner_type, str) and ',' in scanner_type:
+        scanners = [s.strip() for s in scanner_type.split(',')]
+    elif isinstance(scanner_type, list):
+        scanners = scanner_type
+    else:
+        scanners = [scanner_type]
+
+    # Normalize and expand scanners
+    normalized_scanners = []
+    for s in scanners:
+        if s in ['fast', 'regex']:
+            normalized_scanners.append('regex')
+        elif s in ['both', 'comprehensive']:
+            normalized_scanners.extend(['regex', 'checkov', 'containers'])
+        else:
+            normalized_scanners.append(s)
+    
+    # Use set to avoid duplicates
+    active_scanners = set(normalized_scanners)
     
     # Count resources for reporting
     resource_count = count_resources(path, framework)
     
     # Run cost-focused regex scanner
-    if scanner_type in ['regex', 'comprehensive']:
+    if 'regex' in active_scanners:
         # Run regex-based scanner
         all_files = []
         for root, dirs, files in os.walk(path):
@@ -98,7 +112,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         results.extend(scan_directory_level(path, all_files, RULES))
     
     # Run IaC security scanner (Checkov)
-    if scanner_type in ['checkov', 'comprehensive']:
+    if 'checkov' in active_scanners:
         if is_checkov_available():
             try:
                 checkov_results = run_checkov_scan(
@@ -117,7 +131,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     
     # Run container security scanner (Docker Scout or Grype based on config)
     extra_recommendations = []  # Track extra recommendations from container scanner
-    if scanner_type in ['containers', 'comprehensive']:
+    if 'containers' in active_scanners:
         container_scanner = get_container_scanner()
         
         if container_scanner == 'grype':

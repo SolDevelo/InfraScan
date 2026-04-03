@@ -28,9 +28,8 @@ def setup_args():
     
     parser.add_argument(
         "--scanner",
-        choices=["regex", "checkov", "containers", "comprehensive"],
         default="comprehensive",
-        help="Scanner type to run (default: comprehensive)"
+        help="Scanner type(s) to run (default: comprehensive). Support multiple scanners separated by comma (e.g., 'regex,containers'). Options: regex, checkov, containers, comprehensive"
     )
     
     parser.add_argument(
