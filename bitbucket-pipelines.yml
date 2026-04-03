@@ -1,0 +1,21 @@
+image: python:3.9
+
+pipelines:
+  default:
+    - step:
+        name: Build and Test InfraScan HTML Report
+        services:
+          - docker
+        script:
+          # Budujemy lokalny obraz w oparciu o aktualny kod
+          - docker build -t infrascan:test .
+          
+          # Tworzymy folder na artefakty z odpowiednimi uprawnieniami
+          - mkdir -p artifacts
+          - chmod 777 artifacts
+          
+          # Uruchamiamy skanowanie i generujemy raport HTML bezpośrednio do folderu artifacts
+          - docker run --rm -v $(pwd):/scan infrascan:test /scan --format html --out /scan/artifacts/infrascan-report.html
+          - ls -la artifacts/
+        artifacts:
+          - artifacts/infrascan-report.html

@@ -49,8 +49,22 @@ function initApp() {
     const recentScansPageSize = 5;
 
     // Check for CLI Injected Data (Standalone HTML Report)
-    if (window.CLI_INJECTED_DATA) {
-        const data = window.CLI_INJECTED_DATA;
+    if (window.CLI_INJECTED_DATA || window.CLI_INJECTED_DATA_B64) {
+        let data = null;
+        if (window.CLI_INJECTED_DATA_B64) {
+            try {
+                // Decode base64 to string, then parse JSON.
+                // Using decodeURIComponent(escape(atob())) to gracefully handle UTF-8 chars
+                data = JSON.parse(decodeURIComponent(escape(atob(window.CLI_INJECTED_DATA_B64))));
+            } catch (e) {
+                console.error("Failed to decode Base64 CLI data", e);
+                data = window.CLI_INJECTED_DATA;
+            }
+        } else {
+            data = window.CLI_INJECTED_DATA;
+        }
+
+        if (!data) return;
 
         // Hide all web app specific UI parts
         if (scanInputContainer) scanInputContainer.style.display = 'none';
@@ -592,8 +606,8 @@ function initApp() {
                         <div class="metadata-item">
                             <span class="metadata-label">Repository:</span>
                             <span class="metadata-value">
-                                <a href="${metadata.repository_url}" target="_blank" rel="noopener noreferrer">
-                                    ${metadata.repository_name || metadata.repository_url}
+                                <a href="${escapeHtml(metadata.repository_url)}" target="_blank" rel="noopener noreferrer">
+                                    ${escapeHtml(metadata.repository_name || metadata.repository_url)}
                                 </a>
                             </span>
                         </div>
@@ -601,13 +615,13 @@ function initApp() {
                         ${metadata.scan_timestamp ? `
                         <div class="metadata-item">
                             <span class="metadata-label">Scanned:</span>
-                            <span class="metadata-value">${metadata.scan_timestamp}</span>
+                            <span class="metadata-value">${escapeHtml(metadata.scan_timestamp)}</span>
                         </div>
                         ` : ''}
                         ${metadata.resource_count ? `
                         <div class="metadata-item">
                             <span class="metadata-label">Resources Scanned:</span>
-                            <span class="metadata-value">${metadata.resource_count}</span>
+                            <span class="metadata-value">${escapeHtml(metadata.resource_count)}</span>
                         </div>
                         ` : ''}
                     </div>
@@ -724,21 +738,20 @@ function initApp() {
         return groups.map(([ruleId, findings]) => {
             const first = findings[0];
             const fileCount = findings.length;
-
             return `
-            <div class="finding-card ${first.severity}">
-                <div class="finding-header">
-                    <span class="finding-title">${first.rule_name}</span>
-                    <span class="severity-badge ${first.severity}">${first.severity}</span>
-                </div>
+                <div class="finding-card ${first.severity}">
+                    <div class="finding-header">
+                        <span class="finding-title">${escapeHtml(first.rule_name)}</span>
+                        <span class="severity-badge ${first.severity}">${first.severity}</span>
+                    </div>
                 ${first.description && first.description !== 'null' ? `
                 <div class="finding-detail" title="${escapeHtml(first.full_description || first.description)}">
-                    <strong>Problem:</strong> ${first.description}
+                    <strong>Problem:</strong> ${escapeHtml(first.description)}
                 </div>
                 ` : ''}
                 ${first.scanner === 'regex' ? `
                 <div class="finding-detail">
-                    <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${first.estimated_savings}</span>
+                    <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(first.estimated_savings)}</span>
                 </div>` : ''}
                 <div class="finding-detail">
                     <strong>Occurrences:</strong> ${fileCount} ${fileCount === 1 ? 'location' : 'locations'}
@@ -875,9 +888,9 @@ function initApp() {
                     return `
                                                 <div class="cve-item">
                                                     <div class="cve-summary" onclick="toggleCVE('${cveId}')">
-                                                        <span class="cve-id">${v.rule_id}</span>
-                                                        <span class="cve-package">${v.package}@${v.package_version}${v.fix_version && v.fix_version !== 'N/A' && v.fix_version !== null ? ` → ${v.fix_version}` : ''}</span>
-                                                        <span class="cve-short-desc">${v.description ? (v.description.substring(0, 60) + (v.description.length > 60 ? '...' : '')) : ''}</span>
+                                                        <span class="cve-id">${escapeHtml(v.rule_id)}</span>
+                                                        <span class="cve-package">${escapeHtml(v.package)}@${escapeHtml(v.package_version)}${v.fix_version && v.fix_version !== 'N/A' && v.fix_version !== null ? ` → ${escapeHtml(v.fix_version)}` : ''}</span>
+                                                        <span class="cve-short-desc">${v.description ? escapeHtml(v.description.substring(0, 60) + (v.description.length > 60 ? '...' : '')) : ''}</span>
                                                         <span class="cve-expand-icon" id="${cveId}-icon">▼</span>
                                                     </div>
                                                     <div class="cve-details" id="${cveId}" style="display: none;">
@@ -888,7 +901,7 @@ function initApp() {
                                                             </div>
                                                         ` : ''}
                                                         <div class="cve-detail-section">
-                                                            <strong>Package:</strong> ${v.package}@${v.package_version}
+                                                            <strong>Package:</strong> ${escapeHtml(v.package)}@${escapeHtml(v.package_version)}
                                                         </div>
                                                         ${v.remediation ? `
                                                             <div class="cve-detail-section">
@@ -1131,7 +1144,7 @@ function initApp() {
                 <div class="recommendations-section">
                     <h3 class="recommendations-title">💡 Recommendations</h3>
                     <ul class="recommendations-list">
-                        ${recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
                     </ul>
                 </div>
                 ` : ''}

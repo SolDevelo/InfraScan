@@ -35,7 +35,9 @@ def generate_standalone_html(report_dict):
         return f"<html><body><h1>Error generating HTML report</h1><p>{str(e)}</p></body></html>"
 
     # Convert JSON data to string and escape closing script tags to avoid breaking the HTML
-    json_data_str = json.dumps(report_dict, indent=2).replace("</script>", "<\\/script>")
+    # Convert JSON data to string and encode as Base64 to avoid all HTML/JS quoting issues
+    json_data_str = json.dumps(report_dict, separators=(',', ':'))
+    json_b64 = base64.b64encode(json_data_str.encode('utf-8')).decode('utf-8')
 
     # Replace template tags with inline content using regex for robustness
     
@@ -69,12 +71,12 @@ def generate_standalone_html(report_dict):
     html_content = re.sub(r'\{\{\s*.*?\s*\}\}', "", html_content)
     
     # NOW inject the JS content and the actual data
-    injected_script = f"""
-    <script>
-        window.CLI_INJECTED_DATA = {json_data_str};
-        {js_content}
-    </script>
-    """
+    # Use a safe way to build the script tag without f-string interpolation issues for JS content
+    injected_script = "<script>\n"
+    injected_script += f"    window.CLI_INJECTED_DATA_B64 = \"{json_b64}\";\n"
+    injected_script += f"    {js_content}\n"
+    injected_script += "</script>"
+    
     html_content = html_content.replace(js_placeholder, injected_script)
     
     return html_content
