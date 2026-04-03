@@ -51,6 +51,43 @@ class InverseRegexRule(Rule):
                         break
         return matches
 
+class UnassociatedEipRule(Rule):
+    def check(self, content):
+        matches = []
+        lines = content.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if re.search(r'resource\s*["\']aws_eip["\']', line):
+                start_line = i
+                block_lines = [line]
+                
+                brace_count = line.count('{') - line.count('}')
+                i += 1
+                while i < len(lines) and brace_count > 0:
+                    block_lines.append(lines[i])
+                    brace_count += lines[i].count('{') - lines[i].count('}')
+                    i += 1
+                
+                block_content = "\n".join(block_lines)
+                
+                if not re.search(r'^\s*(instance|network_interface)\s*=', block_content, re.MULTILINE):
+                    name_match = re.search(r'resource\s*["\']aws_eip["\']\s*["\']([^"\']+)["\']', lines[start_line])
+                    is_associated = False
+                    if name_match:
+                        eip_name = name_match.group(1)
+                        if re.search(rf'aws_eip\.{eip_name}\.(id|allocation_id)', content):
+                            is_associated = True
+                            
+                    if not is_associated:
+                        matches.append({
+                            "line": start_line + 1,
+                            "content": lines[start_line].strip()
+                        })
+                continue
+            i += 1
+        return matches
+
 RULES = [
     RegexRule(
         id="COST-001",
@@ -97,14 +134,13 @@ RULES = [
         estimated_savings="$30-40/month + data processing fees per gateway",
         pattern=r'resource\s*["\']aws_nat_gateway["\']'
     ),
-    RegexRule(
+    UnassociatedEipRule(
         id="COST-006",
-        name="Elastic IP Usage",
+        name="Unassociated Elastic IP",
         severity="Low",
         description="Elastic IPs are charged if not attached to a running instance or if you have more than one per instance.",
         remediation="Release unattached Elastic IPs.",
-        estimated_savings="$3-4/month per IP",
-        pattern=r'resource\s*["\']aws_eip["\']'
+        estimated_savings="$3-4/month per IP"
     ),
     RegexRule(
         id="COST-007",
