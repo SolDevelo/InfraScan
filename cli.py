@@ -68,8 +68,8 @@ def setup_args():
 
 def print_text_report(report_dict, resource_count, scanner_type):
     overall = report_dict.get('overall', {})
-    metrics = report_dict.get('metadata', {})
-    results = report_dict.get('results', [])
+    findings_dict = report_dict.get('findings', {})
+    results = findings_dict.get('all', report_dict.get('results', []))
     
     print("=" * 60)
     print(f" InfraScan Report - {scanner_type.upper()} SCAN")
@@ -79,38 +79,79 @@ def print_text_report(report_dict, resource_count, scanner_type):
     print(f"Total Findings    : {len(results)}")
     
     print("-" * 60)
-    print(" GRADES")
+    print(" GRADES & SUMMARY")
     print("-" * 60)
-    print(f"Overall           : {overall.get('letter', '?')} ({overall.get('percentage', 0)}%)")
+    
+    def print_grade(name, grade):
+        if not grade or (grade.get('max_score', 0) == 0 and grade.get('letter') != 'A'):
+            return
+        
+        breakdown = grade.get('severity_breakdown', {})
+        counts = [
+            f"Crit:{breakdown.get('critical', 0)}",
+            f"High:{breakdown.get('high', 0)}",
+            f"Med:{breakdown.get('medium', 0)}",
+            f"Low:{breakdown.get('low', 0)}"
+        ]
+        br_str = f" [{' | '.join(counts)}]"
+        print(f"{name:18}: {grade.get('letter', '?')} ({grade.get('percentage', 0)}%){br_str}")
+
+    print_grade("Overall", overall)
     
     if scanner_type in ['regex', 'comprehensive']:
-        cost = report_dict.get('cost', {})
-        print(f"Cost Optimization : {cost.get('letter', '?')} ({cost.get('percentage', 0)}%)")
+        print_grade("Cost Optimization", report_dict.get('cost'))
         
     if scanner_type in ['checkov', 'comprehensive']:
-        security = report_dict.get('security', {})
-        print(f"Security          : {security.get('letter', '?')} ({security.get('percentage', 0)}%)")
+        print_grade("Security", report_dict.get('security'))
         
     if scanner_type in ['containers', 'comprehensive']:
-        containers = report_dict.get('container', {})
-        print(f"Container Security: {containers.get('letter', '?')} ({containers.get('percentage', 0)}%)")
+        print_grade("Container Security", report_dict.get('container'))
 
     print("=" * 60)
     
+    # Recommendations
+    recs = report_dict.get('analysis', {}).get('recommendations', [])
+    if recs:
+        print("\nRECOMMENDATIONS:")
+        for rec in recs:
+            print(f"  * {rec}")
+        print("=" * 60)
+    
     if results:
-        print("\nTop Findings:")
-        for res in results[:10]: # show top 10
-            severity = res.get('severity', 'UNKNOWN').upper()
-            rule_id = res.get('rule_id', 'N/A')
-            file_path = res.get('file', 'Unknown')
-            line_str = f":{res.get('line')}" if res.get('line') else ""
-            print(f"[{severity}] {rule_id}")
-            print(f"  File: {file_path}{line_str}")
-            print(f"  Desc: {res.get('description', '')}")
-            print("-" * 40)
+        print("\nFINDINGS DETAILS:")
+
+        print("-" * 60)
+        
+        # Categorize findings
+        categories = []
+        if findings_dict.get('cost'):
+            categories.append(('Cost Optimization Findings', findings_dict['cost']))
+        if findings_dict.get('security'):
+            categories.append(('IaC Security Findings', findings_dict['security']))
+        if findings_dict.get('container'):
+            categories.append(('Container Security Findings', findings_dict['container']))
             
-        if len(results) > 10:
-            print(f"... and {len(results) - 10} more findings. Use JSON format for full details.")
+        # If no categorization available (e.g. older scan structure), use all results
+        if not categories:
+            categories = [(f"{scanner_type.replace('_',' ').title()} Findings", results)]
+
+        for cat_name, cat_findings in categories:
+            if not cat_findings:
+                continue
+            
+            print(f"\n>>> {cat_name} ({len(cat_findings)}) <<<")
+            for res in cat_findings:
+                severity = res.get('severity', 'UNKNOWN').upper()
+                rule_id = res.get('rule_id', 'N/A')
+                file_path = res.get('file', 'Unknown')
+                line_str = f":{res.get('line')}" if res.get('line') else ""
+                
+                print(f"[{severity}] {rule_id}: {res.get('description', '')}")
+                print(f"           File: {file_path}{line_str}")
+                if res.get('resource'):
+                    print(f"           Resource: {res.get('resource')}")
+                print("-" * 40)
+
 
 def should_fail(args, report_dict, results):
     if not args.fail_on:
