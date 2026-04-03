@@ -83,6 +83,9 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --format json --out /scan/re
 # Fail CI if high or critical findings exist
 docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive --fail-on high_critical
 
+# Fail CI if overall grade is C or worse
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_c
+
 # Fail CI if overall grade is F
 docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_f
 ```
@@ -93,7 +96,7 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_f
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
-- `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, or `grade_f`
+- `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, or specific grade threshold (`grade_a` through `grade_f`). Fails if the result is the specified grade or worse.
 
 #### GitHub Actions
 

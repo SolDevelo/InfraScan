@@ -47,8 +47,8 @@ def setup_args():
     
     parser.add_argument(
         "--fail-on",
-        choices=["any", "high_critical", "grade_f"],
-        help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, or overall grade F)"
+        choices=["any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f"],
+        help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, or overall grade at or below the specified level)"
     )
     
     parser.add_argument(
@@ -126,11 +126,20 @@ def should_fail(args, report_dict, results):
             print(f"\n[ERROR] Build failed: {critical_high_count} high/critical findings detected and --fail-on=high_critical specified.", file=sys.stderr)
             return True
             
-    if args.fail_on == 'grade_f':
-        overall_letter = report_dict.get('overall', {}).get('letter', '')
-        if overall_letter == 'F':
-            print(f"\n[ERROR] Build failed: Overall grade is F and --fail-on=grade_f specified.", file=sys.stderr)
-            return True
+    if args.fail_on.startswith('grade_'):
+        grade_order = ['A', 'B', 'C', 'D', 'F']
+        fail_grade = args.fail_on.split('_')[1].upper()
+        overall_letter = report_dict.get('overall', {}).get('letter', 'A')
+        
+        try:
+            fail_idx = grade_order.index(fail_grade)
+            current_idx = grade_order.index(overall_letter)
+            
+            if current_idx >= fail_idx:
+                print(f"\n[ERROR] Build failed: Overall grade is {overall_letter} and --fail-on={args.fail_on} specified (threshold: {fail_grade} or worse).", file=sys.stderr)
+                return True
+        except ValueError:
+            pass # Should not happen due to argparse choices
             
     return False
 
