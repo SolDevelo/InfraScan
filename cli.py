@@ -4,12 +4,21 @@ import sys
 import argparse
 import json
 import logging
+try:
+    from colorama import Fore, Style, init
+except ImportError:
+    # Minimal fallback for environments without colorama
+    class MockColor:
+        def __getattr__(self, name): return ""
+    Fore = Style = MockColor()
+    def init(*args, **kwargs): pass
+
 from dotenv import load_dotenv
 from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
@@ -67,90 +76,118 @@ def setup_args():
     return parser.parse_args()
 
 def print_text_report(report_dict, resource_count, scanner_type):
+    # Initialize colorama
+    init(autoreset=True)
+    
     overall = report_dict.get('overall', {})
     findings_dict = report_dict.get('findings', {})
     results = findings_dict.get('all', report_dict.get('results', []))
     
-    print("=" * 60)
-    print(f" InfraScan Report - {scanner_type.upper()} SCAN")
-    print("=" * 60)
-    print(f"Directory Scanned : {os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else '.')}")
-    print(f"Resources Found   : {resource_count}")
-    print(f"Total Findings    : {len(results)}")
+    # Header
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}{'=' * 60}")
+    print(f"{Fore.CYAN}{Style.BRIGHT} InfraScan Report - {scanner_type.upper()} SCAN")
+    print(f"{Fore.CYAN}{Style.BRIGHT}{'=' * 60}")
     
-    print("-" * 60)
-    print(" GRADES & SUMMARY")
-    print("-" * 60)
+    # Summary Info
+    target_path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else '.')
+    print(f"{Style.BRIGHT}Path Scanned      :{Style.RESET_ALL} {target_path}")
+    print(f"{Style.BRIGHT}Resources Found   :{Style.RESET_ALL} {resource_count}")
+    print(f"{Style.BRIGHT}Total Findings    :{Style.RESET_ALL} {len(results)}")
     
-    def print_grade(name, grade):
+    # Grades Section
+    print(f"\n{Style.BRIGHT}GRADING SUMMARY:")
+    print(f"{'-' * 30}")
+    
+    def get_grade_color(letter):
+        if letter == 'A': return Fore.GREEN
+        if letter == 'B': return Fore.GREEN
+        if letter == 'C': return Fore.YELLOW
+        if letter == 'D': return Fore.MAGENTA
+        return Fore.RED
+
+    def print_grade_line(name, grade):
         if not grade or (grade.get('max_score', 0) == 0 and grade.get('letter') != 'A'):
             return
         
+        letter = grade.get('letter', '?')
+        percentage = grade.get('percentage', 0)
+        color = get_grade_color(letter)
+        
         breakdown = grade.get('severity_breakdown', {})
         counts = [
-            f"Crit:{breakdown.get('critical', 0)}",
-            f"High:{breakdown.get('high', 0)}",
-            f"Med:{breakdown.get('medium', 0)}",
-            f"Low:{breakdown.get('low', 0)}"
+            f"{Fore.RED}Crit:{breakdown.get('critical', 0)}{Style.RESET_ALL}",
+            f"{Fore.LIGHTRED_EX}High:{breakdown.get('high', 0)}{Style.RESET_ALL}",
+            f"{Fore.YELLOW}Med:{breakdown.get('medium', 0)}{Style.RESET_ALL}",
+            f"{Fore.CYAN}Low:{breakdown.get('low', 0)}{Style.RESET_ALL}"
         ]
         br_str = f" [{' | '.join(counts)}]"
-        print(f"{name:18}: {grade.get('letter', '?')} ({grade.get('percentage', 0)}%){br_str}")
+        print(f"{name:18}: {color}{Style.BRIGHT}{letter}{Style.RESET_ALL} ({percentage}%){br_str}")
 
-    print_grade("Overall", overall)
+    print_grade_line("Overall Health", overall)
     
     if scanner_type in ['regex', 'comprehensive']:
-        print_grade("Cost Optimization", report_dict.get('cost'))
+        print_grade_line("Cost Efficiency", report_dict.get('cost'))
         
     if scanner_type in ['checkov', 'comprehensive']:
-        print_grade("Security", report_dict.get('security'))
+        print_grade_line("IaC Security", report_dict.get('security'))
         
     if scanner_type in ['containers', 'comprehensive']:
-        print_grade("Container Security", report_dict.get('container'))
+        print_grade_line("Container Security", report_dict.get('container'))
 
-    print("=" * 60)
-    
     # Recommendations
     recs = report_dict.get('analysis', {}).get('recommendations', [])
     if recs:
-        print("\nRECOMMENDATIONS:")
+        print(f"\n{Fore.GREEN}{Style.BRIGHT}RECOMMENDATIONS:")
         for rec in recs:
-            print(f"  * {rec}")
-        print("=" * 60)
+            print(f"  {Fore.GREEN}• {Style.BRIGHT}{rec}")
     
+    # Findings Details
     if results:
-        print("\nFINDINGS DETAILS:")
-
-        print("-" * 60)
+        print(f"\n{Style.BRIGHT}FINDINGS DETAILS:")
+        print(f"{'=' * 60}")
         
         # Categorize findings
         categories = []
         if findings_dict.get('cost'):
-            categories.append(('Cost Optimization Findings', findings_dict['cost']))
+            categories.append(('Cost Optimization', findings_dict['cost']))
         if findings_dict.get('security'):
-            categories.append(('IaC Security Findings', findings_dict['security']))
+            categories.append(('IaC Security', findings_dict['security']))
         if findings_dict.get('container'):
-            categories.append(('Container Security Findings', findings_dict['container']))
+            categories.append(('Container Security', findings_dict['container']))
             
-        # If no categorization available (e.g. older scan structure), use all results
         if not categories:
-            categories = [(f"{scanner_type.replace('_',' ').title()} Findings", results)]
+            categories = [('General Findings', results)]
 
         for cat_name, cat_findings in categories:
             if not cat_findings:
                 continue
             
-            print(f"\n>>> {cat_name} ({len(cat_findings)}) <<<")
-            for res in cat_findings:
+            print(f"\n{Style.BRIGHT}>>> {cat_name} ({len(cat_findings)})")
+            
+            # Limit display to 40 findings to avoid overwhelming CI logs
+            display_limit = 40
+            for i, res in enumerate(cat_findings):
+                if i >= display_limit:
+                    print(f"\n      {Fore.YELLOW}... and {len(cat_findings) - display_limit} more findings (see full report for details)")
+                    break
+                    
                 severity = res.get('severity', 'UNKNOWN').upper()
+                sev_color = Fore.WHITE
+                if severity == 'CRITICAL': sev_color = Fore.RED + Style.BRIGHT
+                elif severity == 'HIGH': sev_color = Fore.RED
+                elif severity == 'MEDIUM': sev_color = Fore.YELLOW
+                elif severity == 'LOW': sev_color = Fore.CYAN
+                
                 rule_id = res.get('rule_id', 'N/A')
                 file_path = res.get('file', 'Unknown')
                 line_str = f":{res.get('line')}" if res.get('line') else ""
                 
-                print(f"[{severity}] {rule_id}: {res.get('description', '')}")
-                print(f"           File: {file_path}{line_str}")
+                print(f"  {sev_color}[{severity}]{Style.RESET_ALL} {Style.BRIGHT}{rule_id}{Style.RESET_ALL}: {res.get('description', '')}")
+                print(f"      {Fore.WHITE}at {file_path}{line_str}{Style.RESET_ALL}")
                 if res.get('resource'):
-                    print(f"           Resource: {res.get('resource')}")
-                print("-" * 40)
+                    print(f"      {Fore.WHITE}resource: {res.get('resource')}{Style.RESET_ALL}")
+    
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}{'=' * 60}\n")
 
 
 def should_fail(args, report_dict, results):
@@ -235,28 +272,31 @@ def main():
             'scanner_used': args.scanner
         }
         
-        # Output Results
-        if args.out and args.format == 'json':
-            with open(args.out, 'w') as f:
-                json.dump(report_dict, f, indent=2)
-        elif args.out and args.format == 'text':
-            # Save a background JSON even in text mode if --out is specified
-            with open(args.out, 'w') as f:
-                json.dump(report_dict, f, indent=2)
-            print(f"Full JSON report saved to {args.out}")
-                
-        if args.format == 'json':
-            print(json.dumps(report_dict, indent=2))
-        elif args.format == 'html':
-            html_output = generate_standalone_html(report_dict)
-            if args.out:
+        # Output Results to file/stdout
+        if args.out:
+            if args.format == 'json':
+                with open(args.out, 'w') as f:
+                    json.dump(report_dict, f, indent=2)
+            elif args.format == 'html':
+                html_output = generate_standalone_html(report_dict)
                 with open(args.out, 'w', encoding='utf-8') as f:
                     f.write(html_output)
-                print(f"Standalone HTML report saved to {args.out}")
-            else:
-                print(html_output)
+            else: # text format
+                # Default behavior for text mode with --out is to save JSON results
+                with open(args.out, 'w') as f:
+                    json.dump(report_dict, f, indent=2)
+
+        # Handle console output
+        if args.format == 'json' and not args.out:
+            print(json.dumps(report_dict, indent=2))
+        elif args.format == 'html' and not args.out:
+            print(generate_standalone_html(report_dict))
         else:
+            # If format is text OR if output is saved to record/html/json
+            # always show the text summary in the console
             print_text_report(report_dict, resource_count, args.scanner)
+            if args.out:
+                 print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
             
         # Determine Exit Code
         if should_fail(args, report_dict, results):

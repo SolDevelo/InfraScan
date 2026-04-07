@@ -149,6 +149,22 @@
                 <div class="release-notes-container">
                     <div class="release-entry">
                         <div class="release-header">
+                            <span class="version">v1.0.4</span>
+                            <span class="date">April 7, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>Beautiful Colored CLI Summary</strong>: Integrated rich terminal formatting and
+                                colors for findings directly in CI/CD logs.</li>
+                            <li><strong>Grading Overview</strong>: Real-time A-F grades for cost and security displayed
+                                directly in logs.</li>
+                            <li><strong>CI/CD Optimization</strong>: Added display limits to prevent log flooding and
+                                ensured text summary is always visible.</li>
+                            <li><strong>Improved Report Reliability</strong>: Enhanced standalone HTML generation using
+                                robust regex injection.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
                             <span class="version">v1.0.3</span>
                             <span class="date">March 12, 2026</span>
                         </div>
@@ -264,7 +280,7 @@
     run: |
       docker run --rm \
         -v ${{ github.workspace }}:/scan \
-        soldevelo/infrascan:v1.0.3 \
+        soldevelo/infrascan:v1.0.4 \
         --fail-on high_critical">
                                         <span>Copy</span>
                                     </button>
@@ -275,7 +291,7 @@
     <span class="keyword">run:</span> |
       docker run --rm \
         -v <span class="string">${{ github.workspace }}</span>:/scan \
-        soldevelo/infrascan<span class="variable">:v1.0.3</span> \
+        soldevelo/infrascan<span class="variable">:v1.0.4</span> \
         --fail-on <span class="string">high_critical</span></code></pre>
                             </div>
                             {% endraw %}
@@ -352,7 +368,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.3 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.4 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
