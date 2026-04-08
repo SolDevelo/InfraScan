@@ -150,6 +150,23 @@ function initApp() {
         const scanId = urlParams.get('scan_id');
 
         if (scanId) {
+            resetScanProgress();
+
+            // Hide tabs during shared result loading
+            const tabsNav = document.querySelector('.tabs');
+            if (tabsNav) tabsNav.style.display = 'none';
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            const progressDetails = document.querySelector('.progress-bar-container');
+            const stepsDetails = document.querySelector('.loading-steps');
+            const titleEl = document.getElementById('loading-title');
+            const statusEl = document.getElementById('loading-status');
+
+            if (titleEl) titleEl.textContent = 'Loading Report';
+            if (statusEl) statusEl.textContent = 'Fetching shared results from server...';
+            if (progressDetails) progressDetails.style.display = 'none';
+            if (stepsDetails) stepsDetails.style.display = 'none';
+
             loading.classList.remove('hidden');
             try {
                 const response = await fetch(`/api/results/${scanId}`);
@@ -344,6 +361,17 @@ function initApp() {
             if (scanInputContainer) scanInputContainer.classList.remove('hidden');
             if (landingInfo) landingInfo.classList.remove('collapsed');
             repoUrlInput.value = ''; // Optional: clear input or keep it
+
+            // Restore tabs
+            const tabsNav = document.querySelector('.tabs');
+            if (tabsNav) tabsNav.style.display = 'flex';
+            const activeTabBtn = document.querySelector('.tab-btn.active');
+            if (activeTabBtn) {
+                const targetTab = activeTabBtn.dataset.tab;
+                const tabEl = document.getElementById(`${targetTab}-tab`);
+                if (tabEl) tabEl.classList.add('active');
+            }
+
             // Reset results
             currentResults = null;
             currentSummary = null;
@@ -353,12 +381,119 @@ function initApp() {
         });
     }
 
+    let progressInterval = null;
+
+    function resetScanProgress() {
+        if (progressInterval) clearInterval(progressInterval);
+        const steps = ['step-clone', 'step-init', 'step-iac', 'step-containers', 'step-report'];
+        steps.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.remove('active', 'completed');
+                const icon = el.querySelector('.step-icon');
+                if (icon) icon.textContent = '⏳';
+            }
+        });
+        const bar = document.getElementById('progress-bar-fill');
+        if (bar) bar.style.width = '0%';
+        const status = document.getElementById('loading-status');
+        if (status) status.textContent = 'Connecting to repository...';
+
+        const titleEl = document.getElementById('loading-title');
+        if (titleEl) titleEl.textContent = 'Analyzing Infrastructure';
+
+        const progressDetails = document.querySelector('.progress-bar-container');
+        const stepsDetails = document.querySelector('.loading-steps');
+        if (progressDetails) progressDetails.style.display = 'block';
+        if (stepsDetails) stepsDetails.style.display = 'flex';
+    }
+
+    function startScanProgress() {
+        resetScanProgress();
+        let progress = 0;
+        const bar = document.getElementById('progress-bar-fill');
+        const status = document.getElementById('loading-status');
+
+        const steps = [
+            { id: 'step-clone', threshold: 15, text: 'Cloning repository...' },
+            { id: 'step-init', threshold: 30, text: 'Initializing scanners...' },
+            { id: 'step-iac', threshold: 60, text: 'Running IaC Security & Cost Audit...' },
+            { id: 'step-containers', threshold: 85, text: 'Scanning for container vulnerabilities...' },
+            { id: 'step-report', threshold: 95, text: 'Finalizing report...' }
+        ];
+
+        let currentStepIdx = 0;
+
+        progressInterval = setInterval(() => {
+            // Slower progress as it gets higher to avoid "finishing" too early
+            const increment = progress < 70 ? 0.8 : (progress < 90 ? 0.3 : 0.05);
+            progress = Math.min(progress + increment, 98);
+
+            if (bar) bar.style.width = `${progress}%`;
+
+            // Update steps based on progress
+            steps.forEach((step, idx) => {
+                const el = document.getElementById(step.id);
+                if (!el) return;
+
+                if (progress >= step.threshold) {
+                    if (!el.classList.contains('completed')) {
+                        el.classList.add('completed');
+                        el.classList.remove('active');
+                        const icon = el.querySelector('.step-icon');
+                        if (icon) icon.textContent = '✅';
+                    }
+                } else {
+                    // Check if this should be the active step
+                    const prevStepCompleted = idx === 0 || progress >= steps[idx - 1].threshold;
+                    if (prevStepCompleted && !el.classList.contains('completed')) {
+                        if (!el.classList.contains('active')) {
+                            el.classList.add('active');
+                            if (status) status.textContent = step.text;
+                            currentStepIdx = idx;
+                        }
+                    }
+                }
+            });
+        }, 100);
+    }
+
+    function completeScanProgress() {
+        if (progressInterval) clearInterval(progressInterval);
+        const bar = document.getElementById('progress-bar-fill');
+        if (bar) {
+            bar.style.width = '100%';
+            bar.style.transition = 'width 0.2s ease-out';
+        }
+
+        const steps = ['step-clone', 'step-init', 'step-iac', 'step-containers', 'step-report'];
+        steps.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('completed');
+                el.classList.remove('active');
+                const icon = el.querySelector('.step-icon');
+                if (icon) icon.textContent = '✅';
+            }
+        });
+        const status = document.getElementById('loading-status');
+        if (status) status.textContent = 'Scan completed successfully!';
+    }
+
     async function performScan(url, options) {
         loading.classList.remove('hidden');
         resultsArea.classList.add('hidden');
+
+        // Hide tabs and active content to avoid "empty bar" during loading
+        const tabsNav = document.querySelector('.tabs');
+        if (tabsNav) tabsNav.style.display = 'none';
+        tabContents.forEach(c => c.classList.remove('active'));
+
         if (scanInputContainer) scanInputContainer.classList.add('hidden'); // Hide input
         resultsContent.innerHTML = '';
         currentScanId = null;
+
+        startScanProgress();
 
         try {
             const response = await fetch(url, options);
@@ -371,6 +506,11 @@ function initApp() {
             if (!response.ok) {
                 throw new Error(data.error || `Scan failed (${response.status})`);
             }
+
+            completeScanProgress();
+
+            // Small delay to let the user see the "100%" state
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             currentResults = data.results;
             currentSummary = data.summary;
@@ -393,12 +533,25 @@ function initApp() {
             shareBtn.textContent = 'Share Results';
             shareBtn.disabled = false;
         } catch (error) {
+            if (progressInterval) clearInterval(progressInterval);
             showToast(error.message);
+
+            // Restore tabs and active content on failure
+            const tabsNav = document.querySelector('.tabs');
+            if (tabsNav) tabsNav.style.display = 'flex';
+            const activeTabBtn = document.querySelector('.tab-btn.active');
+            if (activeTabBtn) {
+                const targetTab = activeTabBtn.dataset.tab;
+                const tabEl = document.getElementById(`${targetTab}-tab`);
+                if (tabEl) tabEl.classList.add('active');
+            }
+
             if (scanInputContainer) scanInputContainer.classList.remove('hidden'); // Show input again on failure
             if (landingInfo) landingInfo.classList.remove('collapsed'); // Show info cards again on failure
             if (mainContainer) mainContainer.classList.remove('expanded');
         } finally {
             loading.classList.add('hidden');
+            resetScanProgress();
         }
     }
 

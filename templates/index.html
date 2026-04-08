@@ -330,8 +330,43 @@
             </div>
 
             <div id="loading" class="hidden">
-                <div class="spinner"></div>
-                <p>Scanning infrastructure...</p>
+                <div class="loading-container">
+                    <div class="loading-visual">
+                        <div class="pulse-ring"></div>
+                        <div class="loading-icon">🔍</div>
+                    </div>
+                    <div class="loading-content">
+                        <h2 id="loading-title">Analyzing Infrastructure</h2>
+                        <p id="loading-status">Connecting to repository...</p>
+                        
+                        <div class="progress-bar-container">
+                            <div id="progress-bar-fill" class="progress-bar-fill"></div>
+                        </div>
+
+                        <div class="loading-steps">
+                            <div class="step" id="step-clone">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Repository Clone</span>
+                            </div>
+                            <div class="step" id="step-init">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Scanner Initialization</span>
+                            </div>
+                            <div class="step" id="step-iac">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">IaC Cost & Security Audit</span>
+                            </div>
+                            <div class="step" id="step-containers">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Container Vulnerability Scan</span>
+                            </div>
+                            <div class="step" id="step-report">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Finalizing Report</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="results-area" class="hidden">
