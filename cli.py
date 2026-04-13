@@ -20,8 +20,9 @@ from reporter.html_generator import generate_standalone_html
 
 __version__ = "1.0.5"
 
-# Setup basic logging
+# Setup basic logging (level is adjusted to DEBUG when --verbose is passed)
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 def setup_args():
     parser = argparse.ArgumentParser(
@@ -79,7 +80,14 @@ def setup_args():
         version=f"InfraScan v{__version__}",
         help="Show version information and exit"
     )
-    
+
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        default=False,
+        help="Enable verbose output: show debug logs, scanner progress, and full tracebacks on error"
+    )
+
     return parser.parse_args()
 
 def print_text_report(report_dict, resource_count, scanner_type):
@@ -245,17 +253,28 @@ def should_fail(args, report_dict, results):
 def main():
     load_dotenv()
     args = setup_args()
-    
+
+    # Apply verbose logging level before any further processing
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Verbose mode enabled")
+
     target_path = os.path.abspath(args.path)
-    
+
     if not os.path.exists(target_path):
-        print(f"Error: Path '{target_path}' does not exist.", file=sys.stderr)
+        print(f"[ERROR] Path '{target_path}' does not exist.", file=sys.stderr)
+        if args.verbose:
+            print(f"[DEBUG] Resolved from input: '{args.path}'", file=sys.stderr)
         sys.exit(1)
-        
+
     try:
         if args.format == 'text':
-            print(f"Analyzing {target_path} with '{args.scanner}' scanner...")
-            
+            print(f"[*] Scanning '{target_path}' with scanner: {args.scanner!r} ...")
+        if args.verbose:
+            print(f"[*] Framework: {args.framework}")
+            print(f"[*] Output format: {args.format}")
+            print(f"[*] Download external modules: {args.download_external_modules}")
+
         # Run Scanners
         results, resource_count, recommendations = scan_directory(
             target_path, 
@@ -264,6 +283,9 @@ def main():
             download_external_modules=args.download_external_modules
         )
         
+        if args.verbose:
+            print(f"[*] Scan complete: {resource_count} resource(s) found, {len(results)} finding(s)")
+
         # Generate Report
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
@@ -313,8 +335,9 @@ def main():
         sys.exit(0)
         
     except Exception as e:
-        print(f"An error occurred during scanning: {e}", file=sys.stderr)
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
+        print(f"[ERROR] Scan failed: {e}", file=sys.stderr)
+        print("[INFO]  Run with --verbose (-v) for a full traceback and debug output.", file=sys.stderr)
+        if args.verbose:
             import traceback
             traceback.print_exc()
         sys.exit(1)
