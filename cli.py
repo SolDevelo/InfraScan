@@ -4,6 +4,7 @@ import sys
 import argparse
 import json
 import logging
+import requests
 try:
     from colorama import Fore, Style, init
 except ImportError:
@@ -22,6 +23,35 @@ __version__ = "1.0.5"
 
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
+
+def send_slack_notification(message: str) -> None:
+    """Send a Slack notification via webhook URL from environment variable."""
+    webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
+    if not webhook_url:
+        return
+    try:
+        response = requests.post(webhook_url, json={'text': message}, timeout=5)
+        if response.status_code >= 400:
+            print(f"Slack notification failed: {response.status_code} - {response.text}", file=sys.stderr)
+    except Exception as e:
+        print(f"Slack notification error: {e}", file=sys.stderr)
+
+def build_gh_actions_context() -> dict:
+    """Extract GitHub Actions context from environment variables."""
+    repo = os.getenv('GITHUB_REPOSITORY', '')
+    server = os.getenv('GITHUB_SERVER_URL', 'https://github.com').rstrip('/')
+    run_id = os.getenv('GITHUB_RUN_ID', '')
+    workflow = os.getenv('GITHUB_WORKFLOW', '')
+    ref_name = os.getenv('GITHUB_REF_NAME', '')
+    actor = os.getenv('GITHUB_ACTOR', '')
+    run_url = f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ''
+    return {
+        'repo': repo,
+        'workflow': workflow,
+        'branch': ref_name,
+        'actor': actor,
+        'run_url': run_url,
+    }
 
 def setup_args():
     parser = argparse.ArgumentParser(
@@ -306,6 +336,44 @@ def main():
             if args.out:
                  print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
             
+        # Send Slack notification if configured
+        webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
+        if webhook_url:
+            overall = report_dict.get('overall', {})
+            cost = report_dict.get('cost', {})
+            security = report_dict.get('security', {})
+            container = report_dict.get('container', {})
+
+            total_findings = len(results)
+            overall_grade = overall.get('letter', '?') if overall else '?'
+            overall_pct = overall.get('percentage', 0) if overall else 0
+
+            grades_parts = [f"Overall {overall_grade} ({overall_pct}%)"] 
+            if cost and cost.get('max_score', 0) > 0:
+                grades_parts.append(f"Cost {cost.get('letter','?')} ({cost.get('percentage',0)}%)")
+            if security and security.get('max_score', 0) > 0:
+                grades_parts.append(f"Security {security.get('letter','?')} ({security.get('percentage',0)}%)")
+            if container and container.get('max_score', 0) > 0:
+                grades_parts.append(f"Containers {container.get('letter','?')} ({container.get('percentage',0)}%)")
+            grades_summary = " | ".join(grades_parts)
+
+            ctx = build_gh_actions_context()
+            lines = ["🤖 InfraScan used in *GitHub Actions*"]
+            if ctx['repo']:
+                lines.append(f"Repo: *{ctx['repo']}*")
+            if ctx['branch']:
+                lines.append(f"Branch: `{ctx['branch']}`")
+            if ctx['workflow']:
+                lines.append(f"Workflow: _{ctx['workflow']}_")
+            if ctx['actor']:
+                lines.append(f"Triggered by: {ctx['actor']}")
+            lines.append(f"Grades: {grades_summary}")
+            lines.append(f"Findings: {total_findings} | Scanner: {args.scanner}")
+            if ctx['run_url']:
+                lines.append(f"<{ctx['run_url']}|View run>")
+
+            send_slack_notification(" | ".join(lines))
+
         # Determine Exit Code
         if should_fail(args, report_dict, results):
             sys.exit(1)
