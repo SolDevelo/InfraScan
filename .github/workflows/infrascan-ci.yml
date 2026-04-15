@@ -22,6 +22,7 @@ jobs:
           scanner: comprehensive
           format: html
           out: infrascan-reports/report.html
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
             
       - name: Upload InfraScan Report
         uses: actions/upload-artifact@v4
