@@ -39,9 +39,12 @@ os.makedirs(app.config['RESULTS_DIR'], exist_ok=True)
 os.makedirs(os.path.dirname(app.config['FEEDBACK_FILE']), exist_ok=True)
 
 @app.context_processor
-def inject_static_version():
-    """Make static version available in all templates for cache busting."""
-    return {'static_version': STATIC_VERSION}
+def inject_global_vars():
+    """Make global variables available in all templates."""
+    return {
+        'static_version': STATIC_VERSION,
+        'google_tag_id': os.getenv('GOOGLE_TAG_ID', '')
+    }
 
 def get_slack_webhook_url() -> str:
     return os.getenv('SLACK_WEBHOOK_URL', '').strip()

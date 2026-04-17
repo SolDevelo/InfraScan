@@ -66,9 +66,10 @@ def generate_standalone_html(report_dict):
     js_pattern = r'<script[^>]*src=["\'].*?app\.js.*?["\'][^>]*>\s*</script>'
     html_content = re.sub(js_pattern, js_placeholder, html_content)
 
-    # Clean up ALL remaining Jinja tags (static_version etc)
+    # Clean up ALL remaining Jinja tags (static_version, google_tag_id etc)
     # This must happen before data injection
     html_content = re.sub(r'\{\{\s*.*?\s*\}\}', "", html_content)
+    html_content = re.sub(r'\{%\s*.*?\s*%\}', "", html_content)
     
     # NOW inject the JS content and the actual data
     # Use a safe way to build the script tag without f-string interpolation issues for JS content
