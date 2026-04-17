@@ -66,22 +66,7 @@ def generate_standalone_html(report_dict):
     js_pattern = r'<script[^>]*src=["\'].*?app\.js.*?["\'][^>]*>\s*</script>'
     html_content = re.sub(js_pattern, js_placeholder, html_content)
 
-    # Handle Google Tag ID specifically before generic cleanup
-    google_tag_id = os.getenv('GOOGLE_TAG_ID', '')
-    ga_pattern = r'\{% if google_tag_id %\}(.*?)\{% endif %\}'
-    if google_tag_id:
-        # Inject the ID into the GA block and keep it
-        html_content = re.sub(
-            ga_pattern, 
-            lambda m: m.group(1).replace('{{ google_tag_id }}', google_tag_id), 
-            html_content, 
-            flags=re.DOTALL
-        )
-    else:
-        # Remove the GA block entirely
-        html_content = re.sub(ga_pattern, "", html_content, flags=re.DOTALL)
-
-    # Clean up ALL remaining Jinja tags (static_version etc)
+    # Clean up ALL remaining Jinja tags (static_version, google_tag_id etc)
     # This must happen before data injection
     html_content = re.sub(r'\{\{\s*.*?\s*\}\}', "", html_content)
     html_content = re.sub(r'\{%\s*.*?\s*%\}', "", html_content)
