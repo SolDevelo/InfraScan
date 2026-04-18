@@ -288,7 +288,8 @@ def scan_directory_level(directory, file_paths, rules):
     # Read all files into a dictionary to keep track of content per file
     file_contents = {}
     all_content = ""
-    
+    skipped_files = 0
+
     for filepath in file_paths:
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -296,7 +297,11 @@ def scan_directory_level(directory, file_paths, rules):
                 file_contents[filepath] = content
                 all_content += content + "\n"
         except Exception as e:
+            skipped_files += 1
             continue
+
+    if skipped_files > 0:
+        print(f"[!] Warning: {skipped_files} file(s) could not be read and were skipped — scan results may be incomplete.")
     
     # Only run InverseRegexRules at directory level
     for rule in rules:

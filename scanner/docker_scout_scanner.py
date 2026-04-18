@@ -278,8 +278,9 @@ def run_docker_scout_scan(directory_path: str) -> Tuple[List[Dict[str, Any]], Li
     k8s_files = find_kubernetes_files(directory_path)
     
     if not compose_files and not k8s_files:
+        print("[i] No Docker Compose or Kubernetes files found — container scan skipped.")
         return findings, extra_recommendations, False
-    
+
     print(f"Found {len(compose_files)} Docker Compose file(s) and {len(k8s_files)} Kubernetes file(s) to scan")
     
     # Collect ALL images from ALL files first
@@ -524,13 +525,15 @@ def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_fi
         
         # Group by CVE ID to avoid duplicates
         vuln_map = {}
-        
+        negligible_count = 0
+
         for vuln in vulnerabilities:
             cve_id = vuln.get('id', vuln.get('cve', 'UNKNOWN'))
             severity = vuln.get('severity', 'Unknown')
-            
+
             # Skip Negligible severity vulnerabilities
             if severity.lower() == 'negligible':
+                negligible_count += 1
                 continue
             
             # Docker Scout packages affected by this CVE
@@ -567,7 +570,10 @@ def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_fi
                 data['count']
             )
             findings.append(finding)
-    
+
+        if negligible_count > 0:
+            print(f"[i] Filtered {negligible_count} Negligible-severity CVE(s) from Docker Scout results (use --verbose to include them).")
+
     except Exception as e:
         print(f"Error parsing Docker Scout output: {e}")
         import traceback

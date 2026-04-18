@@ -156,17 +156,19 @@ def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str
         
         # Group by vulnerability ID to avoid duplicates
         vuln_map = {}
-        
+        negligible_count = 0
+
         for match in matches:
             vuln = match.get('vulnerability', {})
             artifact = match.get('artifact', {})
-            
+
             vuln_id = vuln.get('id', 'UNKNOWN')
             severity = vuln.get('severity', 'Unknown')
             description = vuln.get('description', '')
-            
+
             # Skip Negligible severity vulnerabilities
             if severity == 'Negligible':
+                negligible_count += 1
                 continue
             
             # Store highest severity for each vuln
@@ -196,7 +198,10 @@ def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str
                 data['count']
             )
             findings.append(finding)
-    
+
+        if negligible_count > 0:
+            print(f"[i] Filtered {negligible_count} Negligible-severity CVE(s) from Grype results (use --verbose to include them).")
+
     except Exception as e:
         print(f"Error parsing Grype output: {e}")
         import traceback
