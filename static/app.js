@@ -897,17 +897,14 @@ function initApp() {
 
         resultsContent.innerHTML = metadataHtml + gradeHtml + summaryHtml;
 
-        if (results.length === 0) {
-            resultsContent.innerHTML += `
-                <div class="finding-card" style="border-left-color: var(--success)">
-                    <div class="finding-header">
-                        <span class="finding-title">No Issues Found</span>
-                    </div>
-                    <p>Great job! No issues found in the scanned infrastructure.</p>
-                </div>
-            `;
-            return;
-        }
+        // Determine which sections to show based on scanner_used
+        const scannerUsed = (summary && summary.scanner_used) ? summary.scanner_used : 'comprehensive';
+        const isComprehensive = scannerUsed === 'comprehensive' || scannerUsed === 'both' || scannerUsed === 'all';
+        const usedScanners = scannerUsed.split(',').map(s => s.trim());
+
+        const showCost = isComprehensive || usedScanners.includes('regex');
+        const showIaC = isComprehensive || usedScanners.includes('checkov');
+        const showContainers = isComprehensive || usedScanners.includes('containers');
 
         // Group results by rule_id
         const groupedResults = groupByRule(results);
@@ -925,31 +922,31 @@ function initApp() {
         let html = '<div class="results-grid-layout">';
 
         // Cost Column
-        if (costFindings.length > 0) {
+        if (showCost) {
             html += `
                 <div class="results-column">
                     <h3 class="column-title cost">💰 Cost Optimization</h3>
-                    ${renderFindingsList(costFindings)}
+                    ${costFindings.length > 0 ? renderFindingsList(costFindings) : '<div class="empty-state">✅ No cost issues found.</div>'}
                 </div>
             `;
         }
 
         // IaC Security Column
-        if (iacSecurityFindings.length > 0) {
+        if (showIaC) {
             html += `
                 <div class="results-column">
                     <h3 class="column-title security">🔒 IaC Security</h3>
-                    ${renderFindingsList(iacSecurityFindings)}
+                    ${iacSecurityFindings.length > 0 ? renderFindingsList(iacSecurityFindings) : '<div class="empty-state">✅ No IaC security issues found.</div>'}
                 </div>
             `;
         }
 
         // Container Security Column
-        if (containerFindings.length > 0) {
+        if (showContainers) {
             html += `
                 <div class="results-column">
                     <h3 class="column-title security">🐳 Container Security</h3>
-                    ${renderContainerFindings(containerFindings)}
+                    ${containerFindings.length > 0 ? renderContainerFindings(containerFindings) : '<div class="empty-state">✅ No container vulnerabilities found.</div>'}
                 </div>
             `;
         }
@@ -1317,7 +1314,7 @@ function initApp() {
         };
 
         const renderGradeCard = (title, grade, icon) => {
-            if (!grade || grade.violations === 0) return '';
+            if (!grade) return '';
 
             // Context-aware label for violations
             let violationsLabel = 'Violations:';

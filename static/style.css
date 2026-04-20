@@ -704,6 +704,17 @@ input:checked+.slider:before {
     border-bottom-color: #3b82f6;
 }
 
+.empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0.5rem;
+    border: 1px dashed var(--border);
+    margin-top: 1rem;
+}
+
 @media (max-width: 1100px) {
     .results-grid-layout {
         grid-template-columns: 1fr;
