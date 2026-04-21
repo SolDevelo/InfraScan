@@ -2,6 +2,13 @@
 
 **Open Source IaC Cost & Security Scanner**
 
+[![Verified by InfraScan](https://img.shields.io/badge/Verified_by-SolDevelo_InfraScan-0052cc?style=flat&logo=security)](https://github.com/soldevelo/infrascan)
+[![Docker Pulls](https://img.shields.io/docker/pulls/soldevelo/infrascan.svg?style=flat-square)](https://hub.docker.com/r/soldevelo/infrascan)
+[![Docker Image Size](https://img.shields.io/docker/image-size/soldevelo/infrascan/latest?style=flat-square)](https://hub.docker.com/r/soldevelo/infrascan)
+[![GitHub stars](https://img.shields.io/github/stars/soldevelo/infrascan?style=flat-square&logo=github)](https://github.com/soldevelo/infrascan/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/soldevelo/infrascan?style=flat-square)](https://github.com/soldevelo/infrascan/issues)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](https://github.com/soldevelo/infrascan/blob/main/LICENSE)
+
 InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It supports **Terraform**, **Kubernetes manifests**, **CloudFormation**, **Helm**, and **Dockerfiles**. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
 
 ## 📦 Installation
