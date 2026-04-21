@@ -47,9 +47,39 @@ def inject_global_vars():
     }
 
 def get_slack_webhook_url() -> str:
+    """Return the Slack webhook URL from the environment, stripped of surrounding whitespace.
+
+    Returns an empty string when ``SLACK_WEBHOOK_URL`` is unset — callers should
+    treat an empty return value as "Slack notifications disabled" and return early
+    rather than attempting a POST to an empty URL.
+    """
     return os.getenv('SLACK_WEBHOOK_URL', '').strip()
 
 def build_share_url(result_id: str, req) -> str:
+    """Build a shareable URL for a scan result using the best available origin signal.
+
+    Tries three sources in descending priority to construct the base URL:
+
+    1. **Referer header** — preserves the exact scheme, host, and path prefix of
+       the page that triggered the request.  Handles sub-path deployments and
+       reverse proxies correctly because it reflects what the browser actually saw.
+    2. **Origin header** — provides scheme + host without a path.  Used when Referer
+       is absent (e.g. cross-origin POSTs with ``Referrer-Policy: no-referrer``).
+    3. **``req.host_url``** — Flask's own derived host URL as a last resort.
+
+    If all three are absent, or ``req`` is ``None`` (e.g. in offline/test contexts),
+    returns ``result_id`` bare — no base URL can be inferred.
+
+    The query string appended is always ``?scan_id=<result_id>``.
+
+    Args:
+        result_id: Unique identifier of the scan result to share.
+        req: Flask ``Request`` object, or ``None`` in testing / offline contexts.
+
+    Returns:
+        Full URL ending with ``?scan_id=<result_id>``, or just ``result_id``
+        when no origin can be determined.
+    """
     referer = req.headers.get('Referer') if req else None
     if referer:
         parsed = urlparse(referer)
@@ -68,6 +98,16 @@ def build_share_url(result_id: str, req) -> str:
     return result_id
 
 def send_slack_notification(message: str) -> None:
+    """Post a plain-text message to Slack via the configured incoming webhook.
+
+    Silently no-ops when ``SLACK_WEBHOOK_URL`` is unset or empty — callers do
+    not need to guard against a missing webhook.  HTTP errors (4xx/5xx) and
+    network exceptions are logged to stdout but do **not** propagate; a failed
+    Slack notification is never allowed to abort a scan in progress.
+
+    Args:
+        message: Plain text to send as the Slack message body.
+    """
     webhook_url = get_slack_webhook_url()
     if not webhook_url:
         return
