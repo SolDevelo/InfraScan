@@ -279,6 +279,22 @@ The system is designed to be extensible for future enhancements like historical 
 - COST-012: Missing Spot instance usage
 - Plus Checkov's 100+ security/compliance checks
 
+## 🏅 Badge
+
+Show that your infrastructure is secure and cost-optimized! Add this badge to your repository's `README.md`:
+
+**Markdown:**
+```markdown
+[![Verified by InfraScan](https://img.shields.io/badge/Verified_by-SolDevelo_InfraScan-0052cc?style=flat&logo=security)](https://github.com/soldevelo/infrascan)
+```
+
+**HTML:**
+```html
+<a href="https://github.com/soldevelo/infrascan">
+  <img src="https://img.shields.io/badge/Verified_by-SolDevelo_InfraScan-0052cc?style=flat&logo=security" alt="Verified by InfraScan">
+</a>
+```
+
 ## 🤝 Need Professional Help?
 
 InfraScan catches the "low-hanging fruit" in your code. 
