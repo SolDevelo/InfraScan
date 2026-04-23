@@ -43,7 +43,8 @@ def inject_global_vars():
     """Make global variables available in all templates."""
     return {
         'static_version': STATIC_VERSION,
-        'google_tag_id': os.getenv('GOOGLE_TAG_ID', '')
+        'google_tag_id': os.getenv('GOOGLE_TAG_ID', ''),
+        'site_domain': os.getenv('SITE_DOMAIN', 'https://infrascan.soldevelo.com')
     }
 
 def get_slack_webhook_url() -> str:

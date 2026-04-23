@@ -4,7 +4,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InfraScan - Advanced Infrastructure Auditor</title>
+    <meta name="description" content="InfraScan is an open-source Infrastructure as Code scanner that identifies security vulnerabilities, cost optimization opportunities, and compliance issues in Terraform, CloudFormation, Kubernetes, and Dockerfile. Scan GitHub repositories for free.">
+    <meta name="keywords" content="IaC scanner, Terraform security, CloudFormation audit, Kubernetes scanning, infrastructure audit, security scanner, cost optimization">
+    <meta name="author" content="SolDevelo">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ site_domain }}/">
+    <meta property="og:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
+    <meta property="og:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary">
+    <meta property="twitter:url" content="{{ site_domain }}/">
+    <meta property="twitter:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
+    <meta property="twitter:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    
+    <!-- Canonical -->
+    <link rel="canonical" href="{{ site_domain }}/">
+    
+    <!-- Language -->
+    <meta http-equiv="content-language" content="en-US">
+    
+    <title>InfraScan - Free Infrastructure as Code Security Scanner | Terraform & CloudFormation Auditor</title>
+    
     {% if google_tag_id %}
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_tag_id }}"></script>
@@ -16,10 +40,38 @@
         gtag('config', '{{ google_tag_id }}');
     </script>
     {% endif %}
+    
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "InfraScan",
+      "description": "Open-source Infrastructure as Code scanner for security and cost optimization",
+      "url": "{{ site_domain }}",
+      "applicationCategory": "DeveloperApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "creator": {
+        "@type": "Organization",
+        "name": "SolDevelo",
+        "url": "https://soldevelo.com"
+      },
+      "operatingSystem": "Web-based",
+      "featureList": ["Terraform scanning", "CloudFormation audit", "Kubernetes manifest analysis", "Dockerfile security scan", "Cost optimization detection", "Security vulnerability detection"]
+    }
+    </script>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" as="style" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
 </head>
 
 <body>

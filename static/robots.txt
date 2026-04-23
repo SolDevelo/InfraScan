@@ -1,4 +1,13 @@
 User-agent: *
 Allow: /
+Allow: /api/
 
-Sitemap: https://infrascan.soldevelo.com/sitemap.xml
+# Block any malicious bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
