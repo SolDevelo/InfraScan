@@ -53,18 +53,34 @@ header {
 
 .logo {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    /* Back to center for better overall feel */
     justify-content: center;
     gap: 0.75rem;
-    margin-bottom: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.main-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+.main-logo {
+    width: auto;
+    height: 110px; /* Slightly refined size for better symmetry */
+    max-width: 100%;
+    display: block;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
 }
 
 .github-stars-badge {
     display: flex;
     align-items: center;
     transition: transform 0.2s ease;
-    margin-left: 0.5rem;
+    opacity: 0.9;
 }
 
 .github-stars-badge:hover {
@@ -87,10 +103,10 @@ header {
 }
 
 .brand-divider {
-    height: 18px;
+    height: 40px; /* Taller divider for the larger logo */
     width: 1px;
     background: var(--border);
-    margin: 0 0.75rem 0 0;
+    margin: 0 1.5rem; /* Symmetric horizontal spacing */
 }
 
 .logo-link {
@@ -99,20 +115,21 @@ header {
     display: inline-block;
 }
 
-h1 {
-    font-size: 1.75rem;
-    font-weight: 800;
-    line-height: 1.1;
-    background: linear-gradient(to right, #818cf8, #c084fc);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -0.025em;
-    transition: all 0.3s ease;
+.logo-link:hover .main-logo {
+    transform: scale(1.02) translateY(-4px);
+    filter: drop-shadow(0 12px 24px rgba(99, 102, 241, 0.5)) brightness(1.1);
 }
 
-.logo-link:hover h1 {
-    filter: brightness(1.2);
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 .subtitle {
