@@ -33,6 +33,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/security_headers.inc:/etc/nginx/security_headers.inc:ro
       - ./static:/opt/infrascan/static:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
