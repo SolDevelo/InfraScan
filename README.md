@@ -11,6 +11,36 @@
 
 InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It supports **Terraform**, **Kubernetes manifests**, **CloudFormation**, **Helm**, and **Dockerfiles**. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
 
+## 🚀 Quick Start: GitHub Action
+
+The fastest way to integrate InfraScan into your repository is using our official GitHub Action. Add this to `.github/workflows/infrascan.yml`:
+
+```yaml
+name: InfraScan Security Audit
+on: [push, pull_request]
+
+jobs:
+  infrascan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run InfraScan
+        uses: soldevelo/infrascan@v1.0.5
+        with:
+          scanner: comprehensive
+          format: html
+          out: infrascan-report.html
+          fail-on: high_critical
+
+      - name: Upload HTML Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: infrascan-report
+          path: infrascan-report.html
+```
+
 ## 📦 Installation
 
 Requires Python 3.8+
@@ -44,14 +74,9 @@ CONTAINER_SCANNER=docker-scout
 
 ## 🛠️ Usage
 
-### Web Application
+### 🔍 Scanner Options
 
-```bash
-python3 app.py
-```
-Open browser at `http://localhost:5000`
-
-**Scanner Options:**
+InfraScan offers several scanning modes:
 - **regex** (Fast): Quick cost optimization scan (19 regex rules)
 - **containers**: Container vulnerability scanning (Docker Scout or Grype)
 - **checkov**: IaC Security checks only
@@ -63,6 +88,13 @@ Open browser at `http://localhost:5000`
 - **Severity Breakdown**: High/Medium/Low issue counts
 - **Smart Recommendations**: Actionable next steps based on your findings
 
+### Web Application
+
+```bash
+python3 app.py
+```
+Open browser at `http://localhost:5000`
+
 ### CLI / CI/CD Usage
 
 InfraScan provides two modes for command‑line operation:
@@ -71,7 +103,10 @@ InfraScan provides two modes for command‑line operation:
 * **Docker image** – the preferred way for CI/CD; the official image `soldevelo/infrascan` bundles all dependencies and scanners. **New in v1.0.4**: The CLI now provides a beautiful, colored findings summary directly in your CI/CD logs, even when generating HTML or JSON reports, so you can see results immediately without downloading artifacts.
 * **Detailed Guide**: See [docs/PIPELINE_INTEGRATION.md](./docs/PIPELINE_INTEGRATION.md) for best practices and a gradual rollout strategy.
 
-> The container also installs a helper binary called `infrascan`, so if you use the image directly as your pipeline container (e.g. Bitbucket/GitLab), you can invoke the scanner without wrapping it in `docker run`.
+> **Pro Tip:** The official Docker image includes a helper binary called `infrascan`. When using the image directly as your pipeline execution environment (e.g., in Bitbucket or GitLab), you can invoke the scanner directly:
+> ```bash
+> infrascan --scanner comprehensive --format html --out report.html
+> ```
 
 No Python installation or dependency management is required when using the Docker image.
 
@@ -112,40 +147,6 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 - `--framework`: `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm` (default: `auto`). When set to `auto`, InfraScan detects the framework automatically based on file contents.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
-
-#### GitHub Actions
-
-> **Note:** when the container image is used directly as the execution environment (e.g. in Bitbucket or GitLab pipelines), you can call the CLI binary included in `PATH` instead of invoking `docker run`:
->
-> ```bash
-> infrascan --scanner comprehensive --format html --out infrascan-report.html
-> ```
-
-```yaml
-name: InfraScan Security Audit
-on: [push, pull_request]
-
-jobs:
-  infrascan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.5
-        with:
-          scanner: comprehensive
-          format: html
-          out: infrascan-report.html
-          fail-on: high_critical
-
-      - name: Upload HTML Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: infrascan-report
-          path: infrascan-report.html
-```
 
 #### GitLab CI
 
