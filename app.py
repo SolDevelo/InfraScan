@@ -285,9 +285,11 @@ def scan_github():
         
         # Build grades summary
         grades_parts = [f"Overall {overall_grade.letter} ({overall_grade.percentage}%)"]
-        grades_parts.append(f"Cost {cost_grade.letter} ({cost_grade.percentage}%)")
-        grades_parts.append(f"Security {security_grade.letter} ({security_grade.percentage}%)")
-        if container_findings > 0:
+        if cost_grade and cost_grade.max_score > 0:
+            grades_parts.append(f"Cost {cost_grade.letter} ({cost_grade.percentage}%)")
+        if security_grade and security_grade.max_score > 0:
+            grades_parts.append(f"Security {security_grade.letter} ({security_grade.percentage}%)")
+        if container_grade and container_grade.max_score > 0:
             grades_parts.append(f"Containers {container_grade.letter} ({container_grade.percentage}%)")
         grades_summary = " ".join(grades_parts)
         

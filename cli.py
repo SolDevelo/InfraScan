@@ -143,7 +143,10 @@ def print_text_report(report_dict, resource_count, scanner_type):
         return Fore.RED
 
     def print_grade_line(name, grade):
-        if not grade or (grade.get('max_score', 0) == 0 and grade.get('letter') != 'A'):
+        if not grade:
+            return
+        # Skip if scanner didn't actually find anything (empty grade with zero max_score)
+        if grade.get('max_score', 0) == 0 and grade.get('score', 0) == 0:
             return
         
         letter = grade.get('letter', '?')
