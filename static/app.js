@@ -1355,15 +1355,28 @@ function initApp() {
 
         const recommendations = gradeReport.analysis?.recommendations || [];
 
+// Count how many scanners actually ran (non-null grades)
+        const activeScanners = [];
+        if (gradeReport.cost) activeScanners.push({ name: 'Cost Optimization', grade: gradeReport.cost, icon: '💰' });
+        if (gradeReport.security) activeScanners.push({ name: 'IaC Security', grade: gradeReport.security, icon: '🔒' });
+        if (gradeReport.container) activeScanners.push({ name: 'Container Security', grade: gradeReport.container, icon: '🐳' });
+
+        // When only one scanner is used, combine overall and scanner cards into one
+        let gradeCardsHtml;
+        if (activeScanners.length === 1 && gradeReport.overall) {
+            // Single scanner: show only overall card (which already reflects the single scanner)
+            gradeCardsHtml = renderGradeCard('Infrastructure Health', gradeReport.overall, '🎯');
+        } else {
+            gradeCardsHtml = renderGradeCard('Overall Grade', gradeReport.overall, '🎯') +
+                activeScanners.map(s => renderGradeCard(s.name, s.grade, s.icon)).join('');
+        }
+
         return `
             <div class="grade-report-section">
                 <h2 class="section-title">📊 Infrastructure Report Card</h2>
                 <div class="grade-cards-container">
-                    ${renderGradeCard('Overall Grade', gradeReport.overall, '🎯')}
-                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
-                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
-                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
-                </div>
+                    ${gradeCardsHtml}
+                </div>`
                 ${recommendations.length > 0 ? `
                 <div class="recommendations-section">
                     <h3 class="recommendations-title">💡 Recommendations</h3>
