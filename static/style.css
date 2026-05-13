@@ -2813,3 +2813,357 @@ textarea:focus {
 .usage-footer-premium a:hover::after {
     transform: scaleX(1);
 }
+
+/* ============================================
+   Export PDF Button
+   ============================================ */
+.export-pdf-btn {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(59, 130, 246, 0.15));
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #10B981;
+    gap: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.export-pdf-btn:hover {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(59, 130, 246, 0.25));
+    border-color: #10B981;
+    color: #34D399;
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.2);
+    transform: translateY(-1px);
+}
+
+.export-pdf-btn:active {
+    transform: translateY(0);
+}
+
+.export-pdf-btn.exporting {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.export-pdf-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* ============================================
+   Print / PDF Export Styles
+   ============================================ */
+@media print {
+    /* ---- Reset & page setup ---- */
+    @page {
+        size: A4 portrait;
+        margin: 15mm 12mm 18mm 12mm;
+    }
+
+    /* ---- Force light background so content is readable ---- */
+    :root {
+        --bg-color: #ffffff;
+        --card-bg: #f8fafc;
+        --text-main: #0f172a;
+        --text-muted: #475569;
+        --border: #cbd5e1;
+        --primary: #4f46e5;
+        --success: #059669;
+        --warning: #d97706;
+        --danger: #dc2626;
+        --glass: #f1f5f9;
+        --glass-border: #e2e8f0;
+    }
+
+    * {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+
+    body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+        font-size: 10pt;
+        line-height: 1.5;
+    }
+
+    /* ---- Hide UI chrome ---- */
+    header,
+    footer,
+    .tabs,
+    .tab-content,
+    .results-actions,
+    #share-link-container,
+    .soft-sell,
+    #scroll-to-top,
+    #newsletter-modal,
+    #feedback-modal,
+    #toast-container,
+    #loading,
+    #scan-input-container,
+    .landing-info,
+    #recent-scans-tab,
+    #release-notes-tab,
+    #local-usage-tab,
+    .github-stars-badge,
+    .github-stars-badge-footer {
+        display: none !important;
+    }
+
+    /* ---- Container: full width, no transitions ---- */
+    .container,
+    .container.expanded {
+        max-width: 100% !important;
+        width: 100% !important;
+        transition: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ---- Results area: always visible ---- */
+    #results-area {
+        display: block !important;
+        margin-top: 0 !important;
+    }
+
+    /* ---- PDF header banner ---- */
+    #results-area::before {
+        content: "InfraScan — Infrastructure Security Report";
+        display: block;
+        font-size: 18pt;
+        font-weight: 800;
+        color: #4f46e5;
+        border-bottom: 3px solid #4f46e5;
+        padding-bottom: 6pt;
+        margin-bottom: 14pt;
+        letter-spacing: -0.3px;
+    }
+
+    /* ---- Page breaks ---- */
+    .results-column,
+    .finding-card,
+    .grade-report-section,
+    .report-metadata {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .results-column {
+        page-break-before: auto;
+    }
+
+    /* ---- Layout: switch to single column for print ---- */
+    .results-grid-layout {
+        display: block !important;
+        gap: 0 !important;
+    }
+
+    .results-column {
+        margin-bottom: 1.5rem;
+        border: 1px solid #cbd5e1 !important;
+        background: #f8fafc !important;
+        border-radius: 0.5rem;
+        padding: 0.75rem !important;
+    }
+
+    /* ---- Typography adjustments ---- */
+    .stat-value {
+        color: #0f172a !important;
+        font-size: 1.4rem !important;
+    }
+
+    .stat-label {
+        color: #475569 !important;
+    }
+
+    .stat-card {
+        background: #f1f5f9 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    .stat-card.total {
+        background: linear-gradient(135deg, #f1f5f9, #eef2ff) !important;
+    }
+
+    .finding-card {
+        background: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+        margin-bottom: 0.75rem;
+        padding: 1rem !important;
+    }
+
+    .finding-title {
+        color: #0f172a !important;
+    }
+
+    .finding-detail {
+        color: #475569 !important;
+    }
+
+    .code-block {
+        background: #f1f5f9 !important;
+        color: #1e293b !important;
+        border-color: #cbd5e1 !important;
+        font-size: 8pt !important;
+    }
+
+    /* ---- Grade cards ---- */
+    .grade-report-section {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 0.5rem;
+        padding: 1rem !important;
+        margin-bottom: 1.5rem;
+    }
+
+    .grade-card {
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    .grade-letter {
+        color: #ffffff !important;
+        print-color-adjust: exact;
+    }
+
+    .grade-percentage {
+        color: #0f172a !important;
+    }
+
+    .grade-detail-label,
+    .grade-detail-value {
+        color: #475569 !important;
+    }
+
+    .section-title,
+    .column-title,
+    #results-area h2 {
+        color: #0f172a !important;
+    }
+
+    .column-title.cost {
+        color: #059669 !important;
+        border-bottom-color: #059669 !important;
+    }
+
+    .column-title.security {
+        color: #4f46e5 !important;
+        border-bottom-color: #4f46e5 !important;
+    }
+
+    /* ---- Report metadata ---- */
+    .report-metadata {
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .metadata-label {
+        color: #475569 !important;
+    }
+
+    .metadata-value,
+    .metadata-value a {
+        color: #0f172a !important;
+    }
+
+    /* ---- Summary grid ---- */
+    .summary-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+    }
+
+    /* ---- Container findings: expand all accordion sections ---- */
+    .image-card-content,
+    .cve-list,
+    .cve-details {
+        display: block !important;
+    }
+
+    .image-card {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    .image-card-header {
+        cursor: default !important;
+    }
+
+    .expand-icon,
+    .severity-expand-icon,
+    .cve-expand-icon {
+        display: none !important;
+    }
+
+    /* ---- Severity badges stay colored ---- */
+    .severity-badge.Critical {
+        background: rgba(220, 38, 38, 0.15) !important;
+        color: #dc2626 !important;
+    }
+
+    .severity-badge.High {
+        background: rgba(239, 68, 68, 0.15) !important;
+        color: #ef4444 !important;
+    }
+
+    .severity-badge.Medium {
+        background: rgba(245, 158, 11, 0.15) !important;
+        color: #d97706 !important;
+    }
+
+    .severity-badge.Low {
+        background: rgba(148, 163, 184, 0.15) !important;
+        color: #64748b !important;
+    }
+
+    .severity-tag.critical-tag { color: #dc2626 !important; }
+    .severity-tag.high-tag     { color: #ef4444 !important; }
+    .severity-tag.medium-tag   { color: #d97706 !important; }
+    .severity-tag.low-tag      { color: #64748b !important; }
+
+    /* ---- Recommendations ---- */
+    .recommendations-section {
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 0.5rem;
+        padding: 0.75rem !important;
+    }
+
+    .recommendations-title {
+        color: #0f172a !important;
+    }
+
+    .recommendations-list li {
+        color: #1e293b !important;
+    }
+
+    /* ---- Links ---- */
+    a {
+        color: #4f46e5 !important;
+        text-decoration: none;
+    }
+
+    /* ---- Empty states ---- */
+    .empty-state {
+        background: #f1f5f9 !important;
+        border-color: #cbd5e1 !important;
+        color: #475569 !important;
+    }
+
+    /* ---- PDF footer ---- */
+    #results-area::after {
+        content: "Generated by InfraScan — infrascan.soldevelo.com — " attr(data-scan-date);
+        display: block;
+        font-size: 8pt;
+        color: #94a3b8;
+        text-align: center;
+        margin-top: 2rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #e2e8f0;
+    }
+}

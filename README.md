@@ -83,6 +83,7 @@ InfraScan offers several scanning modes:
 - **comprehensive**: All scanners combined (Cost + Security + Containers)
 
 **Report Features:**
+- **Professional PDF Export**: Generate beautiful, branded security reports with one click — perfect for compliance and auditing.
 - **Grade Cards**: Visual A-F grades for Overall, Cost, and Security
 - **Risk Assessment**: Low to Critical risk levels
 - **Severity Breakdown**: High/Medium/Low issue counts

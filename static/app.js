@@ -445,6 +445,46 @@ function initApp() {
         });
     }
 
+    // Export PDF Button — opens a dedicated, beautifully formatted PDF document in a new window
+    const exportPdfBtn = document.getElementById('export-pdf-btn');
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', () => {
+            if (!currentResults) return;
+
+            exportPdfBtn.classList.add('exporting');
+            exportPdfBtn.disabled = true;
+            exportPdfBtn.innerHTML = '<span class="export-pdf-icon">⏳</span> Preparing PDF...';
+
+            setTimeout(() => {
+                try {
+                    const html = buildPdfDocument(
+                        currentResults,
+                        currentSummary,
+                        currentMetadata,
+                        currentGradeReport
+                    );
+                    const win = window.open('', '_blank', 'width=1050,height=820,scrollbars=yes,resizable=yes');
+                    if (!win) {
+                        alert('Popup blocked! Please allow popups for this site to export PDF.');
+                        return;
+                    }
+                    win.document.open();
+                    win.document.write(html);
+                    win.document.close();
+                    win.focus();
+                    // Auto-trigger print after fonts load
+                    setTimeout(() => win.print(), 800);
+                } catch (e) {
+                    console.error('PDF generation error:', e);
+                    alert('Could not generate PDF: ' + e.message);
+                } finally {
+                    exportPdfBtn.classList.remove('exporting');
+                    exportPdfBtn.disabled = false;
+                    exportPdfBtn.innerHTML = '<span class="export-pdf-icon">⬇</span> Export PDF';
+                }
+            }, 100);
+        });
+    }
 
 
     function resetScanProgress() {

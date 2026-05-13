@@ -230,6 +230,15 @@
                 <div class="release-notes-container">
                     <div class="release-entry">
                         <div class="release-header">
+                            <span class="version">v1.0.7</span>
+                            <span class="date">May 13, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>PDF Export</strong>: Reports can now be exported as a print-ready PDF directly from the browser — ideal for sharing with compliance and security teams.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
                             <span class="version">v1.0.5</span>
                             <span class="date">April 10, 2026</span>
                         </div>
@@ -468,6 +477,9 @@
                     <div class="results-actions">
                         <button class="secondary-btn" id="new-scan-btn">New Scan</button>
                         <button class="secondary-btn" id="share-btn">Share Results</button>
+                        <button class="secondary-btn export-pdf-btn" id="export-pdf-btn" title="Export report as PDF">
+                            <span class="export-pdf-icon">⬇</span> Export PDF
+                        </button>
                     </div>
                 </div>
 
@@ -496,7 +508,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.5 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.7 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
@@ -595,6 +607,7 @@
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
+    <script src="{{ url_for('static', filename='pdf_generator.js') }}?v={{ static_version }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}?v={{ static_version }}"></script>
 </body>
 

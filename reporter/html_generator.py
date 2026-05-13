@@ -14,6 +14,7 @@ def generate_standalone_html(report_dict):
     template_path = os.path.join(base_dir, 'templates', 'index.html')
     css_path = os.path.join(base_dir, 'static', 'style.css')
     js_path = os.path.join(base_dir, 'static', 'app.js')
+    pdf_js_path = os.path.join(base_dir, 'static', 'pdf_generator.js')
     logo_path = os.path.join(base_dir, 'static', 'images', 'soldevelo.png')
     
     # Read files
@@ -26,6 +27,9 @@ def generate_standalone_html(report_dict):
             
         with open(js_path, 'r', encoding='utf-8') as f:
             js_content = f.read()
+
+        with open(pdf_js_path, 'r', encoding='utf-8') as f:
+            pdf_js_content = f.read()
             
         with open(logo_path, 'rb') as f:
             logo_b64 = base64.b64encode(f.read()).decode('utf-8')
@@ -63,8 +67,11 @@ def generate_standalone_html(report_dict):
     
     # Protect the app.js script tag from generic cleanup
     js_placeholder = "<!-- APP_JS_PLACEHOLDER -->"
-    js_pattern = r'<script[^>]*src=["\'].*?app\.js.*?["\'][^>]*>\s*</script>'
+    # Match both the new pdf_generator.js and app.js tags
+    js_pattern = r'<script[^>]*src=["\'].*?(app\.js|pdf_generator\.js).*?["\'][^>]*>\s*</script>'
     html_content = re.sub(js_pattern, js_placeholder, html_content)
+    # Remove duplicates if both tags were replaced
+    html_content = re.sub(f"{js_placeholder}\\s*{js_placeholder}", js_placeholder, html_content)
 
     # Clean up ALL remaining Jinja tags (static_version, google_tag_id etc)
     # This must happen before data injection
@@ -75,6 +82,7 @@ def generate_standalone_html(report_dict):
     # Use a safe way to build the script tag without f-string interpolation issues for JS content
     injected_script = "<script>\n"
     injected_script += f"    window.CLI_INJECTED_DATA_B64 = \"{json_b64}\";\n"
+    injected_script += f"    {pdf_js_content}\n"
     injected_script += f"    {js_content}\n"
     injected_script += "</script>"
     
