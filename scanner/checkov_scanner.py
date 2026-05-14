@@ -24,15 +24,17 @@ def is_checkov_available() -> bool:
 def run_checkov_scan(
     directory_path: str, 
     framework: str = "terraform",
-    download_external_modules: bool = False
+    download_external_modules: bool = False,
+    files: List[str] = None
 ) -> List[Dict[str, Any]]:
     """
-    Run Checkov scan on a directory using subprocess.
+    Run Checkov scan on a directory or specific files using subprocess.
     
     Args:
         directory_path: Path to directory containing IaC files
         framework: IaC framework to scan (terraform, cloudformation, kubernetes, etc.)
         download_external_modules: Whether to download external modules
+        files: Optional list of specific files to scan
     
     Returns:
         List of findings in a normalized format
@@ -46,13 +48,19 @@ def run_checkov_scan(
     
     try:
         # Use subprocess to call checkov CLI directly
-        cmd = [
-            "checkov",
-            "-d", directory_path,
+        cmd = ["checkov"]
+        
+        if files:
+            for f in files:
+                cmd.extend(["-f", f])
+        else:
+            cmd.extend(["-d", directory_path])
+            
+        cmd.extend([
             "--framework", framework,
             "-o", "json",
             "--quiet"
-        ]
+        ])
         
         if download_external_modules:
             cmd.append("--download-external-modules")
@@ -62,7 +70,7 @@ def run_checkov_scan(
             cmd,
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(directory_path) or "."
+            cwd=directory_path if os.path.isdir(directory_path) else os.path.dirname(directory_path) or "."
         )
         
         # Parse the JSON output

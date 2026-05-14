@@ -35,6 +35,23 @@ def find_kubernetes_files(directory_path: str) -> List[str]:
                     
     return k8s_files
 
+def filter_container_files(files: List[str]) -> tuple[List[str], List[str]]:
+    """Filter a list of files into Docker Compose and Kubernetes files."""
+    compose_patterns = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml']
+    compose_files = [f for f in files if os.path.basename(f) in compose_patterns or os.path.basename(f).startswith('docker-compose')]
+    
+    potential_k8s = [f for f in files if f.endswith(('.yml', '.yaml')) and f not in compose_files]
+    k8s_files = []
+    for f in potential_k8s:
+        try:
+            with open(f, 'r', encoding='utf-8') as fh:
+                head = fh.read(1024)
+                if 'apiVersion:' in head and 'kind:' in head:
+                    k8s_files.append(f)
+        except Exception:
+            continue
+    return compose_files, k8s_files
+
 def extract_images_from_compose(compose_file: str) -> List[str]:
     """Extract Docker image names from a compose file with environment variable expansion."""
     images = []

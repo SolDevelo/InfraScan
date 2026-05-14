@@ -146,8 +146,24 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
 - `--framework`: `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm` (default: `auto`). When set to `auto`, InfraScan detects the framework automatically based on file contents.
+- `-f`, `--include`: Select specific files or directories to scan. Can be used multiple times (e.g., `-f dir1 -f file2.tf`). This is useful in large repositories to avoid scanning redundant or test deployments.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
+
+#### Selective Scanning (Partial Scans)
+
+In larger projects, you might want to scan only specific subdirectories or files to save time or avoid redundant findings:
+
+```bash
+# Scan only a specific directory
+docker run --rm -v $(pwd):/scan soldevelo/infrascan -f production/terraform
+
+# Scan multiple specific files
+docker run --rm -v $(pwd):/scan soldevelo/infrascan -f main.tf -f database.tf
+
+# Combine directories and files
+docker run --rm -v $(pwd):/scan soldevelo/infrascan -f modules/network -f app/deployment.yaml
+```
 
 #### GitLab CI
 

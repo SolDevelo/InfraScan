@@ -102,6 +102,13 @@ def setup_args():
         choices=["auto", "terraform", "kubernetes", "cloudformation", "helm"],
         help="IaC framework type (default: auto-detect)"
     )
+
+    parser.add_argument(
+        "-f", "--include",
+        action="append",
+        dest="include",
+        help="Select specific files or directories to scan. Can be used multiple times."
+    )
     
     parser.add_argument(
         "--version",
@@ -291,7 +298,8 @@ def main():
             target_path, 
             scanner_type=args.scanner,
             framework=args.framework,
-            download_external_modules=args.download_external_modules
+            download_external_modules=args.download_external_modules,
+            included_paths=args.include
         )
         
         # Generate Report

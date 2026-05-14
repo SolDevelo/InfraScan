@@ -99,6 +99,7 @@ jobs:
 
 ## 💡 Pro Tips
 *   **Console Visibility:** InfraScan v1.0.4+ prints a colored summary directly to the terminal. You don't always need to download the HTML report to see what's wrong.
+*   **Selective Scanning:** For large monorepos, use `-f` or `--include` to scan only the modified directories or files. This speeds up the scan and reduces noise from unrelated projects.
 *   **Selective Scanners:** If you only care about costs, use `--scanner regex`. If you only care about security, use `--scanner checkov`.
 *   **Kubernetes Projects:** InfraScan auto-detects Kubernetes manifests. If your repo contains K8s YAML files alongside Terraform, you can force the framework with `--framework kubernetes`.
 *   **Ignore False Positives:** Use standard Checkov inline comments (e.g., `#checkov:skip=CKV_AWS_1:Reason`) to skip specific security checks that are intentional in your environment.

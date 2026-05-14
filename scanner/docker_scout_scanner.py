@@ -23,7 +23,8 @@ from scanner.image_utils import (
     extract_images_from_compose, 
     find_kubernetes_files,
     extract_images_from_kubernetes,
-    perform_all_logins
+    perform_all_logins,
+    filter_container_files
 )
 
 # ============================================================================
@@ -245,12 +246,13 @@ def cleanup_image(image: str) -> None:
 # Main Scanning Functions
 # ============================================================================
 
-def run_docker_scout_scan(directory_path: str) -> Tuple[List[Dict[str, Any]], List[str], bool]:
+def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple[List[Dict[str, Any]], List[str], bool]:
     """
-    Run Docker Scout scan on Docker Compose files and images in a directory.
+    Run Docker Scout scan on Docker Compose files and images in a directory or specific files.
     
     Args:
         directory_path: Path to directory containing Docker files
+        files: Optional list of specific files to scan
     
     Returns:
         Tuple of (findings, extra_recommendations, auth_failed):
@@ -272,10 +274,13 @@ def run_docker_scout_scan(directory_path: str) -> Tuple[List[Dict[str, Any]], Li
     # Check if cleanup is enabled (default: yes)
     cleanup_enabled = os.getenv('CLEANUP_SCANNED_IMAGES', 'true').lower() == 'true'
     
-    # Find Docker Compose files
-    compose_files = find_compose_files(directory_path)
-    # Find Kubernetes files
-    k8s_files = find_kubernetes_files(directory_path)
+    if files:
+        compose_files, k8s_files = filter_container_files(files)
+    else:
+        # Find Docker Compose files
+        compose_files = find_compose_files(directory_path)
+        # Find Kubernetes files
+        k8s_files = find_kubernetes_files(directory_path)
     
     if not compose_files and not k8s_files:
         return findings, extra_recommendations, False

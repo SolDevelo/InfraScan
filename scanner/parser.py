@@ -18,9 +18,9 @@ def is_container_scanner_available():
     else:  # docker-scout (default)
         return is_docker_scout_available()
 
-def detect_framework(path: str) -> str:
+def detect_framework(path: str = None, files: list = None) -> str:
     """
-    Detect the IaC framework used in the directory.
+    Detect the IaC framework used in the directory or list of files.
     
     Returns:
     - 'terraform' (default)
@@ -32,22 +32,29 @@ def detect_framework(path: str) -> str:
     k8s_files = 0
     cfn_files = 0
     
-    for root, dirs, files in os.walk(path):
-        for file in files:
-            if file.endswith('.tf'):
-                tf_files += 1
-            elif file.endswith(('.yml', '.yaml')):
-                # Check file content for better detection
-                try:
-                    full_path = os.path.join(root, file)
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        head = f.read(1024)
-                        if 'apiVersion:' in head and 'kind:' in head:
-                            k8s_files += 1
-                        elif 'AWSTemplateFormatVersion' in head:
-                            cfn_files += 1
-                except Exception:
-                    continue
+    scan_files = []
+    if files:
+        scan_files = files
+    elif path:
+        for root, dirs, f_list in os.walk(path):
+            for file in f_list:
+                scan_files.append(os.path.join(root, file))
+    
+    for full_path in scan_files:
+        file = os.path.basename(full_path)
+        if file.endswith('.tf'):
+            tf_files += 1
+        elif file.endswith(('.yml', '.yaml')):
+            # Check file content for better detection
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    head = f.read(1024)
+                    if 'apiVersion:' in head and 'kind:' in head:
+                        k8s_files += 1
+                    elif 'AWSTemplateFormatVersion' in head:
+                        cfn_files += 1
+            except Exception:
+                continue
     
     if k8s_files > tf_files and k8s_files > cfn_files:
         return 'kubernetes'
@@ -56,36 +63,48 @@ def detect_framework(path: str) -> str:
     
     return 'terraform'
 
-def count_resources(path, framework='terraform'):
+def count_resources(path=None, framework='terraform', files=None):
     """
     Count total resources in IaC files.
     
     Args:
         path: Directory path to scan
         framework: IaC framework type
+        files: Optional list of specific files to scan
         
     Returns:
         Number of resources found
     """
     resource_count = 0
     
+    scan_files = []
+    if files:
+        scan_files = files
+    elif path:
+        for root, dirs, f_list in os.walk(path):
+            for file in f_list:
+                scan_files.append(os.path.join(root, file))
+
     if framework == 'terraform':
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if file.endswith('.tf'):
-                    try:
-                        full_path = os.path.join(root, file)
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            # Count resource blocks: resource "type" "name" {
-                            pattern = r'^\s*resource\s+"[^"]+"\s+"[^"]+"'
-                            matches = re.findall(pattern, content, re.MULTILINE)
-                            resource_count += len(matches)
-                    except Exception:
-                        continue
+        for full_path in scan_files:
+            if full_path.endswith('.tf'):
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        # Count resource blocks: resource "type" "name" {
+                        pattern = r'^\s*resource\s+"[^"]+"\s+"[^"]+"'
+                        matches = re.findall(pattern, content, re.MULTILINE)
+                        resource_count += len(matches)
+                except Exception:
+                    continue
     elif framework == 'kubernetes':
         from scanner.image_utils import find_kubernetes_files
-        k8s_files = find_kubernetes_files(path)
+        if files:
+            k8s_files = [f for f in files if f.endswith(('.yml', '.yaml'))]
+            # Further filter for K8s content if needed, but find_kubernetes_files usually does that
+        else:
+            k8s_files = find_kubernetes_files(path)
+            
         for k8s_file in k8s_files:
             try:
                 import yaml
@@ -99,7 +118,37 @@ def count_resources(path, framework='terraform'):
     
     return resource_count
 
-def scan_directory(path, scanner_type='regex', framework='terraform', download_external_modules=False):
+def resolve_included_paths(base_path, included_paths):
+    """
+    Resolve a list of files and directories into a list of individual files to scan.
+    """
+    resolved_files = []
+    
+    # Valid file extensions/names for scanning
+    valid_extensions = ('.tf', '.yml', '.yaml', '.json', 'Dockerfile')
+    compose_patterns = ('docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml')
+    
+    for path_item in included_paths:
+        full_path = os.path.join(base_path, path_item) if not os.path.isabs(path_item) else path_item
+        
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Path '{path_item}' does not exist.")
+            
+        if os.path.isfile(full_path):
+            # Check if it's a valid file we can scan
+            is_valid = full_path.endswith(valid_extensions) or any(p in os.path.basename(full_path) for p in compose_patterns)
+            if not is_valid:
+                 raise ValueError(f"File '{path_item}' is not a recognized IaC or container file for scanning.")
+            resolved_files.append(full_path)
+        elif os.path.isdir(full_path):
+            for root, dirs, files in os.walk(full_path):
+                for file in files:
+                    if file.endswith(valid_extensions) or file.startswith('docker-compose'):
+                        resolved_files.append(os.path.join(root, file))
+    
+    return list(set(resolved_files))
+
+def scan_directory(path, scanner_type='regex', framework='terraform', download_external_modules=False, included_paths=None):
     """
     Scan a directory for IaC issues.
     
@@ -112,9 +161,10 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             - 'comprehensive': All scanners (regex + Checkov + containers)
         framework: IaC framework type (terraform, kubernetes, cloudformation, auto)
         download_external_modules: Whether to download external modules
+        included_paths: Optional list of specific files or directories to scan
     
     Returns:
-        Tuple of (findings_list, resource_count)
+        Tuple of (findings_list, resource_count, extra_recommendations)
     """
     results = []
     
@@ -139,23 +189,34 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     # Use set to avoid duplicates
     active_scanners = set(normalized_scanners)
     
+    # Resolve included paths if provided
+    resolved_files = None
+    if included_paths:
+        resolved_files = resolve_included_paths(path, included_paths)
+        if not resolved_files:
+            print(f"Warning: No valid files found in included paths: {included_paths}")
+            return [], 0, []
+
     # Auto-detect framework if needed
     if framework == 'auto' or not framework:
-        framework = detect_framework(path)
+        framework = detect_framework(path, files=resolved_files)
         print(f"Detected framework: {framework}")
 
     # Count resources for reporting
-    resource_count = count_resources(path, framework)
+    resource_count = count_resources(path, framework, files=resolved_files)
     
     # Run cost-focused regex scanner
     if 'regex' in active_scanners:
         # Run regex-based scanner
         all_files = []
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if file.endswith(".tf"):
-                    full_path = os.path.join(root, file)
-                    all_files.append(full_path)
+        if resolved_files:
+            all_files = [f for f in resolved_files if f.endswith(".tf")]
+        else:
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    if file.endswith(".tf"):
+                        full_path = os.path.join(root, file)
+                        all_files.append(full_path)
         
         # Scan all files and collect results
         for file_path in all_files:
@@ -174,7 +235,8 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                 checkov_results = run_checkov_scan(
                     path, 
                     framework, 
-                    download_external_modules=download_external_modules
+                    download_external_modules=download_external_modules,
+                    files=resolved_files
                 )
                 # Add scanner tag to distinguish sources
                 for result in checkov_results:
@@ -194,7 +256,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             if is_grype_available():
                 try:
                     from scanner.grype_scanner import run_grype_scan
-                    grype_results = run_grype_scan(path)
+                    grype_results = run_grype_scan(path, files=resolved_files)
                     # Add scanner tag
                     for result in grype_results:
                         result['scanner'] = 'grype'
@@ -206,13 +268,13 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         else:  # docker-scout (default)
             if is_docker_scout_available():
                 try:
-                    scout_results, scout_recommendations, auth_failed = run_docker_scout_scan(path)
+                    scout_results, scout_recommendations, auth_failed = run_docker_scout_scan(path, files=resolved_files)
                     
                     if auth_failed and is_grype_available() and not scout_results:
                         print("\n[i] Falling back to Grype scanner (no Docker Hub login detected)...")
                         try:
                             from scanner.grype_scanner import run_grype_scan
-                            grype_results = run_grype_scan(path)
+                            grype_results = run_grype_scan(path, files=resolved_files)
                             # Add scanner tag
                             for result in grype_results:
                                 result['scanner'] = 'grype'

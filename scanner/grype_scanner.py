@@ -15,7 +15,8 @@ from scanner.image_utils import (
     extract_images_from_compose, 
     find_kubernetes_files,
     extract_images_from_kubernetes,
-    perform_all_logins
+    perform_all_logins,
+    filter_container_files
 )
 
 # Check if Grype is available
@@ -33,12 +34,13 @@ def is_grype_available() -> bool:
         return False
 
 
-def run_grype_scan(directory_path: str) -> List[Dict[str, Any]]:
+def run_grype_scan(directory_path: str, files: List[str] = None) -> List[Dict[str, Any]]:
     """
-    Run Grype scan on Docker Compose files and images in a directory.
+    Run Grype scan on Docker Compose files and images in a directory or specific files.
     
     Args:
         directory_path: Path to directory containing Docker files
+        files: Optional list of specific files to scan
     
     Returns:
         List of findings in a normalized format
@@ -50,10 +52,13 @@ def run_grype_scan(directory_path: str) -> List[Dict[str, Any]]:
     
     findings = []
     
-    # Find Docker Compose files
-    compose_files = find_compose_files(directory_path)
-    # Find Kubernetes files
-    k8s_files = find_kubernetes_files(directory_path)
+    if files:
+        compose_files, k8s_files = filter_container_files(files)
+    else:
+        # Find Docker Compose files
+        compose_files = find_compose_files(directory_path)
+        # Find Kubernetes files
+        k8s_files = find_kubernetes_files(directory_path)
     
     if not compose_files and not k8s_files:
         return findings
