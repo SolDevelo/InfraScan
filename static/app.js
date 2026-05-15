@@ -91,6 +91,9 @@ function initApp() {
 
         displayResults(data.results, data.summary, data.metadata, gradeReport);
 
+        // Setup PDF export for standalone mode
+        setupPdfExport();
+
         // Hide elements that don't make sense in standalone report
         if (newScanBtn) newScanBtn.style.display = 'none';
         if (shareBtn) shareBtn.style.display = 'none';
@@ -150,6 +153,54 @@ function initApp() {
         } catch (error) {
             console.error('Failed to check scanner status:', error);
         }
+    }
+
+    function setupPdfExport() {
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        if (!exportPdfBtn) return;
+
+        // Remove old listener if any (to prevent doubles)
+        const newBtn = exportPdfBtn.cloneNode(true);
+        exportPdfBtn.parentNode.replaceChild(newBtn, exportPdfBtn);
+
+        newBtn.addEventListener('click', async () => {
+            if (!currentResults) return;
+
+            newBtn.classList.add('exporting');
+            newBtn.disabled = true;
+            newBtn.innerHTML = '<span class="export-pdf-icon">⏳</span> Preparing PDF...';
+
+            try {
+                const html = buildPdfDocument(
+                    currentResults,
+                    currentSummary,
+                    currentMetadata,
+                    currentGradeReport
+                );
+                const win = window.open('', '_blank', 'width=1050,height=820,scrollbars=yes,resizable=yes');
+                if (!win) {
+                    alert('Popup blocked! Please allow popups for this site to export PDF.');
+                    return;
+                }
+                win.document.open();
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+
+                // Wait for fonts to load before printing for perfect rendering
+                if (win.document.fonts) {
+                    await win.document.fonts.ready;
+                }
+                win.print();
+            } catch (e) {
+                console.error('PDF generation error:', e);
+                alert('Could not generate PDF: ' + e.message);
+            } finally {
+                newBtn.classList.remove('exporting');
+                newBtn.disabled = false;
+                newBtn.innerHTML = '<span class="export-pdf-icon">⬇</span> Export PDF';
+            }
+        });
     }
 
     async function loadSharedResults() {
@@ -445,48 +496,8 @@ function initApp() {
         });
     }
 
-    // Export PDF Button — opens a dedicated, beautifully formatted PDF document in a new window
-    const exportPdfBtn = document.getElementById('export-pdf-btn');
-    if (exportPdfBtn) {
-        exportPdfBtn.addEventListener('click', async () => {
-            if (!currentResults) return;
-
-            exportPdfBtn.classList.add('exporting');
-            exportPdfBtn.disabled = true;
-            exportPdfBtn.innerHTML = '<span class="export-pdf-icon">⏳</span> Preparing PDF...';
-
-            try {
-                const html = buildPdfDocument(
-                    currentResults,
-                    currentSummary,
-                    currentMetadata,
-                    currentGradeReport
-                );
-                const win = window.open('', '_blank', 'width=1050,height=820,scrollbars=yes,resizable=yes');
-                if (!win) {
-                    alert('Popup blocked! Please allow popups for this site to export PDF.');
-                    return;
-                }
-                win.document.open();
-                win.document.write(html);
-                win.document.close();
-                win.focus();
-                
-                // Wait for fonts to load before printing for perfect rendering
-                if (win.document.fonts) {
-                    await win.document.fonts.ready;
-                }
-                win.print();
-            } catch (e) {
-                console.error('PDF generation error:', e);
-                alert('Could not generate PDF: ' + e.message);
-            } finally {
-                exportPdfBtn.classList.remove('exporting');
-                exportPdfBtn.disabled = false;
-                exportPdfBtn.innerHTML = '<span class="export-pdf-icon">⬇</span> Export PDF';
-            }
-        });
-    }
+    // Export PDF Button
+    setupPdfExport();
 
 
     function resetScanProgress() {

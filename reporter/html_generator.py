@@ -16,6 +16,7 @@ def generate_standalone_html(report_dict):
     js_path = os.path.join(base_dir, 'static', 'app.js')
     pdf_js_path = os.path.join(base_dir, 'static', 'pdf_generator.js')
     logo_path = os.path.join(base_dir, 'static', 'images', 'soldevelo.png')
+    logo_main_path = os.path.join(base_dir, 'static', 'images', 'logo_transparent.png')
     
     # Read files
     try:
@@ -33,6 +34,9 @@ def generate_standalone_html(report_dict):
             
         with open(logo_path, 'rb') as f:
             logo_b64 = base64.b64encode(f.read()).decode('utf-8')
+            
+        with open(logo_main_path, 'rb') as f:
+            logo_main_b64 = base64.b64encode(f.read()).decode('utf-8')
     except Exception as e:
         import logging
         logging.error(f"Failed to read assets for HTML generation: {e}")
@@ -54,9 +58,11 @@ def generate_standalone_html(report_dict):
     )
     
     # Images (base64) - replace all occurrences
-    logo_tag_pattern = r'\{\{\s*url_for\([\'"]static[\'"],\s*filename=[\'"]images/soldevelo\.png[\'"]\)\s*\}\}'
-    logo_data_uri = f"data:image/png;base64,{logo_b64}"
-    html_content = re.sub(logo_tag_pattern, lambda m: logo_data_uri, html_content)
+    soldevelo_logo_pattern = r'\{\{\s*url_for\([\'"]static[\'"],\s*filename=[\'"]images/soldevelo\.png[\'"]\)\s*\}\}'
+    infrascan_logo_pattern = r'\{\{\s*url_for\([\'"]static[\'"],\s*filename=[\'"]images/logo_transparent\.png[\'"]\)\s*\}\}'
+    
+    html_content = re.sub(soldevelo_logo_pattern, f"data:image/png;base64,{logo_b64}", html_content)
+    html_content = re.sub(infrascan_logo_pattern, f"data:image/png;base64,{logo_main_b64}", html_content)
     
     # Links
     index_tag_pattern = r'\{\{\s*url_for\([\'"]index[\'"]\)\s*\}\}'
