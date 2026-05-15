@@ -89,6 +89,11 @@ function initApp() {
             analysis: data.analysis
         };
 
+        currentResults = data.results;
+        currentSummary = data.summary;
+        currentMetadata = data.metadata || {};
+        currentGradeReport = gradeReport;
+
         displayResults(data.results, data.summary, data.metadata, gradeReport);
 
         // Setup PDF export for standalone mode
