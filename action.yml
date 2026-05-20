@@ -22,7 +22,7 @@ inputs:
     required: false
     default: ''
   framework:
-    description: 'Framework (auto, terraform, kubernetes, cloudformation, helm)'
+    description: 'Framework (auto, terraform, kubernetes, cloudformation, helm, all)'
     required: false
     default: 'auto'
   download-external-modules:

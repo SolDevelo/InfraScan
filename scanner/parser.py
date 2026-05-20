@@ -27,10 +27,12 @@ def detect_framework(path: str = None, files: list = None) -> str:
     - 'kubernetes'
     - 'cloudformation'
     - 'helm'
+    - 'all' (fallback for Docker/secrets/actions/etc.)
     """
     tf_files = 0
     k8s_files = 0
     cfn_files = 0
+    helm_files = 0
     
     scan_files = []
     if files:
@@ -44,6 +46,8 @@ def detect_framework(path: str = None, files: list = None) -> str:
         file = os.path.basename(full_path)
         if file.endswith('.tf'):
             tf_files += 1
+        elif file == 'Chart.yaml' or file == 'Chart.yml':
+            helm_files += 1
         elif file.endswith(('.yml', '.yaml')):
             # Check file content for better detection
             try:
@@ -56,12 +60,16 @@ def detect_framework(path: str = None, files: list = None) -> str:
             except Exception:
                 continue
     
-    if k8s_files > tf_files and k8s_files > cfn_files:
+    if k8s_files > tf_files and k8s_files > cfn_files and k8s_files > helm_files:
         return 'kubernetes'
-    if cfn_files > tf_files:
+    if cfn_files > tf_files and cfn_files > helm_files:
         return 'cloudformation'
+    if helm_files > tf_files:
+        return 'helm'
+    if tf_files > 0:
+        return 'terraform'
     
-    return 'terraform'
+    return 'all'
 
 def count_resources(path=None, framework='terraform', files=None):
     """
@@ -85,7 +93,7 @@ def count_resources(path=None, framework='terraform', files=None):
             for file in f_list:
                 scan_files.append(os.path.join(root, file))
 
-    if framework == 'terraform':
+    if framework in ('terraform', 'all'):
         for full_path in scan_files:
             if full_path.endswith('.tf'):
                 try:
@@ -97,7 +105,8 @@ def count_resources(path=None, framework='terraform', files=None):
                         resource_count += len(matches)
                 except Exception:
                     continue
-    elif framework == 'kubernetes':
+                    
+    if framework in ('kubernetes', 'all'):
         from scanner.image_utils import find_kubernetes_files
         if files:
             k8s_files = [f for f in files if f.endswith(('.yml', '.yaml'))]
@@ -113,6 +122,26 @@ def count_resources(path=None, framework='terraform', files=None):
                     for doc in docs:
                         if doc and isinstance(doc, dict) and 'kind' in doc:
                             resource_count += 1
+            except Exception:
+                continue
+                
+    if framework in ('containers', 'all'):
+        from scanner.image_utils import find_compose_files
+        if files:
+            from scanner.image_utils import filter_container_files
+            compose_files, _ = filter_container_files(files)
+        else:
+            compose_files = find_compose_files(path)
+            
+        for compose_file in compose_files:
+            try:
+                import yaml
+                with open(compose_file, 'r', encoding='utf-8') as f:
+                    compose_data = yaml.safe_load(f)
+                    if compose_data and isinstance(compose_data, dict) and 'services' in compose_data:
+                        services = compose_data['services']
+                        if isinstance(services, dict):
+                            resource_count += len(services)
             except Exception:
                 continue
     
@@ -143,7 +172,7 @@ def resolve_included_paths(base_path, included_paths):
         elif os.path.isdir(full_path):
             for root, dirs, files in os.walk(full_path):
                 for file in files:
-                    if file.endswith(valid_extensions) or file.startswith('docker-compose'):
+                    if file.endswith(valid_extensions) or file.startswith('docker-compose') or file.startswith('compose'):
                         resolved_files.append(os.path.join(root, file))
     
     return list(set(resolved_files))
@@ -290,6 +319,17 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         extra_recommendations.extend(scout_recommendations)
                 except Exception as e:
                     print(f"Warning: Docker Scout scan failed: {e}")
+            elif is_grype_available():
+                print("\n[i] Docker Scout is not installed, falling back to Grype scanner...")
+                try:
+                    from scanner.grype_scanner import run_grype_scan
+                    grype_results = run_grype_scan(path, files=resolved_files)
+                    for result in grype_results:
+                        result['scanner'] = 'grype'
+                    results.extend(grype_results)
+                    print(f"    Grype scan completed with {len(grype_results)} findings.")
+                except Exception as grype_e:
+                    print(f"    Grype fallback failed: {grype_e}")
             else:
                 print("Warning: Docker Scout is not installed. See https://docs.docker.com/scout/ for installation")
     

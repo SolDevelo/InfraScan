@@ -99,7 +99,7 @@ def setup_args():
     parser.add_argument(
         "--framework",
         default="auto",
-        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm"],
+        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm", "all"],
         help="IaC framework type (default: auto-detect)"
     )
 

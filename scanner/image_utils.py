@@ -10,8 +10,9 @@ def find_compose_files(directory_path: str) -> List[str]:
     
     for root, dirs, files in os.walk(directory_path):
         for file in files:
-            if file in compose_patterns or file.startswith('docker-compose'):
-                compose_files.append(os.path.join(root, file))
+            if file.endswith(('.yml', '.yaml')):
+                if file in compose_patterns or file.startswith('docker-compose') or file.startswith('compose'):
+                    compose_files.append(os.path.join(root, file))
     
     return compose_files
 
@@ -38,7 +39,14 @@ def find_kubernetes_files(directory_path: str) -> List[str]:
 def filter_container_files(files: List[str]) -> tuple[List[str], List[str]]:
     """Filter a list of files into Docker Compose and Kubernetes files."""
     compose_patterns = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml']
-    compose_files = [f for f in files if os.path.basename(f) in compose_patterns or os.path.basename(f).startswith('docker-compose')]
+    compose_files = [
+        f for f in files 
+        if f.endswith(('.yml', '.yaml')) and (
+            os.path.basename(f) in compose_patterns 
+            or os.path.basename(f).startswith('docker-compose') 
+            or os.path.basename(f).startswith('compose')
+        )
+    ]
     
     potential_k8s = [f for f in files if f.endswith(('.yml', '.yaml')) and f not in compose_files]
     k8s_files = []
