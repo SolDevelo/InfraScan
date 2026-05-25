@@ -276,8 +276,8 @@ def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], imag
         'rule_id': vuln_id,
         'rule_name': f"Vulnerability in {package_name}",
         'severity': normalized_severity,
-        'description': f"{description[:200]}..." if len(description) > 200 else description,
-        'full_description': description,  # Store full description for tooltips
+        'description': description,
+        'full_description': description,
         'remediation': f"Update {package_name} from {package_version} to {fix_version}" if fix_available == 'Yes' else f"Review {package_name}@{package_version} - no fix available",
         'estimated_savings': f"Security risk mitigation ({severity})",
         'line': 0,

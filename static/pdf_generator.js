@@ -120,11 +120,11 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 `<div class="cell-small" title="${esc(fi.file)}">${esc(trunc(fi.file,50))}${fi.line?':'+fi.line:''}</div>`).join('')
                 + (findings.length>3 ? `<div class="cell-small muted">+${findings.length-3} more…</div>` : '');
             return `<tr style="background:${bg};">
-              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(trunc(f.description))}</div></td>
+              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
               <td class="td"><span style="font-weight:700;color:#059669;">${esc(f.estimated_savings||'—')}</span></td>
-              <td class="td"><div class="cell-small">${esc(trunc(f.remediation,140))}</div>${files}</td>
+              <td class="td"><div class="cell-small">${esc(f.remediation || '')}</div>${files}</td>
             </tr>`;
         }).join('');
 
@@ -161,11 +161,11 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
             }).join('') + (findings.length>4?`<div class="cell-small muted">+${findings.length-4} more…</div>`:'');
             return `<tr style="background:${bg};">
               <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(ruleId)}</td>
-              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(trunc(f.description))}</div></td>
+              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
               <td class="td">${resources}</td>
-              <td class="td"><div class="cell-small">${esc(trunc(f.remediation,130))}</div></td>
+              <td class="td"><div class="cell-small">${esc(f.remediation || '')}</div></td>
             </tr>`;
         }).join('');
 
@@ -213,7 +213,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
               <td class="td"><div class="rule-name">${esc(v.package)}</div><div class="cell-small muted">v${esc(v.package_version)}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(v.severity)}</td>
               <td class="td" style="font-size:0.72rem;">${v.fix_version && v.fix_version!=='N/A' ? `<span style="color:#059669;font-weight:700;">→ ${esc(v.fix_version)}</span>` : '<span class="muted">No fix yet</span>'}</td>
-              <td class="td"><div class="cell-small muted">${esc(trunc(v.description,100))}</div></td>
+              <td class="td"><div class="cell-small muted">${esc(v.description || '')}</div></td>
             </tr>`).join('');
             return [imgRow, cveRows];
         }).join('');
@@ -317,7 +317,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   .data-table tbody tr:last-child { border-bottom: none; }
   .td { padding: 6px 8px; vertical-align: top; }
   .rule-name { font-weight: 600; color: #1E293B; margin-bottom: 2px; }
-  .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; }
+  .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
   .muted { color: #94A3B8 !important; }
   .img-cell { border-top: 2px solid #BFDBFE; }
 
