@@ -1250,9 +1250,8 @@ function initApp() {
         const urlPattern = /(https?:\/\/[^\s<]+)/g;
         escaped = escaped.replace(urlPattern, (fullUrl) => {
             // Keep full URL for href
-            const displayUrl = maxLength && fullUrl.length > maxLength
-                ? fullUrl.substring(0, maxLength) + '...'
-                : fullUrl;
+            // Show full URL text (allow CSS to line-break long URLs)
+            const displayUrl = fullUrl;
             return `<a href="${fullUrl}" target="_blank" rel="noopener noreferrer" class="remediation-link">${displayUrl}</a>`;
         });
 

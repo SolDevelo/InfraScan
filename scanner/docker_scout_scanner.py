@@ -171,7 +171,7 @@ def create_finding_dict(
     Returns:
         Finding dictionary in internal format
     """
-    short_desc = f"{description[:200]}..." if len(description) > 200 else description
+    
     
     # Build base remediation for package update
     base_remediation = (
@@ -193,7 +193,7 @@ def create_finding_dict(
         'rule_id': rule_id,
         'rule_name': f"Vulnerability in {package_name}",
         'severity': severity,
-        'description': short_desc,
+        'description': description,
         'full_description': description,
         'remediation': remediation,
         'estimated_savings': f"Security risk mitigation ({severity})",
