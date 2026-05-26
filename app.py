@@ -50,23 +50,20 @@ def inject_global_vars():
 def get_slack_webhook_url() -> str:
     return os.getenv('SLACK_WEBHOOK_URL', '').strip()
 
-def build_share_url(result_id: str, req) -> str:
-    referer = req.headers.get('Referer') if req else None
-    if referer:
-        parsed = urlparse(referer)
-        origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
-        path = parsed.path or ""
-        if origin:
-            return f"{origin}{path}?scan_id={result_id}"
-
-    origin = req.headers.get('Origin') if req else None
-    if origin:
-        return f"{origin}/?scan_id={result_id}"
+def build_share_url(result_id: str, req, metadata=None) -> str:
+    clean_repo = "report"
+    if metadata and 'repository_name' in metadata:
+        import re
+        clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-')
+        if not clean_repo:
+            clean_repo = "report"
+    
+    scan_path = f"report/{clean_repo}-{result_id}"
 
     if req and req.host_url:
-        return f"{req.host_url.rstrip('/')}/?scan_id={result_id}"
+        return f"{req.host_url.rstrip('/')}/{scan_path}"
 
-    return result_id
+    return f"/{scan_path}"
 
 def send_slack_notification(message: str) -> None:
     webhook_url = get_slack_webhook_url()
@@ -86,12 +83,105 @@ def send_slack_notification(message: str) -> None:
 
 @app.route('/')
 def index():
+    scan_id = request.args.get('scan_id')
+    if scan_id:
+        import re
+        match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$', scan_id.lower())
+        real_uuid = match.group(1) if match else scan_id
+        
+        file_path = os.path.join(app.config['RESULTS_DIR'], f"{real_uuid}.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                metadata = data.get('metadata', {})
+                clean_repo = "report"
+                if 'repository_name' in metadata:
+                    clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+                return redirect(url_for('report_view', scan_id=f"{clean_repo}-{real_uuid}"), code=301)
+            except Exception:
+                pass
+        return redirect(url_for('report_view', scan_id=scan_id), code=301)
+        
     return render_template('index.html')
 
 @app.route('/robots.txt')
-@app.route('/sitemap.xml')
 def static_from_root():
     return send_from_directory(app.static_folder, request.path[1:])
+
+@app.route('/sitemap.xml')
+def sitemap():
+    results_dir = app.config['RESULTS_DIR']
+    try:
+        files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        files = []
+
+    urls = []
+    host_url = request.host_url.rstrip('/')
+    urls.append(f"{host_url}/")
+    
+    import re
+    for filename in files:
+        file_path = os.path.join(results_dir, filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            metadata = data.get('metadata', {})
+            if not metadata.get('is_private', False):
+                real_uuid = filename.replace('.json', '')
+                clean_repo = "report"
+                if 'repository_name' in metadata:
+                    clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+                urls.append(f"{host_url}/report/{clean_repo}-{real_uuid}")
+        except Exception:
+            continue
+            
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for url in urls:
+        xml += f'  <url><loc>{url}</loc></url>\n'
+    xml += '</urlset>'
+    
+    return app.response_class(xml, mimetype='application/xml')
+
+@app.route('/report/<path:scan_id>')
+def report_view(scan_id):
+    import re
+    match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$', scan_id.lower())
+    real_uuid = match.group(1) if match else scan_id
+
+    if '..' in real_uuid or '/' in real_uuid or '\\' in real_uuid or not real_uuid.replace('-', '').isalnum():
+        return "Invalid scan ID", 400
+
+    file_path = os.path.join(app.config['RESULTS_DIR'], f"{real_uuid}.json")
+    if not os.path.exists(file_path):
+        return "Report not found", 404
+        
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        return "Error reading report", 500
+
+    metadata = data.get('metadata', {})
+    clean_repo = "report"
+    if 'repository_name' in metadata:
+        clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+    canonical_scan_id = f"{clean_repo}-{real_uuid}"
+    
+    return render_template('report.html', 
+                           data=data, 
+                           report_json=json.dumps(data).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026').replace("'", '\\u0027'), 
+                           current_scan_id=canonical_scan_id,
+                           metadata=metadata,
+                           summary=data.get('summary', {}),
+                           grade_report={
+                               'overall': data.get('overall', {}),
+                               'cost': data.get('cost', {}),
+                               'security': data.get('security', {}),
+                               'container': data.get('container', {}),
+                           })
 
 @app.route('/api/scanner/status')
 def scanner_status():
@@ -370,7 +460,7 @@ def save_results():
     repo_url = metadata.get('repository_url', 'unknown')
 
 
-    share_url = build_share_url(result_id, request)
+    share_url = build_share_url(result_id, request, metadata)
 
     slack_message = (
         "🔗 InfraScan results shared | "
@@ -379,7 +469,7 @@ def save_results():
     )
     send_slack_notification(slack_message)
     
-    return jsonify({'id': result_id})
+    return jsonify({'id': result_id, 'share_url': share_url})
 
 @app.route('/api/results/<scan_id>', methods=['GET'])
 def get_results(scan_id):
