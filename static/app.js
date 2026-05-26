@@ -73,13 +73,20 @@ function initApp() {
 
         if (!data) return;
 
-        // Hide all web app specific UI parts
-        if (scanInputContainer) scanInputContainer.style.display = 'none';
-        if (document.querySelector('.tabs')) document.querySelector('.tabs').style.display = 'none';
-        if (landingInfo) landingInfo.style.display = 'none';
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        if (newsletterModal) newsletterModal.style.display = 'none';
-        if (feedbackModal) feedbackModal.style.display = 'none';
+        const isHostedReport = window.location.pathname.startsWith('/report/');
+        
+        if (!isHostedReport) {
+            // Hide all web app specific UI parts for standalone CLI
+            if (scanInputContainer) scanInputContainer.style.display = 'none';
+            if (document.querySelector('.tabs')) document.querySelector('.tabs').style.display = 'none';
+            if (landingInfo) landingInfo.style.display = 'none';
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            if (newsletterModal) newsletterModal.style.display = 'none';
+            if (feedbackModal) feedbackModal.style.display = 'none';
+        } else {
+            if (scanInputContainer) scanInputContainer.classList.add('hidden');
+            if (landingInfo) landingInfo.classList.add('collapsed');
+        }
 
         const gradeReport = {
             overall: data.overall,
@@ -100,8 +107,19 @@ function initApp() {
         setupPdfExport();
 
         // Hide elements that don't make sense in standalone report
-        if (newScanBtn) newScanBtn.style.display = 'none';
-        if (shareBtn) shareBtn.style.display = 'none';
+        if (!isHostedReport) {
+            if (newScanBtn) newScanBtn.style.display = 'none';
+            if (shareBtn) shareBtn.style.display = 'none';
+        } else {
+            // We need currentScanId to be populated for sharing to work
+            const pathParts = window.location.pathname.split('/');
+            const lastPart = pathParts[pathParts.length - 1];
+            // Extract UUID from the last part (e.g. clean-repo-name-uuid)
+            const uuidMatch = lastPart.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+            if (uuidMatch) {
+                currentScanId = uuidMatch[1];
+            }
+        }
 
         // Ensure container is correctly styled for full-width report
         if (mainContainer) mainContainer.classList.add('expanded');
@@ -114,7 +132,7 @@ function initApp() {
     loadSharedResults();
 
     // Trigger Newsletter Modal after 3 seconds if not already closed
-    if (!localStorage.getItem('newsletter_closed') && !window.location.search.includes('scan_id')) {
+    if (!localStorage.getItem('newsletter_closed') && !window.location.search.includes('scan_id') && !window.location.pathname.startsWith('/report/')) {
         setTimeout(() => {
             if (newsletterModal) newsletterModal.classList.remove('hidden');
         }, 3000);
@@ -422,7 +440,11 @@ function initApp() {
 
         try {
             if (currentScanId) {
-                const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${currentScanId}`;
+                let cleanRepo = "report";
+                if (currentMetadata && currentMetadata.repository_name) {
+                    cleanRepo = currentMetadata.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "report";
+                }
+                const shareUrl = `${window.location.origin}/report/${cleanRepo}-${currentScanId}`;
                 shareUrlInput.value = shareUrl;
                 shareLinkContainer.classList.remove('hidden');
                 shareBtn.textContent = 'Results Shared';
@@ -454,7 +476,7 @@ function initApp() {
             if (!response.ok) throw new Error(data.error || `Server error (${response.status})`);
 
             currentScanId = data.id;
-            const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${data.id}`;
+            const shareUrl = data.share_url || `${window.location.origin}/report/${data.id}`;
             shareUrlInput.value = shareUrl;
             shareLinkContainer.classList.remove('hidden');
             shareBtn.textContent = 'Results Shared';
@@ -477,6 +499,10 @@ function initApp() {
     // New Scan Button
     if (newScanBtn) {
         newScanBtn.addEventListener('click', () => {
+            if (window.location.pathname.startsWith('/report/')) {
+                window.location.href = '/';
+                return;
+            }
             resultsArea.classList.add('hidden');
             if (scanInputContainer) scanInputContainer.classList.remove('hidden');
             if (landingInfo) landingInfo.classList.remove('collapsed');
@@ -837,7 +863,11 @@ function initApp() {
 
         const recipientBadge = '';
 
-        const viewUrl = `${window.location.origin}${window.location.pathname}?scan_id=${scan.id}`;
+        let cleanRepo = "report";
+        if (scan.repository_name) {
+            cleanRepo = scan.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "report";
+        }
+        const viewUrl = `${window.location.origin}/report/${cleanRepo}-${scan.id}`;
 
         return `
         <div class="scan-history-card">

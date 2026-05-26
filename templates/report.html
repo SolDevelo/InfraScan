@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
+    <meta name="keywords"
+        content="IaC scanner, Terraform security, CloudFormation audit, Kubernetes scanning, infrastructure audit, security scanner, cost optimization">
+    <meta name="author" content="SolDevelo">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
+    <meta property="og:title" content="InfraScan Report for {{ metadata.repository_name }}">
+    <meta property="og:description"
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
+    <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary">
+    <meta property="twitter:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
+    <meta property="twitter:title" content="InfraScan Report for {{ metadata.repository_name }}">
+    <meta property="twitter:description"
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
+    <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+
+    <!-- Canonical -->
+    <link rel="canonical" href="{{ site_domain }}/report/{{ current_scan_id }}">
+
+    <!-- Language -->
+    <meta http-equiv="content-language" content="en-US">
+
+    <title>InfraScan Report for {{ metadata.repository_name }}</title>
+
+    {% if google_tag_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_tag_id }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', '{{ google_tag_id }}');
+    </script>
+    {% endif %}
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "InfraScan Report for {{ metadata.repository_name }}",
+      "datePublished": "{{ metadata.scan_timestamp }}",
+      "about": {
+        "@type": "Thing",
+        "name": "{{ metadata.repository_name }}"
+      },
+      "review": {
+        "@type": "Review",
+        "reviewRating": {
+          "@type": "Rating",
+          "ratingValue": "{{ grade_report.overall.percentage|default('0') }}",
+          "bestRating": "100"
+        }
+      }
+    }
+    </script>
+    <script>
+      window.CLI_INJECTED_DATA = {{ report_json | safe }};
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Preload critical resources -->
+    <link rel="preload" as="style" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="main-brand-row">
+                    <a href="{{ url_for('index') }}" class="logo-link">
+                        <img src="{{ url_for('static', filename='images/logo_transparent.png') }}" alt="InfraScan"
+                            class="main-logo" loading="eager" decoding="async">
+                        <h1 class="sr-only">InfraScan</h1>
+                    </a>
+                    <div class="soldevelo-brand">
+                        <span class="brand-divider"></span>
+                        <a href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=header-logo"
+                            target="_blank">
+                            <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                                class="header-logo">
+                        </a>
+                    </div>
+                </div>
+                <a href="https://github.com/SolDevelo/InfraScan" target="_blank" class="github-stars-badge">
+                    <img src="https://img.shields.io/github/stars/SolDevelo/InfraScan?style=social" alt="GitHub stars">
+                </a>
+            </div>
+            <p class="subtitle">Open Source Infrastructure Auditor by <strong>SolDevelo</strong></p>
+
+            <div class="landing-info">
+                <div class="info-card">
+                    <div class="info-icon">💰</div>
+                    <h4>Reduce Costs</h4>
+                    <p>Identify expensive mistakes like oversized instances, unmanaged disks, or missing lifecycle
+                        rules.</p>
+                    <a href="https://soldevelo.com/services/aws-cost-optimization/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-reduce-costs"
+                        target="_blank" class="card-link">
+                        Learn how we help <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">🛡️</div>
+                    <h4>Fix Security</h4>
+                    <p>Scan for open ports, unencrypted storage, and risky IAM policies before deploying to production.
+                    </p>
+                    <a href="https://soldevelo.com/services/security-audit-and-hardening/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-fix-security"
+                        target="_blank" class="card-link">
+                        Our security approach <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">⚡</div>
+                    <h4>GitHub Ready</h4>
+                    <p>Just paste your repository URL. No complex setup or cloud credentials required for the initial
+                        scan.</p>
+                    <a href="https://soldevelo.com/contact/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-contact"
+                        target="_blank" class="card-link">
+                        Get expert advice <span>→</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="github">Scan GitHub Repo</button>
+                <button class="tab-btn" data-tab="recent-scans" id="recent-scans-tab-btn">Recent Scans</button>
+                <button class="tab-btn" data-tab="release-notes">Release Notes</button>
+                <button class="tab-btn" data-tab="local-usage">Local & CI/CD</button>
+            </div>
+
+            <div class="tab-content active" id="github-tab">
+                <div id="scan-input-container">
+                    <div class="input-group">
+                        <label for="repo-url">GitHub Repository URL</label>
+                        <input type="text" id="repo-url" placeholder="https://github.com/username/repo">
+                        <div id="repo-loader" class="repo-loader hidden">
+                            <div class="mini-spinner"></div>
+                            <span>Fetching branches...</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group hidden" id="branch-selection-container">
+                        <label for="branch-select">Select Branch</label>
+                        <select id="branch-select"></select>
+                    </div>
+
+
+                    <div class="input-group">
+                        <label for="scanner-type">Analysis Scope</label>
+                        <select id="scanner-type">
+                            <option value="comprehensive" selected>Comprehensive (Cost + Security + Containers)</option>
+                            <option value="regex">Fast (Cost Optimization Only)</option>
+                            <option value="containers">Containers (Container Vulnerabilities Only)</option>
+                            <option value="checkov">Security (IaC Security Only)</option>
+                        </select>
+                        <small class="help-text"><strong>Comprehensive</strong> scans for AWS cost antipatterns, IaC
+                            security issues (Checkov), and container vulnerabilities.</small>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="private-scan-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                            <div class="toggle-label-group">
+                                <span class="toggle-label">Private Mode</span>
+                                <small class="help-text">Scan won't appear in the "Recent Scans" list</small>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <button class="action-btn" id="scan-repo-btn">
+                        <span>🔍</span> Scan Repository & Get Report
+                    </button>
+
+                    <div class="supported-tech">
+                        <span>Supported:</span>
+                        <span class="tech-tag">Terraform</span>
+                        <span class="tech-tag">AWS</span>
+                        <span class="tech-tag">Kubernetes</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="recent-scans-tab">
+                <div class="recent-scans-header">
+                    <h2 class="recent-scans-title">🕒 Recent Scans</h2>
+                    <p class="recent-scans-subtitle">History of the latest infrastructure scans performed by InfraScan.
+                    </p>
+                </div>
+                <div id="recent-scans-loading" class="recent-scans-loading hidden">
+                    <div class="spinner"></div>
+                    <p>Loading scan history...</p>
+                </div>
+                <div id="recent-scans-empty" class="recent-scans-empty hidden">
+                    <div class="empty-icon">📭</div>
+                    <p>No scans recorded yet.</p>
+                    <p class="empty-hint">Run your first scan on the <strong>Scan GitHub Repo</strong> tab!</p>
+                </div>
+                <div id="recent-scans-list" class="recent-scans-list"></div>
+
+                <div id="recent-scans-pagination" class="pagination-container hidden">
+                    <button id="prev-page-btn" class="pagination-btn" disabled>&larr; Previous</button>
+                    <div id="page-numbers" class="page-numbers"></div>
+                    <button id="next-page-btn" class="pagination-btn">Next &rarr;</button>
+                </div>
+            </div>
+
+            <div class="tab-content" id="release-notes-tab">
+                <div class="release-notes-container">
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.6</span>
+                            <span class="date">May 13, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>PDF Export</strong>: Reports can now be exported as a print-ready PDF directly from the browser — ideal for sharing with compliance and security teams.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.5</span>
+                            <span class="date">April 10, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>Kubernetes Manifest Scanning</strong>: Added support for scanning Kubernetes
+                                manifest files.</li>
+                            <li><strong>CI/CD Integration Examples</strong>: Added examples for GitHub Actions and
+                                GitLab CI/CD.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.4</span>
+                            <span class="date">April 7, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>Beautiful Colored CLI Summary</strong>: Integrated rich terminal formatting and
+                                colors for findings directly in CI/CD logs.</li>
+                            <li><strong>Grading Overview</strong>: Real-time A-F grades for cost and security displayed
+                                directly in logs.</li>
+                            <li><strong>CI/CD Optimization</strong>: Added display limits to prevent log flooding and
+                                ensured text summary is always visible.</li>
+                            <li><strong>Improved Report Reliability</strong>: Enhanced standalone HTML generation using
+                                robust regex injection.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.3</span>
+                            <span class="date">March 12, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Added option to scan in CI/CD using InfraScan CLI</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.2</span>
+                            <span class="date">March 3, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Added **Private Mode** toggle: scans can now be performed without appearing in the
+                                public "Recent Scans" history</li>
+                            <li>Implemented **Pagination** for "Recent Scans" (5 scans per page) for improved navigation
+                                and history management</li>
+                            <li>Enhanced privacy controls: private scans are still accessible via their unique share
+                                links</li>
+                            <li>Optimized recent scans loading performance with frontend data slicing</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.1</span>
+                            <span class="date">February 4, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Enhanced "One-Pager" dashboard with dynamic container expansion (up to 1400px)</li>
+                            <li>Two-column optimized layout: side-by-side Cost and Security findings</li>
+                            <li>Branding refresh: Integrated SolDevelo logo and detailed service value propositions</li>
+                            <li>Intelligent UX: Automatic feedback request triggered by report engagement (scroll-based)
+                            </li>
+                            <li>Added "Scroll to Top" functionality for easier navigation of long reports</li>
+                            <li>Improved result persistence when switching between application tabs</li>
+                            <li>User-friendly terminology: rebranded technical terms to "Cost" and "Security" focus</li>
+                            <li>Fixed feedback modal accessibility and closing logic</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
+                            <span class="version">v1.0.0</span>
+                            <span class="date">January 21, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li>Advanced dual-engine analysis: Real-time pattern matching and deep security inspection
+                            </li>
+                            <li>Comprehensive rule set covering cost, security, and compliance best practices</li>
+                            <li>Multi-tier scanning: Rapid assessment or deep infrastructure audit</li>
+                            <li>Enterprise features: Budget tracking, spot instance optimization, and S3 lifecycle
+                                management</li>
+                            <li>Intelligent repository analysis with automated risk grouping</li>
+                            <li>Professional dashboard with severity-based prioritization</li>
+                            <li>Optimized for modern AWS and Terraform architectures</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="local-usage-tab">
+                <div class="local-usage-container">
+                    <div class="usage-hero">
+                        <div class="badge" style="display: inline-block; margin-bottom: 1rem;">Official CLI</div>
+                        <h2>🚀 Local & CI/CD Usage</h2>
+                        <p>Experience the full power of InfraScan on your terms. Audit private infrastructure securely,
+                            integrate into your DevOps pipelines, and generate professional reports locally.</p>
+                    </div>
+
+                    <div class="usage-grid">
+                        <!-- Docker Local Scan -->
+                        <div class="usage-card">
+                            <h3>🏠 Run Locally with Docker</h3>
+                            <p>Perfect for private projects. Your code stays on your machine, scanned by a
+                                self-contained environment.</p>
+
+                            <div class="premium-code-block">
+                                <div class="code-window-header">
+                                    <div class="window-controls">
+                                        <div class="control close"></div>
+                                        <div class="control minimize"></div>
+                                        <div class="control maximize"></div>
+                                    </div>
+                                    <div class="file-info">Terminal / Bash</div>
+                                    <button class="copy-btn-premium"
+                                        data-copy="docker run --rm -v $(pwd):/scan soldevelo/infrascan:latest">
+                                        <span>Copy</span>
+                                    </button>
+                                </div>
+                                <pre><code>docker run --rm -v $(pwd):/scan soldevelo/infrascan:latest</code></pre>
+                            </div>
+                            <p class="usage-note">💡 Mounts your current directory to <code>/scan</code> and provides
+                                immediate CLI feedback.</p>
+                        </div>
+
+                        <!-- CI/CD Integration -->
+                        <div class="usage-card">
+                            {% raw %}
+                            <h3>🤖 GitHub Actions</h3>
+                            <p>Stop vulnerabilities before they reach production. Seamlessly integrate InfraScan as a
+                                gatekeeper in your PRs.</p>
+
+                            <div class="premium-code-block">
+                                <div class="code-window-header">
+                                    <div class="window-controls">
+                                        <div class="control close"></div>
+                                        <div class="control minimize"></div>
+                                        <div class="control maximize"></div>
+                                    </div>
+                                    <div class="file-info">.github/workflows/infrascan.yml</div>
+                                    <button class="copy-btn-premium" data-copy="steps:
+  - uses: actions/checkout@v4
+  - name: Run InfraScan Audit
+    run: |
+      docker run --rm \
+        -v ${{ github.workspace }}:/scan \
+        soldevelo/infrascan:v1.0.5 \
+        --fail-on high_critical">
+                                        <span>Copy</span>
+                                    </button>
+                                </div>
+                                <pre><code><span class="keyword">steps:</span>
+  - <span class="keyword">uses:</span> actions/checkout<span class="variable">@v4</span>
+  - <span class="keyword">name:</span> Run InfraScan Audit
+    <span class="keyword">run:</span> |
+      docker run --rm \
+        -v <span class="string">${{ github.workspace }}</span>:/scan \
+        soldevelo/infrascan<span class="variable">:v1.0.5</span> \
+        --fail-on <span class="string">high_critical</span></code></pre>
+                            </div>
+                            {% endraw %}
+                        </div>
+
+                        <!-- HTML Reports -->
+                        <div class="usage-card">
+                            <h3>📊 Professional HTML Reports</h3>
+                            <p>Generate beautiful, shareable HTML audit reports directly from the command line.</p>
+
+                            <div class="premium-code-block">
+                                <div class="code-window-header">
+                                    <div class="window-controls">
+                                        <div class="control close"></div>
+                                        <div class="control minimize"></div>
+                                        <div class="control maximize"></div>
+                                    </div>
+                                    <div class="file-info">Generate audit.html</div>
+                                    <button class="copy-btn-premium"
+                                        data-copy="docker run --rm -v $(pwd):/scan soldevelo/infrascan --format html --out /scan/audit.html">
+                                        <span>Copy</span>
+                                    </button>
+                                </div>
+                                <pre><code>docker run --rm -v $(pwd):/scan soldevelo/infrascan \
+  --format html --out /scan/audit.html</code></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="usage-footer-premium">
+                        <p>Need more control? Explore all CLI arguments in our <a
+                                href="https://github.com/SolDevelo/InfraScan" target="_blank">Documentation on
+                                GitHub</a>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="loading-container">
+                    <div class="loading-visual">
+                        <div class="pulse-ring"></div>
+                        <div class="loading-icon">🔍</div>
+                    </div>
+                    <div class="loading-content">
+                        <h2 id="loading-title">Analyzing Infrastructure</h2>
+                        <p id="loading-status">Connecting to repository...</p>
+
+                        <div class="progress-bar-container">
+                            <div id="progress-bar-fill" class="progress-bar-fill"></div>
+                        </div>
+
+                        <div class="loading-steps">
+                            <div class="step" id="step-clone">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Repository Clone</span>
+                            </div>
+                            <div class="step" id="step-init">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Scanner Initialization</span>
+                            </div>
+                            <div class="step" id="step-iac">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">IaC Cost & Security Audit</span>
+                            </div>
+                            <div class="step" id="step-containers">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Container Vulnerability Scan</span>
+                            </div>
+                            <div class="step" id="step-report">
+                                <span class="step-icon">⏳</span>
+                                <span class="step-text">Finalizing Report</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="results-area" class="hidden">
+                <div class="results-header">
+                    <h2>Scan Results</h2>
+                    <div class="results-actions">
+                        <button class="secondary-btn" id="new-scan-btn">New Scan</button>
+                        <button class="secondary-btn" id="share-btn">Share Results</button>
+                        <button class="secondary-btn export-pdf-btn" id="export-pdf-btn" title="Export report as PDF">
+                            <span class="export-pdf-icon">⬇</span> Export PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="soft-sell">
+                    <h3>Need help implementing these fixes?</h3>
+                    <p>Hire our experts at <a
+                            href="https://soldevelo.com/contact?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=results-soft-sell"
+                            target="_blank">SolDevelo</a>.
+                        Mention 'InfraScan' for a free initial consultation.</p>
+                </div>
+
+                <div id="share-link-container" class="hidden">
+                    <p>Share this link with your team:</p>
+                    <div class="share-input-group">
+                        <input type="text" id="share-url" readonly>
+                        <button id="copy-share-btn">Copy</button>
+                    </div>
+                </div>
+
+                <div id="results-content">
+                    <noscript>
+                        <h1>InfraScan Report for {{ metadata.repository_name }}</h1>
+                        <p>Repository: <a href="{{ metadata.repository_url }}">{{ metadata.repository_url }}</a></p>
+                        <p>Scan Date: {{ metadata.scan_timestamp }}</p>
+                        <p>Overall Grade: {{ grade_report.overall.letter }} ({{ grade_report.overall.percentage }}%)</p>
+                        <p>Total Issues: {{ summary.total }}</p>
+                        
+                        <h2>Cost Optimization</h2>
+                        <p>Grade: {{ grade_report.cost.letter }}</p>
+                        <ul>
+                        {% for finding in data.results or [] if finding.scanner == 'regex' %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }} in {{ finding.file }}</li>
+                        {% endfor %}
+                        </ul>
+
+                        <h2>IaC Security</h2>
+                        <p>Grade: {{ grade_report.security.letter }}</p>
+                        <ul>
+                        {% for finding in data.results or [] if finding.scanner == 'checkov' %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }} in {{ finding.file }}</li>
+                        {% endfor %}
+                        </ul>
+
+                        <h2>Container Security</h2>
+                        <p>Grade: {{ grade_report.container.letter }}</p>
+                        <ul>
+                        {% for finding in data.results or [] if finding.scanner in ['docker-scout', 'grype'] %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }}</li>
+                        {% endfor %}
+                        </ul>
+
+                        <h2>Recommendations</h2>
+                        <ul>
+                        {% for rec in data.analysis or [] %}
+                            <li>{{ rec }}</li>
+                        {% endfor %}
+                        </ul>
+                    </noscript>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p class="footer-feedback">
+                <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
+            </p>
+
+            <p>InfraScan v1.0.6 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
+                    href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
+                contributions are welcome!
+                <a href="https://github.com/SolDevelo/InfraScan" target="_blank" class="github-stars-badge-footer">
+                    <img src="https://img.shields.io/github/stars/SolDevelo/InfraScan?style=social&label=Star"
+                        alt="GitHub stars">
+                </a>
+            </p>
+
+            <p>Made with &hearts; by <a
+                    href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=footer-logo"
+                    target="_blank">
+                    <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                        class="footer-logo">
+                </a>.
+            </p>
+
+            <p style="font-size: 0.8rem; opacity: 0.7; margin-top: 5px;">Designed & Built by the SolDevelo Cloud
+                Engineering Team</p>
+        </footer>
+
+        <button id="scroll-to-top" class="scroll-top-btn hidden" title="Go to top">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 15l-6-6-6 6"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Newsletter Modal -->
+    <div id="newsletter-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Stay Updated</h2>
+                <button class="close-btn" id="close-newsletter-btn">&times;</button>
+            </div>
+            <p class="modal-subtitle">Would you like to subscribe to our newsletter?</p>
+            <div class="newsletter-form">
+                <div class="input-group">
+                    <label for="newsletter-email">Email Address</label>
+                    <input type="email" id="newsletter-email" placeholder="your@email.com">
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="newsletter-consent">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text">I agree to receive the newsletter and be contacted.</span>
+                    </label>
+                </div>
+
+                <button class="action-btn" id="subscribe-btn">
+                    <span>✉️</span> Subscribe Now
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Share Your Feedback</h2>
+                <button class="close-btn" id="close-feedback-btn">&times;</button>
+            </div>
+            <p class="modal-subtitle">Help us shape the future of InfraScan.</p>
+
+            <div class="feedback-form">
+                <div class="rating-group">
+                    <label>How would you rate InfraScan?</label>
+                    <div class="star-rating" id="star-rating">
+                        <span class="star" data-value="1">&#9733;</span>
+                        <span class="star" data-value="2">&#9733;</span>
+                        <span class="star" data-value="3">&#9733;</span>
+                        <span class="star" data-value="4">&#9733;</span>
+                        <span class="star" data-value="5">&#9733;</span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-review">Your Review & Suggestions</label>
+                    <textarea id="feedback-review" placeholder="What should we add? What can be improved?"
+                        rows="4"></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-contact">Contact Info (Optional)</label>
+                    <input type="text" id="feedback-contact" placeholder="Email or name">
+                </div>
+
+                <button class="action-btn" id="submit-feedback-btn">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='pdf_generator.js') }}?v={{ static_version }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v={{ static_version }}"></script>
+</body>
+
+</html>
