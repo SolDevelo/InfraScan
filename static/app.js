@@ -119,6 +119,36 @@ function initApp() {
             if (uuidMatch) {
                 currentScanId = uuidMatch[1];
             }
+
+            // Register hosted-report button listeners (must happen before early return)
+            if (newScanBtn) {
+                newScanBtn.addEventListener('click', () => {
+                    window.location.href = '/';
+                });
+            }
+
+            if (shareBtn) {
+                shareBtn.addEventListener('click', () => {
+                    if (!currentScanId) return;
+                    let cleanRepo = 'report';
+                    if (currentMetadata && currentMetadata.repository_name) {
+                        cleanRepo = currentMetadata.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'report';
+                    }
+                    const shareUrl = `${window.location.origin}/report/${cleanRepo}-${currentScanId}`;
+                    if (shareUrlInput) shareUrlInput.value = shareUrl;
+                    if (shareLinkContainer) shareLinkContainer.classList.remove('hidden');
+                    shareBtn.textContent = 'Results Shared';
+                });
+            }
+
+            if (copyShareBtn) {
+                copyShareBtn.addEventListener('click', () => {
+                    if (shareUrlInput) shareUrlInput.select();
+                    document.execCommand('copy');
+                    copyShareBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyShareBtn.textContent = 'Copy'; }, 2000);
+                });
+            }
         }
 
         // Ensure container is correctly styled for full-width report
