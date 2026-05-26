@@ -1,9 +1,9 @@
-name: 'InfraScan Security & Cost Scanner'
-description: 'Open Source IaC Cost & Security Scanner'
+name: 'InfraScan – IaC Cost & Security Scanner'
+description: 'Scan Terraform, Kubernetes and Docker for cost inefficiencies and security issues in CI/CD pipelines'
 author: 'SolDevelo'
 branding:
-  icon: 'shield'
-  color: 'blue'
+  icon: 'alert-triangle'
+  color: 'green'
 inputs:
   directory:
     description: 'Directory to scan (relative to repository root)'
