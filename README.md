@@ -1,6 +1,6 @@
 # InfraScan
 
-**Open Source IaC Cost & Security Scanner**
+**Open-source infrastructure auditing platform.**
 
 [![Verified by InfraScan](https://img.shields.io/badge/Verified_by-SolDevelo_InfraScan-0052cc?style=flat&logo=security)](https://github.com/soldevelo/infrascan)
 [![Docker Pulls](https://img.shields.io/docker/pulls/soldevelo/infrascan.svg?style=flat-square)](https://hub.docker.com/r/soldevelo/infrascan)
@@ -9,7 +9,15 @@
 [![GitHub issues](https://img.shields.io/github/issues/soldevelo/infrascan?style=flat-square)](https://github.com/soldevelo/infrascan/issues)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](https://github.com/soldevelo/infrascan/blob/main/LICENSE)
 
-InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It supports **Terraform**, **Kubernetes manifests**, **CloudFormation**, **Helm**, and **Dockerfiles**. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
+InfraScan helps engineering teams detect cloud cost waste, security risks, and container vulnerabilities directly in CI/CD - before infrastructure reaches production.
+
+✅ Fully open-source and auditable  
+✅ Runs locally or inside your pipelines  
+✅ No vendor lock-in  
+✅ Transparent grading and rules  
+✅ Built for Terraform, Kubernetes, Helm, CloudFormation, and containers
+
+Unlike closed SaaS scanners, InfraScan executes entirely in your environment, making it suitable for security-conscious and regulated organizations.
 
 ## 🚀 Quick Start: GitHub Action
 
