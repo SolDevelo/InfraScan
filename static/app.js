@@ -449,6 +449,11 @@ function initApp() {
             if (data.branches && data.branches.length > 0) {
                 if (branchSelect) {
                     branchSelect.innerHTML = data.branches.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+                    // Pre-select the repository's actual default branch when available
+                    if (data.default_branch) {
+                        const defaultOption = branchSelect.querySelector(`option[value="${CSS.escape(data.default_branch)}"]`);
+                        if (defaultOption) defaultOption.selected = true;
+                    }
                 }
                 if (branchSelectionContainer) branchSelectionContainer.classList.remove('hidden');
             }
