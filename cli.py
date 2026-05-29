@@ -98,9 +98,9 @@ def setup_args():
 
     parser.add_argument(
         "--framework",
-        default="auto",
-        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm", "all"],
-        help="IaC framework type (default: auto-detect)"
+        default="smart",
+        choices=["smart", "auto", "terraform", "kubernetes", "cloudformation", "helm", "ansible", "all"],
+        help="IaC framework type (default: smart). 'smart' automatically uses 'all' for multi-framework projects"
     )
 
     parser.add_argument(
