@@ -327,7 +327,7 @@ def scan_github():
             raise clone_error
         
         # Scan directory and get results with resource count
-        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='terraform')
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
         
         # Generate comprehensive report with grades
         report_generator = ReportGenerator()
