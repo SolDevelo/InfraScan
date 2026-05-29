@@ -15,7 +15,7 @@ InfraScan helps engineering teams detect cloud cost waste, security risks, and c
 ✅ Runs locally or inside your pipelines  
 ✅ No vendor lock-in  
 ✅ Transparent grading and rules  
-✅ Built for Terraform, Kubernetes, Helm, CloudFormation, and containers
+✅ Built for Terraform, Kubernetes, Helm, CloudFormation, Ansible, and containers
 
 Unlike closed SaaS scanners, InfraScan executes entirely in your environment, making it suitable for security-conscious and regulated organizations.
 
@@ -153,7 +153,11 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 - `--scanner`: `regex`, `checkov`, `containers`, `comprehensive` (default: `comprehensive`). You can combine multiple scanners using comma (e.g. `--scanner regex,containers`).
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
-- `--framework`: `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm` (default: `auto`). When set to `auto`, InfraScan detects the framework automatically based on file contents.
+- `--framework`: `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible`, `all` (default: `smart`). 
+  - **`smart` (default)**: Intelligently detects the framework. If multiple frameworks are found (e.g., Terraform + Ansible + Kubernetes), automatically scans **all of them** for comprehensive coverage. If only one framework is detected, scans just that one for faster results.
+  - **`auto`**: Auto-detects the framework but picks only the dominant one. Shows a warning if other frameworks are ignored. Useful for projects that intentionally use one primary IaC tool.
+  - **`all`**: Explicitly scans all frameworks (terraform, kubernetes, cloudformation, helm, ansible).
+  - **Explicit framework**: Scan only that specific framework (terraform, kubernetes, etc.).
 - `-f`, `--include`: Select specific files or directories to scan. Can be used multiple times (e.g., `-f dir1 -f file2.tf`). This is useful in large repositories to avoid scanning redundant or test deployments.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
@@ -246,7 +250,31 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner containers
 ```
 
-## 🐳 Advanced Container Scanning
+## � Ansible Support
+
+InfraScan natively supports **Ansible playbooks** (`.yml`/`.yaml`). When Ansible files are detected (files containing `hosts:` and `tasks:` or `roles:` keys), InfraScan will:
+
+- **Auto-detect the framework**: If your project contains more Ansible playbooks than other IaC files, InfraScan will automatically switch to Ansible mode. You can also force it with `--framework ansible`.
+- **Security scanning (Checkov)**: Runs Ansible-specific Checkov rules (CKV_ANSIBLE_*) to detect security issues such as disabled certificate validation, hardcoded secrets, unsafe shell operations, and other misconfigurations.
+- **Task and handler counting**: InfraScan counts all tasks and handlers in your playbooks to provide comprehensive reporting.
+- **Multi-document support**: Files with multiple plays or multiple YAML documents separated by `---` are fully supported.
+
+**Example — scanning Ansible playbooks:**
+```bash
+# Auto-detected
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+
+# Explicit framework
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner comprehensive
+
+# Security checks only
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner checkov
+
+# Scan specific Ansible files
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible -f playbooks/ -f roles/
+```
+
+## �🐳 Advanced Container Scanning
 
 InfraScan supports advanced container scanning features:
 - **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
