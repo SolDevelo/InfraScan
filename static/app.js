@@ -93,7 +93,8 @@ function initApp() {
             cost: data.cost,
             security: data.security,
             container: data.container,
-            analysis: data.analysis
+            analysis: data.analysis,
+            metrics: data.metrics
         };
 
         currentResults = data.results;
@@ -301,7 +302,8 @@ function initApp() {
                         cost: data.cost,
                         security: data.security,
                         container: data.container,
-                        analysis: data.analysis
+                        analysis: data.analysis,
+                        metrics: data.metrics
                     };
                 }
 
@@ -698,7 +700,8 @@ function initApp() {
                 cost: data.cost,
                 security: data.security,
                 container: data.container,
-                analysis: data.analysis
+                analysis: data.analysis,
+                metrics: data.metrics
             };
 
             displayResults(data.results, data.summary, data.metadata, currentGradeReport);
@@ -1469,29 +1472,34 @@ function initApp() {
                 </div>
             `;
         };
-
+        const singleScannerMode = gradeReport.metrics?.single_scanner_mode;
         const recommendations = gradeReport.analysis?.recommendations || [];
 
         return `
-            <div class="grade-report-section">
-                <h2 class="section-title">📊 Infrastructure Report Card</h2>
-                <div class="grade-cards-container">
-                    ${renderGradeCard('Overall Grade', gradeReport.overall, '🎯')}
-                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
-                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
-                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
-                </div>
-                ${recommendations.length > 0 ? `
-                <div class="recommendations-section">
-                    <h3 class="recommendations-title">💡 Recommendations</h3>
-                    <ul class="recommendations-list">
-                        ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
-                    </ul>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
+           <div class="grade-report-section">
+               <h2 class="section-title">📊 Infrastructure Health Report</h2>
+
+               <div class="grade-cards-container">
+                   ${!singleScannerMode && gradeReport.overall
+                       ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
+                       : ''}
+
+                   ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
+                   ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
+                   ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
+               </div>
+
+               ${recommendations.length > 0 ? `
+               <div class="recommendations-section">
+                   <h3 class="recommendations-title">💡 Recommendations</h3>
+                   <ul class="recommendations-list">
+                       ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                   </ul>
+               </div>
+               ` : ''}
+           </div>
+`       ;
+}
 
     submitFeedbackBtn.addEventListener('click', async () => {
         const review = feedbackReview.value.trim();
@@ -1681,5 +1689,4 @@ function toggleCVE(cveId) {
     } else {
         details.style.display = 'none';
         if (icon) icon.textContent = '▼';
-    }
-}
+        }}

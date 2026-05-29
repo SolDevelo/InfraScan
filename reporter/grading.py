@@ -134,10 +134,10 @@ class ScanReport:
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         return {
-            'overall': self.overall_grade.to_dict(),
-            'cost': self.cost_grade.to_dict(),
-            'security': self.security_grade.to_dict(),
-            'container': self.container_grade.to_dict(),
+        'overall': self.overall_grade.to_dict() if self.overall_grade else None,
+        'cost': self.cost_grade.to_dict() if self.cost_grade else None,
+        'security': self.security_grade.to_dict() if self.security_grade else None,
+        'container': self.container_grade.to_dict() if self.container_grade else None,
             'findings': {
                 'cost': self.cost_findings,
                 'security': self.security_findings,
@@ -317,6 +317,18 @@ class ReportGenerator:
         Returns:
             Complete ScanReport object
         """
+        scanner_set = set(s.strip() for s in scanner_type.split(','))
+        
+        enabled_scanners = []
+        
+        if scanner_set & {'regex', 'comprehensive'}:
+            enabled_scanners.append('cost')
+        
+        if scanner_set & {'checkov', 'comprehensive'}:
+            enabled_scanners.append('security')
+        
+        if scanner_set & {'containers', 'comprehensive'}:
+            enabled_scanners.append('container')
         # Separate findings by scanner type
         cost_findings = [f for f in findings if f.get('scanner') == 'regex']
         security_findings = [f for f in findings if f.get('scanner') == 'checkov']
@@ -329,25 +341,41 @@ class ReportGenerator:
         container_scoring_findings = self._most_severe_per_container_image(container_findings)
 
         # Calculate individual grades
-        cost_grade = self.calculator.calculate_grade(cost_findings, resource_count)
+        cost_grade = (
+            self.calculator.calculate_grade(cost_findings, resource_count)
+            if 'cost' in enabled_scanners
+            else None
+        )
 
         # Security uses resource-based max score to avoid overweighting many checks per resource
         max_severity_weight = max(self.calculator.severity_weights.values())
         base_resource_count = resource_count if resource_count and resource_count > 0 else 0
         security_resource_count = max(base_resource_count, len(security_scoring_findings), 1)
         security_max_score = security_resource_count * max_severity_weight
-        security_grade = self.calculator.calculate_grade_with_max(
-            security_scoring_findings, security_max_score, 
-            violations=len(security_findings), all_findings=security_findings
+        security_grade = (
+            self.calculator.calculate_grade_with_max(
+                security_scoring_findings,
+                security_max_score,
+                violations=len(security_findings),
+                all_findings=security_findings
+            )
+            if 'security' in enabled_scanners
+            else None
         )
         
         # Container security grading (aggregated by image)
         # Use scoring_findings for severity breakdown to show container counts, not total vulnerabilities
         container_resource_count = max(base_resource_count, len(container_scoring_findings), 1)
         container_max_score = container_resource_count * max_severity_weight
-        container_grade = self.calculator.calculate_grade_with_max(
-            container_scoring_findings, container_max_score, 
-            violations=len(container_scoring_findings), all_findings=container_scoring_findings
+        container_grade = (
+            self.calculator.calculate_grade_with_max(
+                container_scoring_findings,
+                container_max_score,
+                violations=len(container_scoring_findings),
+                all_findings=container_scoring_findings
+            )
+            if 'container' in enabled_scanners
+            else None
         )
         
         # Calculate overall grade
@@ -368,6 +396,8 @@ class ReportGenerator:
         
         # Additional metrics (extensible)
         metrics = self._calculate_additional_metrics(findings, resource_count)
+
+        single_scanner_mode = len(enabled_scanners) == 1
         
         return ScanReport(
             overall_grade=overall_grade,
@@ -383,7 +413,10 @@ class ReportGenerator:
             total_violations=len(findings),
             recommendations=recommendations,
             top_issues=top_issues,
-            metrics=metrics
+            metrics={
+                **(metrics or {}),
+                'single_scanner_mode': single_scanner_mode
+            }
         )
 
     def _most_severe_per_resource(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -425,17 +458,18 @@ class ReportGenerator:
         """Calculate overall grade from cost, security, and container grades."""
         # Determine which scanners were used
         scanners_used = []
-        if cost_findings:
+        
+        if cost_grade:
             scanners_used.append('cost')
-        if security_findings:
+        
+        if security_grade:
             scanners_used.append('security')
-        if container_findings:
+        
+        if container_grade:
             scanners_used.append('container')
         
         if not scanners_used:
-            overall_percentage = 100.0
-            combined_score = 0
-            max_combined = 0
+            return None
         elif len(scanners_used) == 1:
             # Single scanner - use its grade directly
             if 'cost' in scanners_used:
@@ -459,18 +493,27 @@ class ReportGenerator:
                  container_grade.percentage) * SCORE_WEIGHTS[s]
                 for s in scanners_used
             ) / total_weight
-            combined_score = cost_grade.score + security_grade.score + container_grade.score
-            max_combined = cost_grade.max_score + security_grade.max_score + container_grade.max_score
+            combined_score = sum(
+                g.score for g in [cost_grade, security_grade, container_grade]
+                if g
+            )
+
+            max_combined = sum(
+                g.max_score for g in [cost_grade, security_grade, container_grade]
+                if g
+            )
         
         letter = self.calculator.get_letter_grade(overall_percentage)
         
         # Merge severity breakdowns
+        grades = [g for g in [cost_grade, security_grade, container_grade] if g]
+
         combined_breakdown = {
-            'critical': cost_grade.severity_breakdown['critical'] + security_grade.severity_breakdown['critical'] + container_grade.severity_breakdown['critical'],
-            'high': cost_grade.severity_breakdown['high'] + security_grade.severity_breakdown['high'] + container_grade.severity_breakdown['high'],
-            'medium': cost_grade.severity_breakdown['medium'] + security_grade.severity_breakdown['medium'] + container_grade.severity_breakdown['medium'],
-            'low': cost_grade.severity_breakdown['low'] + security_grade.severity_breakdown['low'] + container_grade.severity_breakdown['low'],
-            'info': cost_grade.severity_breakdown['info'] + security_grade.severity_breakdown['info'] + container_grade.severity_breakdown['info']
+            'critical': sum(g.severity_breakdown['critical'] for g in grades),
+            'high': sum(g.severity_breakdown['high'] for g in grades),
+            'medium': sum(g.severity_breakdown['medium'] for g in grades),
+            'low': sum(g.severity_breakdown['low'] for g in grades),
+            'info': sum(g.severity_breakdown['info'] for g in grades)
         }
         
         return GradeInfo(
@@ -479,7 +522,7 @@ class ReportGenerator:
             score=combined_score,
             max_score=max_combined,
             risk_level=RISK_LEVELS.get(letter, 'Unknown'),
-            violations=cost_grade.violations + security_grade.violations + container_grade.violations,
+            violations=sum(g.violations for g in grades),
             severity_breakdown=combined_breakdown
         )
     
@@ -493,8 +536,14 @@ class ReportGenerator:
         recommendations = []
         
         # IaC Security - show most critical issue only
-        iac_critical = security_grade.severity_breakdown.get('critical', 0)
-        iac_high = security_grade.severity_breakdown['high']
+        iac_critical = (
+            security_grade.severity_breakdown.get('critical', 0)
+            if security_grade else 0
+        )
+        iac_high = (
+            security_grade.severity_breakdown.get('high', 0)
+            if security_grade else 0
+        )
         if iac_critical > 0:
             recommendations.append(
                 f"🔥 URGENT: Fix {iac_critical} critical-severity "
@@ -507,8 +556,14 @@ class ReportGenerator:
             )
         
         # Container Security - show most critical issue only
-        container_critical = container_grade.severity_breakdown.get('critical', 0)
-        container_high = container_grade.severity_breakdown['high']
+        container_critical = (
+            container_grade.severity_breakdown.get('critical', 0)
+            if container_grade else 0
+        )
+        container_high = (
+            container_grade.severity_breakdown.get('high', 0)
+            if container_grade else 0
+        )
         if container_critical > 0:
             recommendations.append(
                 f"🔥 URGENT: Address {container_critical} {'image with' if container_critical == 1 else 'images with'} critical "
@@ -521,21 +576,30 @@ class ReportGenerator:
             )
         
         # Cost - show only if high priority
-        if cost_grade.severity_breakdown['high'] > 0:
+        if cost_grade and cost_grade.severity_breakdown.get('high', 0) > 0:
             recommendations.append(
                 f"💰 Optimize {cost_grade.severity_breakdown['high']} high-cost "
                 f"{'issue' if cost_grade.severity_breakdown['high'] == 1 else 'issues'} for significant savings"
             )
         
         # Overall assessment - max 1
-        worst_grade = min([cost_grade.letter, security_grade.letter, container_grade.letter])
+        available_letters = [
+            g.letter for g in [cost_grade, security_grade, container_grade]
+            if g
+        ]
+
+        worst_grade = max(available_letters) if available_letters else 'A'
         total_findings = len(cost_findings) + len(security_findings) + len(container_findings)
         
         if worst_grade in ['D', 'F']:
             recommendations.append(
                 "⚠️ Infrastructure needs improvement - consider professional review"
             )
-        elif cost_grade.letter == 'A' and security_grade.letter == 'A' and container_grade.letter == 'A' and total_findings > 0:
+        elif all(
+            g.letter == 'A'
+            for g in [cost_grade, security_grade, container_grade]
+            if g
+        ) and total_findings > 0:
             recommendations.append("✅ Excellent infrastructure health - maintain current practices")
         elif worst_grade in ['B', 'C']:
             recommendations.append("👍 Good foundation - address remaining issues for optimal results")
@@ -575,5 +639,4 @@ class ReportGenerator:
         
         # Calculate estimated potential savings (for cost findings)
         # This is extensible - add more calculations as needed
-        
-        return metrics
+       

@@ -15,6 +15,7 @@ from scanner.checkov_scanner import is_checkov_available
 from scanner.docker_scout_scanner import is_docker_scout_available
 from scanner.grype_scanner import is_grype_available
 from reporter.grading import ReportGenerator
+import traceback
 
 load_dotenv()
 
@@ -238,10 +239,12 @@ def get_branches():
             
         return jsonify({'branches': branches})
     except Exception as e:
+        print(f"Error: {e}")
         error_msg = str(e).lower()
         if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
-             return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
+            return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
         return jsonify({'error': f'Failed to fetch branches: {str(e)}'}), 500
+
 
 @app.route('/api/scan/github', methods=['POST'])
 def scan_github():
@@ -374,11 +377,27 @@ def scan_github():
         findings_summary = ", ".join(findings_parts)
         
         # Build grades summary
-        grades_parts = [f"Overall {overall_grade.letter} ({overall_grade.percentage}%)"]
-        grades_parts.append(f"Cost {cost_grade.letter} ({cost_grade.percentage}%)")
-        grades_parts.append(f"Security {security_grade.letter} ({security_grade.percentage}%)")
-        if container_findings > 0:
-            grades_parts.append(f"Containers {container_grade.letter} ({container_grade.percentage}%)")
+        grades_parts = []
+
+        if overall_grade:
+            grades_parts.append(
+                f"Overall {overall_grade.letter} ({overall_grade.percentage}%)"
+            )
+        
+        if cost_grade:
+            grades_parts.append(
+                f"Cost {cost_grade.letter} ({cost_grade.percentage}%)"
+            )
+        
+        if security_grade:
+            grades_parts.append(
+                f"Security {security_grade.letter} ({security_grade.percentage}%)"
+            )
+        
+        if container_grade:
+            grades_parts.append(
+                f"Containers {container_grade.letter} ({container_grade.percentage}%)"
+            )
         grades_summary = " ".join(grades_parts)
         
         slack_message = (
@@ -410,6 +429,7 @@ def scan_github():
         
         return jsonify(report_dict)
     except Exception as e:
+        print(f"Error: {e}")
         # User-friendly error message without exposing technical details
         error_msg = str(e).lower()
         if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
@@ -423,7 +443,7 @@ def scan_github():
     finally:
         # Clean up
         shutil.rmtree(temp_dir, ignore_errors=True)
-
+        
 
 @app.route('/api/results/save', methods=['POST'])
 def save_results():
