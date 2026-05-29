@@ -233,6 +233,11 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
 
     # Count resources for reporting
     resource_count = count_resources(path, framework, files=resolved_files)
+    # Log discovered files
+    if resolved_files:
+        print("Files passed to Checkov:")
+        for file in resolved_files:
+            print(f"  - {os.path.relpath(file, path)}")
     
     # Run cost-focused regex scanner
     if 'regex' in active_scanners:
@@ -249,6 +254,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         
         # Scan all files and collect results
         for file_path in all_files:
+            print(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
             file_results = scan_file(file_path)
             if file_results:
                 results.extend(file_results)
@@ -261,6 +267,10 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     if 'checkov' in active_scanners:
         if is_checkov_available():
             try:
+                if resolved_files:
+                    print("[INFO] Files passed to Checkov:")
+                    for file in resolved_files:
+                        print(f"  - {os.path.relpath(file, path)}")
                 checkov_results = run_checkov_scan(
                     path, 
                     framework, 

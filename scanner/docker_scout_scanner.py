@@ -281,11 +281,18 @@ def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple
         compose_files = find_compose_files(directory_path)
         # Find Kubernetes files
         k8s_files = find_kubernetes_files(directory_path)
-    
     if not compose_files and not k8s_files:
         return findings, extra_recommendations, False
     
-    print(f"Found {len(compose_files)} Docker Compose file(s) and {len(k8s_files)} Kubernetes file(s) to scan")
+    if compose_files:
+        print("[INFO] Found Docker Compose files:")
+        for file in compose_files:
+            print(f"  - {os.path.relpath(file, directory_path)}")
+    
+    if k8s_files:
+        print("[INFO] Found Kubernetes files:")
+        for file in k8s_files:
+            print(f"  - {os.path.relpath(file, directory_path)}")
     
     # Collect ALL images from ALL files first
     all_images_map = {} # image -> source_file
@@ -310,8 +317,14 @@ def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple
         # Check if image exists locally before scanning
         image_existed_before = check_image_exists(image)
         
-        print(f"Scanning image: {image}")
-        
+        relative_file = os.path.relpath(compose_file, directory_path)
+
+        print(
+            f"[INFO] Scanning image '{image}' "
+            f"from file: {os.path.relpath(compose_file, directory_path)}"
+        )
+        print(f"  Source file: {relative_file}")
+
         try:
             image_findings, image_auth_failed = scan_image(image, compose_file, directory_path)
             findings.extend(image_findings)
