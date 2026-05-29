@@ -1236,10 +1236,10 @@ function initApp() {
                                                         <span class="cve-expand-icon" id="${cveId}-icon">▼</span>
                                                     </div>
                                                     <div class="cve-details" id="${cveId}" style="display: none;">
-                                                        ${v.scanner === 'grype' && (v.full_description || v.description) ? `
+                                                        ${(v.full_description || v.description) ? `
                                                             <div class="cve-detail-section">
                                                                 <strong>Description:</strong>
-                                                                <p>${escapeHtml(v.full_description || v.description)}</p>
+                                                                <div class="markdown-rendered" style="margin-top: 8px; font-size: 0.85rem; line-height: 1.5;">${window.marked ? window.marked.parse(v.description || v.full_description) : escapeHtml(v.description || v.full_description)}</div>
                                                             </div>
                                                         ` : ''}
                                                         <div class="cve-detail-section">

@@ -6,6 +6,24 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
     const esc = (t) => t == null ? '' : String(t)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    // Render Markdown to HTML if marked.js is available, otherwise plain-text escape
+    const parseMarkdown = (t) => {
+        if (!t) return '';
+        if (typeof marked !== 'undefined' && marked.parse) {
+            return marked.parse(String(t));
+        }
+        // Fallback: minimal inline rendering without marked
+        let s = esc(t);
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/`([^`]+)`/g, '<code style="background:#F1F5F9;padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>');
+        s = s.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:3px solid #CBD5E1;padding-left:8px;color:#475569;margin:4px 0;">$1</blockquote>');
+        s = s.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color:#4F46E5;">$1</a>');
+        s = s.replace(/^- (.+)$/gm, '<li>$1</li>');
+        s = s.replace(/(<li>.*<\/li>)/gs, '<ul style="margin:4px 0 4px 16px;">$1</ul>');
+        s = s.replace(/\n\n/g, '<br>');
+        return s;
+    };
+
     // ── Meta ──────────────────────────────────────────────────────────────────
     const repoName  = esc(metadata?.repository_name || metadata?.repository_url || '—');
     const repoUrl   = esc(metadata?.repository_url  || '');
@@ -208,13 +226,16 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 ${containerScannerName ? `<span style="font-weight:400;color:#94A3B8;font-size:0.72rem;margin-left:6px;">via ${esc(containerScannerName)}</span>` : ''}
               </td>
             </tr>`;
-            const cveRows = ordered.map(v => `<tr>
+            const cveRows = ordered.map(v => {
+                const hasRichDesc = v.description && (v.description.includes('**') || v.description.includes('##') || v.description.includes('`'));
+                return `<tr>
               <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(v.rule_id||'—')}</td>
               <td class="td"><div class="rule-name">${esc(v.package)}</div><div class="cell-small muted">v${esc(v.package_version)}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(v.severity)}</td>
               <td class="td" style="font-size:0.72rem;">${v.fix_version && v.fix_version!=='N/A' ? `<span style="color:#059669;font-weight:700;">→ ${esc(v.fix_version)}</span>` : '<span class="muted">No fix yet</span>'}</td>
-              <td class="td"><div class="cell-small muted">${esc(v.description || '')}</div></td>
-            </tr>`).join('');
+              <td class="td"><div class="markdown-desc" style="font-size:0.75rem;line-height:1.5;">${parseMarkdown(v.description || v.full_description || '')}</div></td>
+            </tr>`;
+            }).join('');
             return [imgRow, cveRows];
         }).join('');
 
@@ -222,7 +243,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   <h2 class="section-title" style="color:#2563EB;">🐳 Container Security — ${containerResults.length} vulnerabilities in ${Object.keys(imageMap).length} image(s)${containerScannerName ? ` · Scanner: <span style="font-weight:600;">${esc(containerScannerName)}</span>` : ''}</h2>
   <table class="data-table" style="--hdr:#EFF6FF;--hdr-bdr:#BFDBFE;--hdr-fg:#1E40AF;">
     <thead><tr style="background:var(--hdr);border-bottom:2px solid var(--hdr-bdr);">
-      ${TH('CVE / ID','12%')}${TH('Package','18%')}${TH('Severity','9%')}${TH('Fix Version','12%')}${TH('Description')}
+      ${TH('CVE / ID','12%')}${TH('Package','16%')}${TH('Severity','9%')}${TH('Fix Version','11%')}${TH('Description')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -236,6 +257,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
 <meta charset="UTF-8">
 <title>InfraScan Report — ${repoName}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -320,6 +342,17 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
   .muted { color: #94A3B8 !important; }
   .img-cell { border-top: 2px solid #BFDBFE; }
+
+  /* ── Markdown-rendered description ── */
+  .markdown-desc p { margin: 0 0 6px 0; }
+  .markdown-desc p:last-child { margin-bottom: 0; }
+  .markdown-desc strong { font-weight: 700; color: #1E293B; }
+  .markdown-desc code { background: #F1F5F9; padding: 1px 5px; border-radius: 3px; font-size: 0.78em; font-family: monospace; color: #4F46E5; }
+  .markdown-desc ul { margin: 4px 0 4px 16px; padding: 0; }
+  .markdown-desc li { margin-bottom: 2px; }
+  .markdown-desc blockquote { border-left: 3px solid #CBD5E1; padding: 4px 8px; margin: 4px 0; color: #475569; background: #F8FAFC; border-radius: 0 4px 4px 0; }
+  .markdown-desc a { color: #4F46E5; text-decoration: none; word-break: break-all; }
+  .markdown-desc h1, .markdown-desc h2, .markdown-desc h3 { font-size: 0.8rem; font-weight: 700; margin: 6px 0 3px; color: #1E293B; }
 
   /* ── Info box ── */
   .infobox {
