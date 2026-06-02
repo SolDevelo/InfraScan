@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Scan
-        uses: soldevelo/infrascan@v1.0.6
+        uses: soldevelo/infrascan@v1.0.7
         with:
           format: html
           out: report.html
@@ -143,7 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run K8s Scan
-        uses: soldevelo/infrascan@v1.0.6
+        uses: soldevelo/infrascan@v1.0.7
         with:
           framework: kubernetes
           scanner: comprehensive
