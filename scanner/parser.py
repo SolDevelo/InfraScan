@@ -18,6 +18,63 @@ def is_container_scanner_available():
     else:  # docker-scout (default)
         return is_docker_scout_available()
 
+def detect_all_frameworks(path: str = None, files: list = None) -> list:
+    """
+    Detect ALL IaC frameworks present in the directory or list of files.
+    Returns a list of detected frameworks.
+    
+    Returns:
+    - List of detected frameworks (e.g., ['terraform', 'kubernetes', 'ansible'])
+    """
+    detected = []
+    
+    scan_files = []
+    if files:
+        scan_files = files
+    elif path:
+        for root, dirs, f_list in os.walk(path):
+            for file in f_list:
+                scan_files.append(os.path.join(root, file))
+    
+    tf_files = 0
+    k8s_files = 0
+    cfn_files = 0
+    helm_files = 0
+    ansible_files = 0
+    
+    for full_path in scan_files:
+        file = os.path.basename(full_path)
+        if file.endswith('.tf'):
+            tf_files += 1
+        elif file == 'Chart.yaml' or file == 'Chart.yml':
+            helm_files += 1
+        elif file.endswith(('.yml', '.yaml')):
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    head = f.read(1024)
+                    if 'apiVersion:' in head and 'kind:' in head:
+                        k8s_files += 1
+                    elif 'AWSTemplateFormatVersion' in head:
+                        cfn_files += 1
+                    elif ('hosts:' in head or '- hosts:' in head) and ('tasks:' in head or 'roles:' in head or 'play' in head):
+                        ansible_files += 1
+            except Exception:
+                continue
+    
+    # Build list of detected frameworks
+    if tf_files > 0:
+        detected.append('terraform')
+    if k8s_files > 0:
+        detected.append('kubernetes')
+    if cfn_files > 0:
+        detected.append('cloudformation')
+    if helm_files > 0:
+        detected.append('helm')
+    if ansible_files > 0:
+        detected.append('ansible')
+    
+    return detected if detected else ['all']
+
 def detect_framework(path: str = None, files: list = None) -> str:
     """
     Detect the IaC framework used in the directory or list of files.
@@ -27,12 +84,14 @@ def detect_framework(path: str = None, files: list = None) -> str:
     - 'kubernetes'
     - 'cloudformation'
     - 'helm'
-    - 'all' (fallback for Docker/secrets/actions/etc.)
+    - 'ansible'
+    - 'all' (when multiple frameworks are detected, or fallback for Docker/secrets/actions/etc.)
     """
     tf_files = 0
     k8s_files = 0
     cfn_files = 0
     helm_files = 0
+    ansible_files = 0
     
     scan_files = []
     if files:
@@ -57,14 +116,27 @@ def detect_framework(path: str = None, files: list = None) -> str:
                         k8s_files += 1
                     elif 'AWSTemplateFormatVersion' in head:
                         cfn_files += 1
+                    elif ('hosts:' in head or '- hosts:' in head) and ('tasks:' in head or 'roles:' in head or 'play' in head):
+                        # Ansible playbook detection
+                        ansible_files += 1
             except Exception:
                 continue
     
-    if k8s_files > tf_files and k8s_files > cfn_files and k8s_files > helm_files:
+    # Count how many frameworks were detected
+    framework_count = sum([1 for x in [tf_files, k8s_files, cfn_files, helm_files, ansible_files] if x > 0])
+    
+    # If multiple frameworks detected - return 'all' for comprehensive scanning
+    if framework_count > 1:
+        return 'all'
+    
+    # If only one framework - return the specific one
+    if ansible_files > 0:
+        return 'ansible'
+    if k8s_files > 0:
         return 'kubernetes'
-    if cfn_files > tf_files and cfn_files > helm_files:
+    if cfn_files > 0:
         return 'cloudformation'
-    if helm_files > tf_files:
+    if helm_files > 0:
         return 'helm'
     if tf_files > 0:
         return 'terraform'
@@ -142,6 +214,42 @@ def count_resources(path=None, framework='terraform', files=None):
                         services = compose_data['services']
                         if isinstance(services, dict):
                             resource_count += len(services)
+            except Exception:
+                continue
+    
+    if framework in ('ansible', 'all'):
+        import yaml
+        scan_files_ansible = []
+        if files:
+            scan_files_ansible = [f for f in files if f.endswith(('.yml', '.yaml'))]
+        else:
+            for root, dirs, f_list in os.walk(path):
+                for file in f_list:
+                    if file.endswith(('.yml', '.yaml')):
+                        scan_files_ansible.append(os.path.join(root, file))
+        
+        for ansible_file in scan_files_ansible:
+            try:
+                with open(ansible_file, 'r', encoding='utf-8') as f:
+                    # Count plays and tasks in Ansible playbooks
+                    docs = yaml.safe_load_all(f)
+                    for doc in docs:
+                        if doc and isinstance(doc, list):
+                            # Ansible playbooks are lists of plays
+                            for play in doc:
+                                if isinstance(play, dict):
+                                    # Count tasks in each play
+                                    if 'tasks' in play and isinstance(play['tasks'], list):
+                                        resource_count += len(play['tasks'])
+                                    # Count handlers in each play
+                                    if 'handlers' in play and isinstance(play['handlers'], list):
+                                        resource_count += len(play['handlers'])
+                        elif doc and isinstance(doc, dict) and 'tasks' in doc:
+                            # Single play format
+                            if isinstance(doc['tasks'], list):
+                                resource_count += len(doc['tasks'])
+                            if 'handlers' in doc and isinstance(doc['handlers'], list):
+                                resource_count += len(doc['handlers'])
             except Exception:
                 continue
     
@@ -227,12 +335,52 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             return [], 0, []
 
     # Auto-detect framework if needed
-    if framework == 'auto' or not framework:
-        framework = detect_framework(path, files=resolved_files)
-        print(f"Detected framework: {framework}")
+    if framework == 'smart' or framework == 'auto' or not framework:
+        all_frameworks = detect_all_frameworks(path, files=resolved_files)
+        
+        # For 'smart' mode: detect all frameworks and use 'all' if multiple are found
+        if framework == 'smart':
+            if len(all_frameworks) > 1:
+                framework = 'all'
+                print(f"[i] Multiple IaC frameworks detected: {', '.join(all_frameworks)}")
+                print("[i] Scanning all frameworks for comprehensive coverage")
+            else:
+                framework = all_frameworks[0] if all_frameworks else 'all'
+                print(f"[i] Detected framework: {framework}")
+        else:
+            # For 'auto' mode: traditional behavior - pick the dominant one
+            # Don't use detect_framework() directly as it returns 'all' for multiple frameworks
+            # Instead, manually pick the dominant one
+            framework_counts = {
+                'terraform': 0,
+                'kubernetes': 0,
+                'ansible': 0,
+                'cloudformation': 0,
+                'helm': 0
+            }
+            for fw in all_frameworks:
+                framework_counts[fw] = 1
+            
+            # Pick the one that was detected (or first one if tie)
+            dominant = max(all_frameworks, key=lambda x: (framework_counts[x], all_frameworks.index(x)), default='all')
+            framework = dominant
+            print(f"Detected framework: {framework}")
+            
+            # Show warning if multiple frameworks exist but only one is being scanned
+            if len(all_frameworks) > 1:
+                ignored = [f for f in all_frameworks if f != framework]
+                print(f"[!] WARNING: Detected {len(all_frameworks)} framework types: {', '.join(all_frameworks)}")
+                print(f"[!] Only scanning: {framework}")
+                print(f"[!] Ignored: {', '.join(ignored)}")
+                print("[!] To scan all frameworks, use: --framework all")
 
     # Count resources for reporting
     resource_count = count_resources(path, framework, files=resolved_files)
+    # Log discovered files
+    if resolved_files:
+        print("Files passed to Checkov:")
+        for file in resolved_files:
+            print(f"  - {os.path.relpath(file, path)}")
     
     # Run cost-focused regex scanner
     if 'regex' in active_scanners:
@@ -249,6 +397,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         
         # Scan all files and collect results
         for file_path in all_files:
+            print(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
             file_results = scan_file(file_path)
             if file_results:
                 results.extend(file_results)
@@ -261,6 +410,10 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     if 'checkov' in active_scanners:
         if is_checkov_available():
             try:
+                if resolved_files:
+                    print("[INFO] Files passed to Checkov:")
+                    for file in resolved_files:
+                        print(f"  - {os.path.relpath(file, path)}")
                 checkov_results = run_checkov_scan(
                     path, 
                     framework, 
