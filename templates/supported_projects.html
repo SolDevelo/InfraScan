@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="InfraScan Supported Projects - Public adoption dashboard of projects using InfraScan for Infrastructure as Code cost and security auditing.">
+    <meta name="keywords"
+        content="IaC scanner, Terraform security, CloudFormation audit, Kubernetes scanning, infrastructure audit, security scanner, cost optimization, supported projects, adoption dashboard">
+    <meta name="author" content="SolDevelo">
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ site_domain }}/supported-projects">
+    <meta property="og:title" content="InfraScan - Supported Projects Dashboard">
+    <meta property="og:description"
+        content="Track open source and enterprise adoption of InfraScan. Audit grades, scans count, and latest activity dashboard.">
+    <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary">
+    <meta property="twitter:url" content="{{ site_domain }}/supported-projects">
+    <meta property="twitter:title" content="InfraScan - Supported Projects Dashboard">
+    <meta property="twitter:description"
+        content="Track open source and enterprise adoption of InfraScan. Audit grades, scans count, and latest activity dashboard.">
+    <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+
+    <!-- Canonical -->
+    <link rel="canonical" href="{{ site_domain }}/supported-projects">
+
+    <!-- Language -->
+    <meta http-equiv="content-language" content="en-US">
+
+    <title>Supported Projects | InfraScan - Infrastructure Auditor Adoption Dashboard</title>
+
+    {% if google_tag_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_tag_id }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', '{{ google_tag_id }}');
+    </script>
+    {% endif %}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="main-brand-row">
+                    <a href="{{ url_for('index') }}" class="logo-link">
+                        <img src="{{ url_for('static', filename='images/logo_transparent.png') }}" alt="InfraScan"
+                            class="main-logo" loading="eager" decoding="async">
+                        <h1 class="sr-only">InfraScan</h1>
+                    </a>
+                    <div class="soldevelo-brand">
+                        <span class="brand-divider"></span>
+                        <a href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=header-logo"
+                            target="_blank">
+                            <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                                class="header-logo">
+                        </a>
+                    </div>
+                </div>
+                <a href="https://github.com/SolDevelo/InfraScan" target="_blank" class="github-stars-badge">
+                    <img src="https://img.shields.io/github/stars/SolDevelo/InfraScan?style=social" alt="GitHub stars">
+                </a>
+            </div>
+            <p class="subtitle">Open Source Infrastructure Auditor by <strong>SolDevelo</strong></p>
+
+            <div class="landing-info">
+                <div class="info-card">
+                    <div class="info-icon">💰</div>
+                    <h4>Reduce Costs</h4>
+                    <p>Identify expensive mistakes like oversized instances, unmanaged disks, or missing lifecycle
+                        rules.</p>
+                    <a href="https://soldevelo.com/services/aws-cost-optimization/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-reduce-costs"
+                        target="_blank" class="card-link">
+                        Learn how we help <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">🛡️</div>
+                    <h4>Fix Security</h4>
+                    <p>Scan for open ports, unencrypted storage, and risky IAM policies before deploying to production.
+                    </p>
+                    <a href="https://soldevelo.com/services/security-audit-and-hardening/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-fix-security"
+                        target="_blank" class="card-link">
+                        Our security approach <span>→</span>
+                    </a>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">⚡</div>
+                    <h4>GitHub Ready</h4>
+                    <p>Just paste your repository URL. No complex setup or cloud credentials required for the initial
+                        scan.</p>
+                    <a href="https://soldevelo.com/contact/?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=card-contact"
+                        target="_blank" class="card-link">
+                        Get expert advice <span>→</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <a href="{{ url_for('index') }}" class="tab-btn">Scan GitHub Repo</a>
+                <a href="{{ url_for('index') }}?tab=recent-scans" class="tab-btn">Recent Scans</a>
+                <a href="{{ url_for('supported_projects') }}" class="tab-btn active">Supported Projects</a>
+                <a href="{{ url_for('index') }}?tab=release-notes" class="tab-btn">Release Notes</a>
+                <a href="{{ url_for('index') }}?tab=local-usage" class="tab-btn">Local & CI/CD</a>
+            </div>
+
+            <div class="tab-content active" id="supported-projects-tab">
+                <div class="supported-projects-header">
+                    <div>
+                        <h2 class="recent-scans-title">💼 Supported Projects</h2>
+                        <p class="recent-scans-subtitle">Infrastructure projects actively audited by InfraScan in the last 12 months.</p>
+                    </div>
+                    <div class="projects-search-container">
+                        <span class="projects-search-icon">🔍</span>
+                        <input type="text" id="projects-search" class="projects-search-input" placeholder="Search projects...">
+                    </div>
+                </div>
+
+                <div id="projects-loading" class="recent-scans-loading">
+                    <div class="spinner"></div>
+                    <p>Loading projects list...</p>
+                </div>
+
+                <div id="projects-empty" class="recent-scans-empty hidden">
+                    <div class="empty-icon">📭</div>
+                    <p>No projects found matching the criteria.</p>
+                </div>
+
+                <div id="projects-table-wrapper" class="projects-table-container hidden">
+                    <table class="projects-table">
+                        <thead>
+                            <tr id="table-headers">
+                                <th>Project</th>
+                                <th style="text-align: center;">Scans (12m)</th>
+                                <th>Latest Scan</th>
+                                <!-- Grade column will be dynamically loaded if show_grades is true -->
+                            </tr>
+                        </thead>
+                        <tbody id="projects-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="projects-pagination" class="pagination-container hidden">
+                    <button id="prev-page-btn" class="pagination-btn" disabled>&larr; Previous</button>
+                    <div id="page-numbers" class="page-numbers"></div>
+                    <button id="next-page-btn" class="pagination-btn">Next &rarr;</button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p class="footer-feedback">
+                <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
+            </p>
+
+            <p>InfraScan v1.0.7 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
+                    href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
+                contributions are welcome!
+                <a href="https://github.com/SolDevelo/InfraScan" target="_blank" class="github-stars-badge-footer">
+                    <img src="https://img.shields.io/github/stars/SolDevelo/InfraScan?style=social&label=Star"
+                        alt="GitHub stars">
+                </a>
+            </p>
+
+            <p>Made with &hearts; by <a
+                    href="https://soldevelo.com?utm_source=infrascan&utm_medium=referral&utm_campaign=app_transition&utm_content=footer-logo"
+                    target="_blank">
+                    <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                        class="footer-logo">
+                </a>.
+            </p>
+
+            <p style="font-size: 0.8rem; opacity: 0.7; margin-top: 5px;">Designed & Built by the SolDevelo Cloud
+                Engineering Team</p>
+        </footer>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Share Your Feedback</h2>
+                <button class="close-btn" id="close-feedback-btn">&times;</button>
+            </div>
+            <p class="modal-subtitle">Help us shape the future of InfraScan.</p>
+
+            <div class="feedback-form">
+                <div class="rating-group">
+                    <label>How would you rate InfraScan?</label>
+                    <div class="star-rating" id="star-rating">
+                        <span class="star" data-value="1">&#9733;</span>
+                        <span class="star" data-value="2">&#9733;</span>
+                        <span class="star" data-value="3">&#9733;</span>
+                        <span class="star" data-value="4">&#9733;</span>
+                        <span class="star" data-value="5">&#9733;</span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-review">Your Review & Suggestions</label>
+                    <textarea id="feedback-review" placeholder="What should we add? What can be improved?"
+                        rows="4"></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label for="feedback-contact">Contact Info (Optional)</label>
+                    <input type="text" id="feedback-contact" placeholder="Email or name">
+                </div>
+
+                <button class="action-btn" id="submit-feedback-btn">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Feedback Modal functionality
+            const feedbackModal = document.getElementById('feedback-modal');
+            const openFeedbackBtn = document.getElementById('open-feedback-btn');
+            const closeFeedbackBtn = document.getElementById('close-feedback-btn');
+            const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
+            const stars = document.querySelectorAll('.star');
+            const feedbackReview = document.getElementById('feedback-review');
+            const feedbackContact = document.getElementById('feedback-contact');
+            let selectedRating = 0;
+
+            if (openFeedbackBtn) {
+                openFeedbackBtn.onclick = () => feedbackModal.classList.remove('hidden');
+            }
+            if (closeFeedbackBtn) {
+                closeFeedbackBtn.onclick = () => {
+                    feedbackModal.classList.add('hidden');
+                    resetFeedbackForm();
+                };
+            }
+
+            stars.forEach(star => {
+                star.addEventListener('mouseover', () => {
+                    const val = parseInt(star.dataset.value);
+                    highlightStars(val);
+                });
+                star.addEventListener('mouseout', () => {
+                    highlightStars(selectedRating);
+                });
+                star.addEventListener('click', () => {
+                    selectedRating = parseInt(star.dataset.value);
+                    highlightStars(selectedRating);
+                });
+            });
+
+            function highlightStars(count) {
+                stars.forEach(s => {
+                    const val = parseInt(s.dataset.value);
+                    if (val <= count) {
+                        s.classList.add('active');
+                    } else {
+                        s.classList.remove('active');
+                    }
+                });
+            }
+
+            function resetFeedbackForm() {
+                selectedRating = 0;
+                highlightStars(0);
+                if (feedbackReview) feedbackReview.value = '';
+                if (feedbackContact) feedbackContact.value = '';
+            }
+
+            if (submitFeedbackBtn) {
+                submitFeedbackBtn.onclick = async () => {
+                    if (selectedRating === 0) {
+                        showToast('Please select a rating star.');
+                        return;
+                    }
+                    const review = feedbackReview.value.trim();
+                    if (!review) {
+                        showToast('Please leave a comment suggesting improvements.');
+                        return;
+                    }
+
+                    submitFeedbackBtn.disabled = true;
+                    submitFeedbackBtn.textContent = 'Submitting...';
+
+                    try {
+                        const response = await fetch('/api/feedback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rating: selectedRating,
+                                review: review,
+                                contact: feedbackContact.value.trim() || 'Not provided'
+                            })
+                        });
+
+                        if (!response.ok) throw new Error('Feedback submission failed.');
+
+                        showToast('Feedback submitted! Thank you.', 'success');
+                        feedbackModal.classList.add('hidden');
+                        resetFeedbackForm();
+                    } catch (e) {
+                        showToast(e.message || 'Submission failed. Please try again.');
+                    } finally {
+                        submitFeedbackBtn.disabled = false;
+                        submitFeedbackBtn.textContent = 'Submit Feedback';
+                    }
+                };
+            }
+
+            function showToast(message, type = 'error') {
+                const container = document.getElementById('toast-container');
+                if (!container) return;
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                const icon = type === 'error' ? '❌' : '✅';
+                toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.classList.add('fadeOut');
+                    setTimeout(() => toast.remove(), 300);
+                }, 4000);
+            }
+
+            // Supported Projects aggregations logic
+            let allProjects = [];
+            let filteredProjects = [];
+            let currentPage = 1;
+            const pageSize = 10;
+            let showGrades = false;
+
+            const searchInput = document.getElementById('projects-search');
+            const loadingEl = document.getElementById('projects-loading');
+            const emptyEl = document.getElementById('projects-empty');
+            const wrapperEl = document.getElementById('projects-table-wrapper');
+            const listEl = document.getElementById('projects-list');
+            const tableHeaders = document.getElementById('table-headers');
+            const paginationEl = document.getElementById('projects-pagination');
+
+            async function loadProjects() {
+                loadingEl.classList.remove('hidden');
+                emptyEl.classList.add('hidden');
+                wrapperEl.classList.add('hidden');
+                paginationEl.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/api/scans/supported-projects');
+                    if (!response.ok) throw new Error('Failed to load project database.');
+
+                    const data = await response.json();
+                    allProjects = data.projects || [];
+                    showGrades = data.show_grades || false;
+                    filteredProjects = [...allProjects];
+
+                    // Add headers conditionally
+                    if (showGrades) {
+                        const thExists = Array.from(tableHeaders.querySelectorAll('th')).some(th => th.textContent === 'Grade');
+                        if (!thExists) {
+                            const th = document.createElement('th');
+                            th.textContent = 'Grade';
+                            th.style.textAlign = 'center';
+                            tableHeaders.appendChild(th);
+                        }
+                    }
+
+                    loadingEl.classList.add('hidden');
+
+                    if (allProjects.length === 0) {
+                        emptyEl.classList.remove('hidden');
+                        return;
+                    }
+
+                    wrapperEl.classList.remove('hidden');
+                    displayPage();
+                } catch (e) {
+                    loadingEl.classList.add('hidden');
+                    listEl.innerHTML = `<tr><td colspan="${showGrades ? 4 : 3}" style="text-align: center; color: var(--danger);">Error loading data.</td></tr>`;
+                    wrapperEl.classList.remove('hidden');
+                }
+            }
+
+            function displayPage() {
+                const start = (currentPage - 1) * pageSize;
+                const end = start + pageSize;
+                const pageProjects = filteredProjects.slice(start, end);
+
+                if (pageProjects.length === 0) {
+                    listEl.innerHTML = '';
+                    emptyEl.classList.remove('hidden');
+                    wrapperEl.classList.add('hidden');
+                    paginationEl.classList.add('hidden');
+                    return;
+                }
+
+                emptyEl.classList.add('hidden');
+                wrapperEl.classList.remove('hidden');
+
+                listEl.innerHTML = pageProjects.map(proj => {
+                    const repoUrl = proj.repository_url || '#';
+                    const githubUrl = repoUrl;
+
+                    let gradeHtml = '';
+                    if (showGrades) {
+                        const gradeClass = (proj.grade && ['A','B','C','D','F'].includes(proj.grade)) ? proj.grade : 'unknown';
+                        gradeHtml = `<td style="text-align: center;"><span class="grade-badge-cell ${gradeClass}">${proj.grade || '?'}</span></td>`;
+                    }
+
+                    const sourceLabel = proj.latest_scan_source === 'github_actions'
+                        ? 'GitHub Actions'
+                        : proj.latest_scan_source === 'web_app'
+                            ? 'Web App'
+                            : proj.latest_scan_source === 'unknown'
+                                ? ''
+                                : 'Other';
+                    const sourceBadge = sourceLabel ? `<span style="display:inline-block;margin-left:0.5rem;padding:2px 6px;border-radius:999px;background:#e2e8f0;color:#0f172a;font-size:0.75rem;vertical-align:middle;">${escapeHtml(sourceLabel)}</span>` : '';
+
+                    return `
+                        <tr>
+                            <td>
+                                <div class="project-name-cell">
+                                    📁 <a href="${githubUrl}" target="_blank" class="project-link">${escapeHtml(proj.project_name)}</a>
+                                </div>
+                            </td>
+                            <td style="text-align: center; font-weight: 600;">${proj.scan_count}</td>
+                            <td>${proj.latest_scan}${sourceBadge}</td>
+                            ${gradeHtml}
+                        </tr>
+                    `;
+                }).join('');
+
+                if (filteredProjects.length > pageSize) {
+                    paginationEl.classList.remove('hidden');
+                    updatePaginationControls();
+                } else {
+                    paginationEl.classList.add('hidden');
+                }
+            }
+
+            function updatePaginationControls() {
+                const prevBtn = document.getElementById('prev-page-btn');
+                const nextBtn = document.getElementById('next-page-btn');
+                const pageNumbers = document.getElementById('page-numbers');
+                const totalPages = Math.ceil(filteredProjects.length / pageSize);
+
+                if (prevBtn) prevBtn.disabled = currentPage === 1;
+                if (nextBtn) nextBtn.disabled = currentPage === totalPages;
+
+                if (pageNumbers) {
+                    let html = '';
+                    let startPage = Math.max(1, currentPage - 2);
+                    let endPage = Math.min(totalPages, startPage + 4);
+                    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+                    for (let i = startPage; i <= endPage; i++) {
+                        html += `<div class="page-number ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</div>`;
+                    }
+
+                    if (totalPages > 1) {
+                        html += `<span class="pagination-info">Page ${currentPage} of ${totalPages}</span>`;
+                    }
+
+                    pageNumbers.innerHTML = html;
+
+                    pageNumbers.querySelectorAll('.page-number').forEach(btn => {
+                        btn.onclick = () => {
+                            currentPage = parseInt(btn.dataset.page);
+                            displayPage();
+                        };
+                    });
+                }
+            }
+
+            const prevPageBtn = document.getElementById('prev-page-btn');
+            const nextPageBtn = document.getElementById('next-page-btn');
+
+            if (prevPageBtn) {
+                prevPageBtn.onclick = () => {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        displayPage();
+                    }
+                };
+            }
+
+            if (nextPageBtn) {
+                nextPageBtn.onclick = () => {
+                    const totalPages = Math.ceil(filteredProjects.length / pageSize);
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        displayPage();
+                    }
+                };
+            }
+
+            // Dynamic search
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const query = searchInput.value.toLowerCase().trim();
+                    filteredProjects = allProjects.filter(proj => 
+                        proj.project_name.toLowerCase().includes(query)
+                    );
+                    currentPage = 1;
+                    displayPage();
+                });
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                return str
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            // Fetch on load
+            loadProjects();
+        });
+    </script>
+</body>
+
+</html>
