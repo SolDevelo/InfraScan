@@ -317,6 +317,15 @@ def main():
             'total': len(results),
             'scanner_used': args.scanner
         }
+        report_dict['metadata'] = report_dict.get('metadata', {})
+        gh_ctx = build_gh_actions_context()
+        if gh_ctx['repo'] or gh_ctx['workflow'] or gh_ctx['run_url']:
+            report_dict['metadata'].update({
+                'scan_source': 'github_actions',
+                'github_actions': gh_ctx,
+            })
+            if gh_ctx['repo'] and 'repository_url' not in report_dict['metadata']:
+                report_dict['metadata']['repository_url'] = f"https://github.com/{gh_ctx['repo']}"
         
         # Output Results to file/stdout
         if args.out:

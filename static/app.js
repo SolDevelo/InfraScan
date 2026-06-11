@@ -327,8 +327,9 @@ function initApp() {
 
     // Tab Switching
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', (e) => {
             const targetTab = tab.dataset.tab;
+            if (!targetTab) return; // Allow normal link navigation for non-tab buttons
 
             tabs.forEach(t => t.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
@@ -1644,6 +1645,16 @@ function initApp() {
                 subscribeBtn.innerHTML = '<span>✉️</span> Subscribe Now';
             }
         };
+    }
+
+    // Check for tab query parameter on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam) {
+        const targetTabBtn = document.querySelector(`.tab-btn[data-tab="${tabParam}"]`);
+        if (targetTabBtn) {
+            targetTabBtn.click();
+        }
     }
 }
 

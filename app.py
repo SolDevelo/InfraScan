@@ -26,11 +26,18 @@ app.config['RESULTS_DIR'] = os.path.join(os.getcwd(), 'scan_results')
 app.config['DATA_DIR'] = os.path.join(os.getcwd(), 'data')
 app.config['FEEDBACK_FILE'] = os.path.join(app.config['DATA_DIR'], 'feedback.json')
 app.config['SUBSCRIBERS_FILE'] = os.path.join(app.config['DATA_DIR'], 'subscribers.json')
+app.config['MONITORED_PROJECTS_FILE'] = os.path.join(app.config['DATA_DIR'], 'monitored_projects.json')
+app.config['SHOW_GRADES_PUBLICLY'] = os.getenv('SHOW_GRADES_PUBLICLY', 'True').lower() in ('true', '1', 'yes')
 
 # Create directories if they don't exist
 os.makedirs(app.config['RESULTS_DIR'], exist_ok=True)
 os.makedirs(app.config['DATA_DIR'], exist_ok=True)
 app.config['SLACK_WEBHOOK_URL'] = os.getenv('SLACK_WEBHOOK_URL', '')
+
+# Ensure monitored projects config exists
+if not os.path.exists(app.config['MONITORED_PROJECTS_FILE']):
+    with open(app.config['MONITORED_PROJECTS_FILE'], 'w') as f:
+        json.dump([], f)
 
 # Cache busting - changes on each deployment/restart
 STATIC_VERSION = str(int(time.time()))
@@ -65,6 +72,43 @@ def build_share_url(result_id: str, req, metadata=None) -> str:
         return f"{req.host_url.rstrip('/')}/{scan_path}"
 
     return f"/{scan_path}"
+
+
+def load_monitored_projects():
+    try:
+        with open(app.config['MONITORED_PROJECTS_FILE'], 'r') as f:
+            items = json.load(f) or []
+    except Exception:
+        return []
+
+    monitored = []
+    for item in items:
+        if isinstance(item, str):
+            monitored.append({
+                'repo_url': item,
+                'branch': 'main',
+                'scanner': 'comprehensive',
+                'is_private': False,
+            })
+        elif isinstance(item, dict) and item.get('repo_url'):
+            monitored.append({
+                'repo_url': item['repo_url'],
+                'branch': item.get('branch', 'main'),
+                'scanner': item.get('scanner', 'comprehensive'),
+                'is_private': item.get('is_private', False),
+            })
+    return monitored
+
+
+def save_scan_result(report_dict):
+    if 'metadata' not in report_dict or report_dict['metadata'] is None:
+        report_dict['metadata'] = {}
+    result_id = str(uuid.uuid4())
+    file_path = os.path.join(app.config['RESULTS_DIR'], f"{result_id}.json")
+    with open(file_path, 'w') as f:
+        json.dump(report_dict, f)
+    return result_id
+
 
 def send_slack_notification(message: str) -> None:
     webhook_url = get_slack_webhook_url()
@@ -353,6 +397,7 @@ def scan_github():
         report_dict['metadata'].update({
             'repository_url': repo_url,
             'repository_name': repo_name,
+            'scan_source': 'web_app',
 
             'scan_timestamp': scan_timestamp,
             'is_private': is_private,
@@ -444,6 +489,87 @@ def scan_github():
         # Clean up
         shutil.rmtree(temp_dir, ignore_errors=True)
         
+
+def scan_repository(repo_url, branch='main', scanner_type='comprehensive', is_private=False, scan_source='monitored_scan'):
+    temp_dir = tempfile.mkdtemp()
+    try:
+        Repo.clone_from(repo_url, temp_dir, branch=branch, depth=1)
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise RuntimeError(f"Unable to clone repository: {e}")
+
+    try:
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
+        report_generator = ReportGenerator()
+        report = report_generator.generate_report(
+            findings=results,
+            resource_count=resource_count,
+            scanner_type=scanner_type,
+            extra_recommendations=recommendations
+        )
+
+        repo_name = repo_url.rstrip('/').split('/')[-1] if '/' in repo_url else repo_url
+        scan_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+        report_dict = report.to_dict()
+        report_dict['metadata'] = report_dict.get('metadata', {})
+        report_dict['metadata'].update({
+            'repository_url': repo_url,
+            'repository_name': repo_name,
+            'scan_source': scan_source,
+            'scan_timestamp': scan_timestamp,
+            'is_private': is_private,
+            'branch': branch
+        })
+
+        report_dict['results'] = results
+        report_dict['summary'] = {
+            'total': len(results),
+            'unique_rules': report.metrics.get('unique_rules_triggered', 0),
+            'scanner_used': scanner_type
+        }
+
+        scan_id = save_scan_result(report_dict)
+        return scan_id, report_dict
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.route('/api/scans/monitored/refresh', methods=['POST'])
+def refresh_monitored_scans():
+    monitored = load_monitored_projects()
+    if not monitored:
+        return jsonify({'error': 'No monitored repositories configured.', 'monitored_projects': []}), 400
+
+    refresh_results = []
+    for project in monitored:
+        try:
+            scan_id, report_dict = scan_repository(
+                project['repo_url'],
+                branch=project.get('branch', 'main'),
+                scanner_type=project.get('scanner', 'comprehensive'),
+                is_private=project.get('is_private', False),
+                scan_source='monitored_project'
+            )
+            refresh_results.append({
+                'repo_url': project['repo_url'],
+                'scan_id': scan_id,
+                'status': 'ok',
+                'grade': report_dict.get('overall', {}).get('letter', '?'),
+                'scan_timestamp': report_dict['metadata'].get('scan_timestamp')
+            })
+        except Exception as e:
+            refresh_results.append({
+                'repo_url': project['repo_url'],
+                'status': 'error',
+                'message': str(e)
+            })
+
+    return jsonify({
+        'results': refresh_results,
+        'refreshed_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+    })
+
 
 @app.route('/api/results/save', methods=['POST'])
 def save_results():
@@ -572,6 +698,231 @@ def get_recent_scans():
 
     # Return only the 500 most recent
     return jsonify({'scans': scans[:500]})
+
+
+def normalize_repository_url(repo_url):
+    import re
+    if not repo_url:
+        return repo_url
+
+    url = repo_url.strip()
+    if url.startswith('git@'):
+        match = re.match(r'^git@([^:]+):(.+)$', url)
+        if match:
+            host = match.group(1)
+            path = match.group(2)
+            path = path.rstrip('/')
+            if path.endswith('.git'):
+                path = path[:-4]
+            return f'https://{host}/{path}'
+
+    if '://' not in url:
+        url = f'https://{url}'
+
+    parsed = urlparse(url)
+    path = parsed.path.rstrip('/')
+    if path.endswith('.git'):
+        path = path[:-4]
+
+    return f'{parsed.scheme}://{parsed.netloc}{path}'
+
+
+def extract_project_name(repo_url):
+    import re
+    if not repo_url:
+        return 'Unknown'
+
+    url = repo_url.strip()
+
+    # Normalize SSH-style URLs to a path-like string
+    if url.startswith('git@') or '://git@' in url:
+        if '://' in url:
+            url = url.split('://', 1)[1]
+        url = url.replace(':', '/')
+
+    try:
+        parsed = urlparse(url if '://' in url else f'https://{url}')
+        path = parsed.path.strip('/')
+    except Exception:
+        path = url.strip('/')
+
+    if path.endswith('.git'):
+        path = path[:-4]
+
+    parts = [p for p in path.split('/') if p]
+    if parts:
+        # Use repo name (last segment) when available
+        return parts[-1]
+
+    # Fallback: remove common host segments and return last remaining piece
+    parts = [p for p in re.split(r'[:/]', url) if p and p.lower() not in ['github.com', 'gitlab.com', 'bitbucket.org', 'https', 'http', 'git']]
+    return parts[-1] if parts else 'Unknown'
+
+
+def get_display_name(proj_name):
+    if not proj_name:
+        return 'Unknown'
+
+    if proj_name.islower():
+        return proj_name.replace('-', ' ').replace('_', ' ').title()
+
+    if '-' in proj_name or '_' in proj_name:
+        import re
+        parts = re.split(r'[-_]', proj_name)
+        return ' '.join(part.capitalize() if part.islower() else part for part in parts)
+
+    return proj_name
+
+
+@app.route('/supported-projects')
+def supported_projects():
+    """Render the Supported Projects page."""
+    return render_template('supported_projects.html')
+
+
+@app.route('/api/scans/supported-projects', methods=['GET'])
+def get_supported_projects():
+    """Return an aggregated list of infrastructure projects using InfraScan in the last 12 months."""
+    results_dir = app.config['RESULTS_DIR']
+    projects_map = {}
+    
+    try:
+        files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        files = []
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    twelve_months_ago = now - datetime.timedelta(days=365)
+
+    import re
+    for filename in files:
+        file_path = os.path.join(results_dir, filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+
+            metadata = data.get('metadata', {}) or {}
+            repo_url = metadata.get('repository_url')
+            scan_timestamp = metadata.get('scan_timestamp')
+            is_private = metadata.get('is_private', False)
+
+            # Skip entries without essential data or private scans
+            if not repo_url or not scan_timestamp or is_private:
+                continue
+
+            # Parse scan_timestamp
+            scan_dt = None
+            clean_ts = scan_timestamp.replace(' UTC', '').split('.')[0]
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d'):
+                try:
+                    scan_dt = datetime.datetime.strptime(clean_ts, fmt).replace(tzinfo=datetime.timezone.utc)
+                    break
+                except ValueError:
+                    continue
+
+            if not scan_dt:
+                continue
+
+            proj_name = extract_project_name(repo_url)
+            proj_key = proj_name.lower()
+            
+            # Check rolling 12-month window
+            in_window = scan_dt >= twelve_months_ago
+
+            latest_scan_letter = data.get('overall', {}).get('letter') if data.get('overall') else None
+            latest_scan_pct = data.get('overall', {}).get('percentage') if data.get('overall') else None
+            latest_scan_source = metadata.get('scan_source') or 'unknown'
+
+            normalized_repo_url = normalize_repository_url(repo_url)
+            if proj_key not in projects_map:
+                projects_map[proj_key] = {
+                    'raw_name': proj_name,
+                    'repository_url': normalized_repo_url,
+                    'scans_in_window': 0,
+                    'latest_scan_dt': scan_dt,
+                    'latest_scan_letter': latest_scan_letter,
+                    'latest_scan_pct': latest_scan_pct,
+                    'latest_scan_source': latest_scan_source,
+                    'web_scans': 0,
+                    'github_actions_scans': 0,
+                    'other_scans': 0,
+                    'pct_sum': 0,
+                    'pct_count': 0,
+                }
+            else:
+                if scan_dt > projects_map[proj_key]['latest_scan_dt']:
+                    projects_map[proj_key]['latest_scan_dt'] = scan_dt
+                    projects_map[proj_key]['latest_scan_letter'] = latest_scan_letter
+                    projects_map[proj_key]['latest_scan_pct'] = latest_scan_pct
+                    projects_map[proj_key]['latest_scan_source'] = latest_scan_source
+                    projects_map[proj_key]['repository_url'] = normalized_repo_url
+
+            if in_window:
+                projects_map[proj_key]['scans_in_window'] += 1
+                if latest_scan_source == 'github_actions':
+                    projects_map[proj_key]['github_actions_scans'] += 1
+                elif latest_scan_source == 'web_app':
+                    projects_map[proj_key]['web_scans'] += 1
+                else:
+                    projects_map[proj_key]['other_scans'] += 1
+                pct = latest_scan_pct
+                if pct is not None:
+                    try:
+                        projects_map[proj_key]['pct_sum'] += float(pct)
+                        projects_map[proj_key]['pct_count'] += 1
+                    except (TypeError, ValueError):
+                        pass
+
+        except Exception as e:
+            print(f"Error reading scan file {filename}: {e}")
+            continue
+    
+    def pct_to_letter(pct):
+        if pct >= 90: return 'A'
+        if pct >= 75: return 'B'
+        if pct >= 60: return 'C'
+        if pct >= 45: return 'D'
+        return 'F'
+
+    projects_list = []
+    for key, info in projects_map.items():
+        if info['scans_in_window'] > 0:
+            latest_grade = info.get('latest_scan_letter')
+            if not latest_grade and info.get('latest_scan_pct') is not None:
+                try:
+                    latest_grade = pct_to_letter(float(info['latest_scan_pct']))
+                except (TypeError, ValueError):
+                    latest_grade = None
+            if not latest_grade:
+                latest_grade = '?'
+            projects_list.append({
+                'project_name': get_display_name(info['raw_name']),
+                'repository_url': info.get('repository_url'),
+                'scan_count': info['scans_in_window'],
+                'latest_scan': info['latest_scan_dt'].strftime('%Y-%m-%d'),
+                'latest_scan_source': info.get('latest_scan_source', 'unknown'),
+                'web_scans': info.get('web_scans', 0),
+                'github_actions_scans': info.get('github_actions_scans', 0),
+                'other_scans': info.get('other_scans', 0),
+                'grade': latest_grade
+            })
+
+    # Sort descending by scan count, then latest scan date descending, then alphabetically by project name
+    projects_list.sort(key=lambda p: p['project_name'].lower())
+    projects_list.sort(key=lambda p: p['latest_scan'], reverse=True)
+    projects_list.sort(key=lambda p: p['scan_count'], reverse=True)
+
+    # Filter grade output if grade visibility is disabled
+    show_grades = app.config['SHOW_GRADES_PUBLICLY']
+    for p in projects_list:
+        if not show_grades:
+            p['grade'] = None
+
+    return jsonify({
+        'projects': projects_list,
+        'show_grades': show_grades
+    })
+
 
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():

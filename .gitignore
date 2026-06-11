@@ -57,3 +57,8 @@ env/
 # Environment files
 .env
 
+# InfraScan runtime and local artifacts
+scan_results/
+data/feedback.json
+data/subscribers.json
+
