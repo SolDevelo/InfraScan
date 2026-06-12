@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.7
+        uses: soldevelo/infrascan@v1.0.8
         with:
           scanner: comprehensive
           format: html

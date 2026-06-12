@@ -17,4 +17,3 @@ This release contains all changes since `v1.0.6`.
 
 - The application version has been updated to `1.0.7`.
 - Documentation and CI/examples have been updated to reference `v1.0.7`.
-- Use the `release/1.0.7` branch to create the pull request against `main`.
