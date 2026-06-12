@@ -251,7 +251,11 @@ def scanner_status():
 
 @app.route('/api/repo/branches', methods=['POST'])
 def get_branches():
-    """Fetch branches for a given repository URL."""
+    """Fetch branches for a given repository URL.
+    
+    For GitHub repositories, also returns the default_branch as reported
+    by the GitHub REST API so the UI can pre-select it.
+    """
     data = request.get_json()
     repo_url = data.get('url')
     
@@ -260,6 +264,32 @@ def get_branches():
     
     # Strip query parameters and hash fragments from URL
     repo_url = repo_url.split('?')[0].split('#')[0]
+
+    # --- Detect GitHub URL and fetch default branch via the GitHub API ---
+    default_branch = None
+    import re as _re
+    github_match = _re.match(
+        r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$',
+        repo_url,
+        _re.IGNORECASE
+    )
+    if github_match:
+        owner, repo_name = github_match.group(1), github_match.group(2)
+        try:
+            gh_headers = {'Accept': 'application/vnd.github+json'}
+            gh_token = os.getenv('GITHUB_TOKEN', '').strip()
+            if gh_token:
+                gh_headers['Authorization'] = f'Bearer {gh_token}'
+            gh_resp = requests.get(
+                f'https://api.github.com/repos/{owner}/{repo_name}',
+                headers=gh_headers,
+                timeout=10
+            )
+            if gh_resp.status_code == 200:
+                default_branch = gh_resp.json().get('default_branch')
+        except Exception:
+            pass  # Non-fatal – fall back to ls-remote ordering
+    # --- End GitHub detection ---
     
     try:
         g = cmd.Git()
@@ -270,18 +300,27 @@ def get_branches():
             if '\trefs/heads/' in line:
                 branches.append(line.split('\trefs/heads/')[-1])
         
-        # Sort branches, but keep 'main' or 'master' at the top if they exist
+        # Sort branches alphabetically
         if branches:
             branches.sort()
-            for primary in ['main', 'master']:
-                if primary in branches:
-                    branches.remove(primary)
-                    branches.insert(0, primary)
+            # Promote the actual default branch to the top
+            top_branch = default_branch if default_branch and default_branch in branches else None
+            if top_branch is None:
+                # Fallback: prefer 'main', then 'master'
+                for primary in ['main', 'master']:
+                    if primary in branches:
+                        top_branch = primary
+                        break
+            if top_branch and top_branch in branches:
+                branches.remove(top_branch)
+                branches.insert(0, top_branch)
         else:
             # If no heads found, return common defaults as a fallback
             branches = ['main', 'master']
+            if default_branch and default_branch not in branches:
+                branches.insert(0, default_branch)
             
-        return jsonify({'branches': branches})
+        return jsonify({'branches': branches, 'default_branch': default_branch})
     except Exception as e:
         print(f"Error: {e}")
         error_msg = str(e).lower()

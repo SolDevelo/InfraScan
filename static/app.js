@@ -74,7 +74,7 @@ function initApp() {
         if (!data) return;
 
         const isHostedReport = window.location.pathname.startsWith('/report/');
-        
+
         if (!isHostedReport) {
             // Hide all web app specific UI parts for standalone CLI
             if (scanInputContainer) scanInputContainer.style.display = 'none';
@@ -452,6 +452,11 @@ function initApp() {
             if (data.branches && data.branches.length > 0) {
                 if (branchSelect) {
                     branchSelect.innerHTML = data.branches.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+                    // Pre-select the repository's actual default branch when available
+                    if (data.default_branch) {
+                        const defaultOption = branchSelect.querySelector(`option[value="${CSS.escape(data.default_branch)}"]`);
+                        if (defaultOption) defaultOption.selected = true;
+                    }
                 }
                 if (branchSelectionContainer) branchSelectionContainer.classList.remove('hidden');
             }
@@ -1700,4 +1705,5 @@ function toggleCVE(cveId) {
     } else {
         details.style.display = 'none';
         if (icon) icon.textContent = '▼';
-        }}
+    }
+}
