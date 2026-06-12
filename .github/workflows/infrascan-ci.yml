@@ -17,7 +17,7 @@ jobs:
           chmod 777 infrascan-reports
 
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.7
+        uses: soldevelo/infrascan@v1.0.8
         with:
           scanner: comprehensive
           format: html

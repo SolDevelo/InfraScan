@@ -229,6 +229,15 @@
                 <div class="release-notes-container">
                     <div class="release-entry">
                         <div class="release-header">
+                            <span class="version">v1.0.8</span>
+                            <span class="date">June 12, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>UX/UI</strong>: Add support for monitoring of InfraScan projects.</li>
+                        </ul>
+                    </div>                   
+                    <div class="release-entry">
+                        <div class="release-header">
                             <span class="version">v1.0.7</span>
                             <span class="date">June 2, 2026</span>
                         </div>
@@ -410,7 +419,7 @@
     run: |
       docker run --rm \
         -v ${{ github.workspace }}:/scan \
-        soldevelo/infrascan:v1.0.7 \
+        soldevelo/infrascan:v1.0.8 \
         --fail-on high_critical">
                                         <span>Copy</span>
                                     </button>
@@ -421,7 +430,7 @@
     <span class="keyword">run:</span> |
       docker run --rm \
         -v <span class="string">${{ github.workspace }}</span>:/scan \
-        soldevelo/infrascan<span class="variable">:v1.0.7</span> \
+        soldevelo/infrascan<span class="variable">:v1.0.8</span> \
         --fail-on <span class="string">high_critical</span></code></pre>
                             </div>
                             {% endraw %}
@@ -536,7 +545,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.7 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.8 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
