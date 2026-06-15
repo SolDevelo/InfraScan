@@ -329,15 +329,34 @@ The system is designed to be extensible for future enhancements like historical 
 
 ## 📋 Detection Rules
 
-**19 Cost Optimization Rules** including:
-- COST-001: Old generation instances (t2, m3, c4, r3)
-- COST-002: Over-provisioned large instances
+**27 Cost Optimization Rules** including:
+- COST-001: Old generation EC2 instances (t2, m3, c4, r3)
+- COST-002: Over-provisioned large instances (8xlarge+)
+- COST-003: Unencrypted EBS volumes
 - COST-004: Expensive Provisioned IOPS (io1/io2)
 - COST-005: Expensive NAT Gateways
+- COST-006: Unassociated Elastic IPs
+- COST-007: DynamoDB Provisioned billing mode
+- COST-008: EC2 detailed monitoring enabled
 - COST-009: Old generation storage (gp2 vs gp3)
 - COST-010: Missing S3 lifecycle policies
 - COST-011: Missing AWS budgets
 - COST-012: Missing Spot instance usage
+- COST-013: Expensive premium storage (Premium_LRS)
+- COST-014: Unnecessary Route53 health checks
+- COST-015: CloudWatch log groups without retention period
+- COST-016: Oversized root EBS volumes
+- COST-017: Missing Cost and Usage Report
+- COST-018: High DynamoDB provisioned capacity
+- COST-019: Load balancers on single-instance deployments
+- COST-020: Old generation RDS instance classes (db.t2, db.m4, db.r3, db.r4)
+- COST-021: Lambda over-provisioned memory (≥3008 MB)
+- COST-022: API Gateway REST API instead of HTTP API (3.5× cheaper)
+- COST-023: SQS queues at maximum 14-day message retention
+- COST-024: RDS Multi-AZ enabled in non-production environments
+- COST-025: ECS task definitions without CPU/memory limits
+- COST-026: Multiple NAT Gateways (potential redundancy)
+- COST-027: Missing VPC Endpoints for S3/DynamoDB (NAT data-processing charges)
 - Plus Checkov's 100+ security/compliance checks
 
 ## 🏅 Badge
