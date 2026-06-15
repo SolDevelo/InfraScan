@@ -6,22 +6,11 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
     const esc = (t) => t == null ? '' : String(t)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-    // Render Markdown to HTML if marked.js is available, otherwise plain-text escape
+    // Render as plain text with line breaks (no CDN dependencies)
     const parseMarkdown = (t) => {
         if (!t) return '';
-        if (typeof marked !== 'undefined' && marked.parse) {
-            return marked.parse(String(t));
-        }
-        // Fallback: minimal inline rendering without marked
-        let s = esc(t);
-        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        s = s.replace(/`([^`]+)`/g, '<code style="background:#F1F5F9;padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>');
-        s = s.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:3px solid #CBD5E1;padding-left:8px;color:#475569;margin:4px 0;">$1</blockquote>');
-        s = s.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color:#4F46E5;">$1</a>');
-        s = s.replace(/^- (.+)$/gm, '<li>$1</li>');
-        s = s.replace(/(<li>.*<\/li>)/gs, '<ul style="margin:4px 0 4px 16px;">$1</ul>');
-        s = s.replace(/\n\n/g, '<br>');
-        return s;
+        const s = esc(String(t));
+        return s.replace(/\n/g, '<br>');
     };
 
     // ── Meta ──────────────────────────────────────────────────────────────────
@@ -178,7 +167,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 return `<div class="cell-small">${esc(trunc(res,60))}</div>`;
             }).join('') + (findings.length>4?`<div class="cell-small muted">+${findings.length-4} more…</div>`:'');
             return `<tr style="background:${bg};">
-              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(ruleId)}</td>
+              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">${esc(ruleId)}</td>
               <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
@@ -229,7 +218,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
             const cveRows = ordered.map(v => {
                 const hasRichDesc = v.description && (v.description.includes('**') || v.description.includes('##') || v.description.includes('`'));
                 return `<tr>
-              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(v.rule_id||'—')}</td>
+              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">${esc(v.rule_id||'—')}</td>
               <td class="td"><div class="rule-name">${esc(v.package)}</div><div class="cell-small muted">v${esc(v.package_version)}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(v.severity)}</td>
               <td class="td" style="font-size:0.72rem;">${v.fix_version && v.fix_version!=='N/A' ? `<span style="color:#059669;font-weight:700;">→ ${esc(v.fix_version)}</span>` : '<span class="muted">No fix yet</span>'}</td>
@@ -256,12 +245,10 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
 <head>
 <meta charset="UTF-8">
 <title>InfraScan Report — ${repoName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 12px;
     color: #1E293B;
     background: #FFFFFF;
@@ -279,12 +266,15 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   /* ── Header ── */
   .pdf-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
+    gap: 14px;
     border-bottom: 3px solid #4F46E5;
     padding-bottom: 14px;
     margin-bottom: 20px;
   }
+  .pdf-header > div { min-width: 0; }
   .pdf-logo-block { display: flex; align-items: center; gap: 12px; }
   .pdf-logo-name {
     font-size: 1.6rem;
@@ -333,11 +323,13 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   .meta-table tr:last-child td { border-bottom: none; }
 
   /* ── Data tables ── */
-  .data-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+  .data-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.75rem; }
+  .data-table thead th,
+  .data-table tbody td { word-break: break-word; white-space: normal; overflow-wrap: anywhere; }
   .data-table thead th { padding: 7px 8px; color: var(--hdr-fg); font-weight: 700; }
   .data-table tbody tr { border-bottom: 1px solid #F1F5F9; }
   .data-table tbody tr:last-child { border-bottom: none; }
-  .td { padding: 6px 8px; vertical-align: top; }
+  .td { padding: 6px 8px; vertical-align: top; min-width: 0; }
   .rule-name { font-weight: 600; color: #1E293B; margin-bottom: 2px; }
   .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
   .muted { color: #94A3B8 !important; }
