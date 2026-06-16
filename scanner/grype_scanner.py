@@ -8,6 +8,9 @@ Note: Docker Scout is the default scanner. To use Grype, set CONTAINER_SCANNER=g
 import json
 import os
 import subprocess
+from logging import getLogger
+
+logger = getLogger(__name__)
 from typing import List, Dict, Any
 
 from scanner.image_utils import (
@@ -83,12 +86,12 @@ def run_grype_scan(directory_path: str, files: List[str] = None) -> List[Dict[st
         
     # Extract images from compose files and scan them
     for image, compose_file in all_images_map.items():
-        print(f"Scanning image with Grype: {image}")
+        logger.info(f"Scanning image with Grype: {image}")
         try:
             image_findings = scan_image(image, compose_file, directory_path)
             findings.extend(image_findings)
         except Exception as e:
-            print(f"Warning: Failed to scan image {image}: {e}")
+            logger.warning(f" Failed to scan image {image}: {e}")
             continue
     
     return findings
@@ -128,15 +131,15 @@ def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, 
                 grype_data = json.loads(result.stdout)
                 findings = parse_grype_output(grype_data, image, compose_file, base_path)
             except json.JSONDecodeError as e:
-                print(f"Failed to parse Grype JSON output: {e}")
+                logger.warning(f"Failed to parse Grype JSON output: {e}")
         
         if result.stderr and "error" in result.stderr.lower():
-            print(f"Grype stderr: {result.stderr}")
+            logger.info(f"Grype stderr: {result.stderr}")
     
     except subprocess.TimeoutExpired:
-        print(f"Timeout scanning image: {image}")
+        logger.info(f"Timeout scanning image: {image}")
     except Exception as e:
-        print(f"Error scanning image {image}: {e}")
+        logger.error(f"Error scanning image {image}: {e}")
     
     return findings
 
@@ -203,7 +206,7 @@ def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str
             findings.append(finding)
     
     except Exception as e:
-        print(f"Error parsing Grype output: {e}")
+        logger.error(f"Error parsing Grype output: {e}")
         import traceback
         traceback.print_exc()
     
@@ -276,8 +279,8 @@ def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], imag
         'rule_id': vuln_id,
         'rule_name': f"Vulnerability in {package_name}",
         'severity': normalized_severity,
-        'description': f"{description[:200]}..." if len(description) > 200 else description,
-        'full_description': description,  # Store full description for tooltips
+        'description': description,
+        'full_description': description,
         'remediation': f"Update {package_name} from {package_version} to {fix_version}" if fix_available == 'Yes' else f"Review {package_name}@{package_version} - no fix available",
         'estimated_savings': f"Security risk mitigation ({severity})",
         'line': 0,
