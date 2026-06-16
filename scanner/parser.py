@@ -1,5 +1,8 @@
 import os
 import re
+from logging import getLogger
+
+logger = getLogger(__name__)
 from rules.definitions import check_rules
 from scanner.checkov_scanner import is_checkov_available, run_checkov_scan
 from scanner.docker_scout_scanner import is_docker_scout_available, run_docker_scout_scan
@@ -27,10 +30,12 @@ def detect_framework(path: str = None, files: list = None) -> str:
     - 'kubernetes'
     - 'cloudformation'
     - 'helm'
+    - 'all' (fallback for Docker/secrets/actions/etc.)
     """
     tf_files = 0
     k8s_files = 0
     cfn_files = 0
+    helm_files = 0
     
     scan_files = []
     if files:
@@ -44,6 +49,8 @@ def detect_framework(path: str = None, files: list = None) -> str:
         file = os.path.basename(full_path)
         if file.endswith('.tf'):
             tf_files += 1
+        elif file == 'Chart.yaml' or file == 'Chart.yml':
+            helm_files += 1
         elif file.endswith(('.yml', '.yaml')):
             # Check file content for better detection
             try:
@@ -56,12 +63,16 @@ def detect_framework(path: str = None, files: list = None) -> str:
             except Exception:
                 continue
     
-    if k8s_files > tf_files and k8s_files > cfn_files:
+    if k8s_files > tf_files and k8s_files > cfn_files and k8s_files > helm_files:
         return 'kubernetes'
-    if cfn_files > tf_files:
+    if cfn_files > tf_files and cfn_files > helm_files:
         return 'cloudformation'
+    if helm_files > tf_files:
+        return 'helm'
+    if tf_files > 0:
+        return 'terraform'
     
-    return 'terraform'
+    return 'all'
 
 def count_resources(path=None, framework='terraform', files=None):
     """
@@ -85,7 +96,7 @@ def count_resources(path=None, framework='terraform', files=None):
             for file in f_list:
                 scan_files.append(os.path.join(root, file))
 
-    if framework == 'terraform':
+    if framework in ('terraform', 'all'):
         for full_path in scan_files:
             if full_path.endswith('.tf'):
                 try:
@@ -97,7 +108,8 @@ def count_resources(path=None, framework='terraform', files=None):
                         resource_count += len(matches)
                 except Exception:
                     continue
-    elif framework == 'kubernetes':
+                    
+    if framework in ('kubernetes', 'all'):
         from scanner.image_utils import find_kubernetes_files
         if files:
             k8s_files = [f for f in files if f.endswith(('.yml', '.yaml'))]
@@ -113,6 +125,26 @@ def count_resources(path=None, framework='terraform', files=None):
                     for doc in docs:
                         if doc and isinstance(doc, dict) and 'kind' in doc:
                             resource_count += 1
+            except Exception:
+                continue
+                
+    if framework in ('containers', 'all'):
+        from scanner.image_utils import find_compose_files
+        if files:
+            from scanner.image_utils import filter_container_files
+            compose_files, _ = filter_container_files(files)
+        else:
+            compose_files = find_compose_files(path)
+            
+        for compose_file in compose_files:
+            try:
+                import yaml
+                with open(compose_file, 'r', encoding='utf-8') as f:
+                    compose_data = yaml.safe_load(f)
+                    if compose_data and isinstance(compose_data, dict) and 'services' in compose_data:
+                        services = compose_data['services']
+                        if isinstance(services, dict):
+                            resource_count += len(services)
             except Exception:
                 continue
     
@@ -143,7 +175,7 @@ def resolve_included_paths(base_path, included_paths):
         elif os.path.isdir(full_path):
             for root, dirs, files in os.walk(full_path):
                 for file in files:
-                    if file.endswith(valid_extensions) or file.startswith('docker-compose'):
+                    if file.endswith(valid_extensions) or file.startswith('docker-compose') or file.startswith('compose'):
                         resolved_files.append(os.path.join(root, file))
     
     return list(set(resolved_files))
@@ -194,16 +226,21 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     if included_paths:
         resolved_files = resolve_included_paths(path, included_paths)
         if not resolved_files:
-            print(f"Warning: No valid files found in included paths: {included_paths}")
+            logger.warning(f"No valid files found in included paths: {included_paths}")
             return [], 0, []
 
     # Auto-detect framework if needed
     if framework == 'auto' or not framework:
         framework = detect_framework(path, files=resolved_files)
-        print(f"Detected framework: {framework}")
+        logger.info(f"Detected framework: {framework}")
 
     # Count resources for reporting
     resource_count = count_resources(path, framework, files=resolved_files)
+    # Log discovered files
+    if resolved_files:
+        logger.info("Files passed to Checkov:")
+        for file in resolved_files:
+            logger.info(f"  - {os.path.relpath(file, path)}")
     
     # Run cost-focused regex scanner
     if 'regex' in active_scanners:
@@ -220,6 +257,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         
         # Scan all files and collect results
         for file_path in all_files:
+            logger.info(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
             file_results = scan_file(file_path)
             if file_results:
                 results.extend(file_results)
@@ -232,6 +270,10 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     if 'checkov' in active_scanners:
         if is_checkov_available():
             try:
+                if resolved_files:
+                    logger.info("[INFO] Files passed to Checkov:")
+                    for file in resolved_files:
+                        logger.info(f"  - {os.path.relpath(file, path)}")
                 checkov_results = run_checkov_scan(
                     path, 
                     framework, 
@@ -243,9 +285,9 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                     result['scanner'] = 'checkov'
                 results.extend(checkov_results)
             except Exception as e:
-                print(f"Warning: Checkov scan failed: {e}")
+                logger.warning(f"Checkov scan failed: {e}")
         else:
-            print("Warning: Checkov is not installed. Install with: pip install checkov")
+            logger.warning("Checkov is not installed. Install with: pip install checkov")
     
     # Run container security scanner (Docker Scout or Grype based on config)
     extra_recommendations = []  # Track extra recommendations from container scanner
@@ -262,16 +304,16 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         result['scanner'] = 'grype'
                     results.extend(grype_results)
                 except Exception as e:
-                    print(f"Warning: Grype scan failed: {e}")
+                    logger.warning(f"Grype scan failed: {e}")
             else:
-                print("Warning: Grype is not installed. See https://github.com/anchore/grype for installation")
+                logger.warning("Grype is not installed. See https://github.com/anchore/grype for installation")
         else:  # docker-scout (default)
             if is_docker_scout_available():
                 try:
                     scout_results, scout_recommendations, auth_failed = run_docker_scout_scan(path, files=resolved_files)
                     
                     if auth_failed and is_grype_available() and not scout_results:
-                        print("\n[i] Falling back to Grype scanner (no Docker Hub login detected)...")
+                        logger.info("\n[i] Falling back to Grype scanner (no Docker Hub login detected)...")
                         try:
                             from scanner.grype_scanner import run_grype_scan
                             grype_results = run_grype_scan(path, files=resolved_files)
@@ -279,9 +321,9 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                             for result in grype_results:
                                 result['scanner'] = 'grype'
                             results.extend(grype_results)
-                            print(f"    Grype scan completed with {len(grype_results)} findings.")
+                            logger.info(f"    Grype scan completed with {len(grype_results)} findings.")
                         except Exception as grype_e:
-                            print(f"    Grype fallback failed: {grype_e}")
+                            logger.info(f"    Grype fallback failed: {grype_e}")
                     else:
                         # Add scanner tag
                         for result in scout_results:
@@ -289,9 +331,20 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         results.extend(scout_results)
                         extra_recommendations.extend(scout_recommendations)
                 except Exception as e:
-                    print(f"Warning: Docker Scout scan failed: {e}")
+                    logger.warning(f"Docker Scout scan failed: {e}")
+            elif is_grype_available():
+                logger.info("\n[i] Docker Scout is not installed, falling back to Grype scanner...")
+                try:
+                    from scanner.grype_scanner import run_grype_scan
+                    grype_results = run_grype_scan(path, files=resolved_files)
+                    for result in grype_results:
+                        result['scanner'] = 'grype'
+                    results.extend(grype_results)
+                    logger.info(f"    Grype scan completed with {len(grype_results)} findings.")
+                except Exception as grype_e:
+                    logger.info(f"    Grype fallback failed: {grype_e}")
             else:
-                print("Warning: Docker Scout is not installed. See https://docs.docker.com/scout/ for installation")
+                logger.warning("Docker Scout is not installed. See https://docs.docker.com/scout/ for installation")
     
     # Add scanner tag to regex results and normalize paths
     for result in results:
@@ -327,7 +380,7 @@ def scan_file(filepath):
         # In a more advanced version, we would parse HCL here
         findings = check_rules(filepath, content)
     except Exception as e:
-        print(f"Warning: Could not read file {filepath}: {e}")
+        logger.warning(f"Could not read file {filepath}: {e}")
     
     return findings
 
