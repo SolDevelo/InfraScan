@@ -1,6 +1,6 @@
 # InfraScan
 
-**Open Source IaC Cost & Security Scanner**
+**Open-source infrastructure auditing platform.**
 
 [![Verified by InfraScan](https://img.shields.io/badge/Verified_by-SolDevelo_InfraScan-0052cc?style=flat&logo=security)](https://github.com/soldevelo/infrascan)
 [![Docker Pulls](https://img.shields.io/docker/pulls/soldevelo/infrascan.svg?style=flat-square)](https://hub.docker.com/r/soldevelo/infrascan)
@@ -9,7 +9,15 @@
 [![GitHub issues](https://img.shields.io/github/issues/soldevelo/infrascan?style=flat-square)](https://github.com/soldevelo/infrascan/issues)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](https://github.com/soldevelo/infrascan/blob/main/LICENSE)
 
-InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It supports **Terraform**, **Kubernetes manifests**, **CloudFormation**, **Helm**, and **Dockerfiles**. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
+InfraScan helps engineering teams detect cloud cost waste, security risks, and container vulnerabilities directly in CI/CD - before infrastructure reaches production.
+
+✅ Fully open-source and auditable  
+✅ Runs locally or inside your pipelines  
+✅ No vendor lock-in  
+✅ Transparent grading and rules  
+✅ Built for Terraform, Kubernetes, Helm, CloudFormation, Ansible, and containers
+
+Unlike closed SaaS scanners, InfraScan executes entirely in your environment, making it suitable for security-conscious and regulated organizations.
 
 ## 🚀 Quick Start: GitHub Action
 
@@ -26,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.6
+        uses: soldevelo/infrascan@v1.0.8
         with:
           scanner: comprehensive
           format: html
@@ -145,7 +153,11 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 - `--scanner`: `regex`, `checkov`, `containers`, `comprehensive` (default: `comprehensive`). You can combine multiple scanners using comma (e.g. `--scanner regex,containers`).
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
-- `--framework`: `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm` (default: `auto`). When set to `auto`, InfraScan detects the framework automatically based on file contents.
+- `--framework`: `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible`, `all` (default: `smart`). 
+  - **`smart` (default)**: Intelligently detects the framework. If multiple frameworks are found (e.g., Terraform + Ansible + Kubernetes), automatically scans **all of them** for comprehensive coverage. If only one framework is detected, scans just that one for faster results.
+  - **`auto`**: Auto-detects the framework but picks only the dominant one. Shows a warning if other frameworks are ignored. Useful for projects that intentionally use one primary IaC tool.
+  - **`all`**: Explicitly scans all frameworks (terraform, kubernetes, cloudformation, helm, ansible).
+  - **Explicit framework**: Scan only that specific framework (terraform, kubernetes, etc.).
 - `-f`, `--include`: Select specific files or directories to scan. Can be used multiple times (e.g., `-f dir1 -f file2.tf`). This is useful in large repositories to avoid scanning redundant or test deployments.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
@@ -238,7 +250,31 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner containers
 ```
 
-## 🐳 Advanced Container Scanning
+## � Ansible Support
+
+InfraScan natively supports **Ansible playbooks** (`.yml`/`.yaml`). When Ansible files are detected (files containing `hosts:` and `tasks:` or `roles:` keys), InfraScan will:
+
+- **Auto-detect the framework**: If your project contains more Ansible playbooks than other IaC files, InfraScan will automatically switch to Ansible mode. You can also force it with `--framework ansible`.
+- **Security scanning (Checkov)**: Runs Ansible-specific Checkov rules (CKV_ANSIBLE_*) to detect security issues such as disabled certificate validation, hardcoded secrets, unsafe shell operations, and other misconfigurations.
+- **Task and handler counting**: InfraScan counts all tasks and handlers in your playbooks to provide comprehensive reporting.
+- **Multi-document support**: Files with multiple plays or multiple YAML documents separated by `---` are fully supported.
+
+**Example — scanning Ansible playbooks:**
+```bash
+# Auto-detected
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+
+# Explicit framework
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner comprehensive
+
+# Security checks only
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner checkov
+
+# Scan specific Ansible files
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible -f playbooks/ -f roles/
+```
+
+## �🐳 Advanced Container Scanning
 
 InfraScan supports advanced container scanning features:
 - **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
@@ -293,15 +329,34 @@ The system is designed to be extensible for future enhancements like historical 
 
 ## 📋 Detection Rules
 
-**19 Cost Optimization Rules** including:
-- COST-001: Old generation instances (t2, m3, c4, r3)
-- COST-002: Over-provisioned large instances
+**27 Cost Optimization Rules** including:
+- COST-001: Old generation EC2 instances (t2, m3, c4, r3)
+- COST-002: Over-provisioned large instances (8xlarge+)
+- COST-003: Unencrypted EBS volumes
 - COST-004: Expensive Provisioned IOPS (io1/io2)
 - COST-005: Expensive NAT Gateways
+- COST-006: Unassociated Elastic IPs
+- COST-007: DynamoDB Provisioned billing mode
+- COST-008: EC2 detailed monitoring enabled
 - COST-009: Old generation storage (gp2 vs gp3)
 - COST-010: Missing S3 lifecycle policies
 - COST-011: Missing AWS budgets
 - COST-012: Missing Spot instance usage
+- COST-013: Expensive premium storage (Premium_LRS)
+- COST-014: Unnecessary Route53 health checks
+- COST-015: CloudWatch log groups without retention period
+- COST-016: Oversized root EBS volumes
+- COST-017: Missing Cost and Usage Report
+- COST-018: High DynamoDB provisioned capacity
+- COST-019: Load balancers on single-instance deployments
+- COST-020: Old generation RDS instance classes (db.t2, db.m4, db.r3, db.r4)
+- COST-021: Lambda over-provisioned memory (≥3008 MB)
+- COST-022: API Gateway REST API instead of HTTP API (3.5× cheaper)
+- COST-023: SQS queues at maximum 14-day message retention
+- COST-024: RDS Multi-AZ enabled in non-production environments
+- COST-025: ECS task definitions without CPU/memory limits
+- COST-026: Multiple NAT Gateways (potential redundancy)
+- COST-027: Missing VPC Endpoints for S3/DynamoDB (NAT data-processing charges)
 - Plus Checkov's 100+ security/compliance checks
 
 ## 🏅 Badge

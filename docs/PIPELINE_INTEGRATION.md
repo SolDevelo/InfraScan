@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Scan
-        uses: soldevelo/infrascan@v1.0.6
+        uses: soldevelo/infrascan@v1.0.8
         with:
           format: html
           out: report.html
@@ -96,6 +96,33 @@ jobs:
           name: infrascan-report
           path: report.html
 ```
+
+## Daily monitoring of GitHub Actions projects
+If you want InfraScan to collect grades from a known set of repositories every day, add those repository URLs to `data/monitored_projects.json` and trigger the new refresh endpoint once per day.
+
+`data/monitored_projects.json` supports either a list of repository URLs or an array of objects with optional branch/scanner configuration:
+
+```json
+[
+  "https://github.com/soldevelo/InfraScan",
+  {
+    "repo_url": "https://github.com/example/repo",
+    "branch": "main",
+    "scanner": "comprehensive",
+    "is_private": false
+  }
+]
+```
+
+Then call the refresh endpoint to fetch the latest scan results for those repos and store them in the web app:
+
+```bash
+curl -X POST https://your-infrascan.example.com/api/scans/monitored/refresh
+```
+
+This allows the web app to aggregate the latest grades and scan timestamps from configured repositories. The app still needs the list of repos because it cannot automatically discover every project using InfraScan from GitHub Actions alone.
+
+> Note: to let the InfraScan web app track GitHub Actions scans and their grades, the workflow can also emit JSON output with metadata and make it available to the app (for example by writing it into the app `scan_results` directory or posting it to `/api/results/save`).
 
 ## 💡 Pro Tips
 *   **Console Visibility:** InfraScan v1.0.4+ prints a colored summary directly to the terminal. You don't always need to download the HTML report to see what's wrong.
@@ -143,7 +170,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run K8s Scan
-        uses: soldevelo/infrascan@v1.0.6
+        uses: soldevelo/infrascan@v1.0.8
         with:
           framework: kubernetes
           scanner: comprehensive

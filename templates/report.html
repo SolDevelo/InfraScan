@@ -5,33 +5,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="InfraScan is an open-source Infrastructure as Code scanner that identifies security vulnerabilities, cost optimization opportunities, and compliance issues in Terraform, CloudFormation, Kubernetes, and Dockerfile. Scan GitHub repositories for free.">
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
     <meta name="keywords"
         content="IaC scanner, Terraform security, CloudFormation audit, Kubernetes scanning, infrastructure audit, security scanner, cost optimization">
     <meta name="author" content="SolDevelo">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 
     <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ site_domain }}/">
-    <meta property="og:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
-    <meta property="og:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
+    <meta property="og:title" content="InfraScan Report for {{ metadata.repository_name }}">
+    <meta property="og:description" content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
     <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary">
-    <meta property="twitter:url" content="{{ site_domain }}/">
-    <meta property="twitter:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
-    <meta property="twitter:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    <meta property="twitter:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
+    <meta property="twitter:title" content="InfraScan Report for {{ metadata.repository_name }}">
+    <meta property="twitter:description" content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
     <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Canonical -->
-    <link rel="canonical" href="{{ site_domain }}/">
+    <link rel="canonical" href="{{ site_domain }}/report/{{ current_scan_id }}">
 
     <!-- Language -->
     <meta http-equiv="content-language" content="en-US">
 
-    <title>InfraScan - Free Infrastructure as Code Security Scanner | Terraform & CloudFormation Auditor</title>
+    <title>InfraScan Report for {{ metadata.repository_name }}</title>
 
     {% if google_tag_id %}
     <!-- Google tag (gtag.js) -->
@@ -49,24 +49,25 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "InfraScan",
-      "description": "Open-source Infrastructure as Code scanner for security and cost optimization",
-      "url": "{{ site_domain }}",
-      "applicationCategory": "DeveloperApplication",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
+      "@type": "TechArticle",
+      "headline": "InfraScan Report for {{ metadata.repository_name }}",
+      "datePublished": "{{ metadata.scan_timestamp }}",
+      "about": {
+        "@type": "Thing",
+        "name": "{{ metadata.repository_name }}"
       },
-      "creator": {
-        "@type": "Organization",
-        "name": "SolDevelo",
-        "url": "https://soldevelo.com"
-      },
-      "operatingSystem": "Web-based",
-      "featureList": ["Terraform scanning", "CloudFormation audit", "Kubernetes manifest analysis", "Dockerfile security scan", "Cost optimization detection", "Security vulnerability detection"]
+      "review": {
+        "@type": "Review",
+        "reviewRating": {
+          "@type": "Rating",
+          "ratingValue": "{{ grade_report.overall.percentage|default('0') }}",
+          "bestRating": "100"
+        }
+      }
     }
+    </script>
+    <script>
+        window.CLI_INJECTED_DATA = {{ report_json | safe }};
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -229,49 +230,12 @@
                 <div class="release-notes-container">
                     <div class="release-entry">
                         <div class="release-header">
-                            <span class="version">v1.0.8</span>
-                            <span class="date">June 12, 2026</span>
-                        </div>
-                        <ul class="release-list">
-                            <li><strong>UX/UI</strong>: Add support for monitoring of InfraScan projects.</li>
-                        </ul>
-                    </div>                   
-                    <div class="release-entry">
-                        <div class="release-header">
-                            <span class="version">v1.0.7</span>
-                            <span class="date">June 2, 2026</span>
-                        </div>
-                        <ul class="release-list">
-                            <li><strong>PDF Export</strong>: Reports can now be exported as a print-ready PDF directly
-                                from the browser — ideal for sharing with compliance and security teams.</li>
-                            <li><strong>Ansible Support</strong>: Added scanning support for Ansible playbooks and
-                                improved framework detection logic.</li>
-                            <li><strong>Improved GitHub Scans</strong>: Better framework handling in GitHub repository
-                                scanning and enhanced Checkov JSON output parsing.</li>
-                            <li><strong>Richer Reporting</strong>: Enhanced vulnerability reporting with markdown
-                                descriptions, metadata, and structured rendering in the dashboard and PDF exports.</li>
-                            <li><strong>Sharing and Navigation</strong>: Added report sharing and persistent report
-                                routing with semantic URLs.</li>
-                            <li><strong>Logging Improvements</strong>: Updated logging behavior for better debug and
-                                audit output.</li>
-                        </ul>
-                    </div>
-                    <div class="release-entry">
-                        <div class="release-header">
                             <span class="version">v1.0.6</span>
                             <span class="date">May 13, 2026</span>
                         </div>
                         <ul class="release-list">
-                            <li><strong>Container Scanning Improvements</strong>: Enhanced container image scanning and
-                                added a new `all` framework option with `grype` fallback for better coverage.</li>
-                            <li><strong>PDF Branding</strong>: Added PDF export with a transparent logo for cleaner,
-                                printable reports.</li>
-                            <li><strong>Docker Image Tooling</strong>: Included AWS CLI in the Docker image for smoother
-                                cloud scanning workflows.</li>
-                            <li><strong>Scan Result Enhancements</strong>: Captured results, summary, and metadata more
-                                reliably in the web UI.</li>
-                            <li><strong>Bug Fixes</strong>: Improved description handling in scanners and fixed PDF
-                                generation issues.</li>
+                            <li><strong>PDF Export</strong>: Reports can now be exported as a print-ready PDF directly
+                                from the browser — ideal for sharing with compliance and security teams.</li>
                         </ul>
                     </div>
                     <div class="release-entry">
@@ -536,7 +500,46 @@
                     </div>
                 </div>
 
-                <div id="results-content"></div>
+                <div id="results-content">
+                    <noscript>
+                        <h1>InfraScan Report for {{ metadata.repository_name }}</h1>
+                        <p>Repository: <a href="{{ metadata.repository_url }}">{{ metadata.repository_url }}</a></p>
+                        <p>Scan Date: {{ metadata.scan_timestamp }}</p>
+                        <p>Overall Grade: {{ grade_report.overall.letter }} ({{ grade_report.overall.percentage }}%)</p>
+                        <p>Total Issues: {{ summary.total }}</p>
+
+                        <h2>Cost Optimization</h2>
+                        <p>Grade: {{ grade_report.cost.letter }}</p>
+                        <ul>
+                            {% for finding in data.results or [] if finding.scanner == 'regex' %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }} in {{ finding.file }}</li>
+                            {% endfor %}
+                        </ul>
+
+                        <h2>IaC Security</h2>
+                        <p>Grade: {{ grade_report.security.letter }}</p>
+                        <ul>
+                            {% for finding in data.results or [] if finding.scanner == 'checkov' %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }} in {{ finding.file }}</li>
+                            {% endfor %}
+                        </ul>
+
+                        <h2>Container Security</h2>
+                        <p>Grade: {{ grade_report.container.letter }}</p>
+                        <ul>
+                            {% for finding in data.results or [] if finding.scanner in ['docker-scout', 'grype'] %}
+                            <li>{{ finding.rule_id }}: {{ finding.resource }}</li>
+                            {% endfor %}
+                        </ul>
+
+                        <h2>Recommendations</h2>
+                        <ul>
+                            {% for rec in data.analysis or [] %}
+                            <li>{{ rec }}</li>
+                            {% endfor %}
+                        </ul>
+                    </noscript>
+                </div>
             </div>
         </main>
 

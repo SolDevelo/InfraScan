@@ -20,7 +20,7 @@ from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
 
-__version__ = "1.0.6"
+__version__ = "1.0.8"
 
 # Setup logging with timestamps
 logging.basicConfig(
@@ -107,9 +107,9 @@ def setup_args():
 
     parser.add_argument(
         "--framework",
-        default="auto",
-        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm", "all"],
-        help="IaC framework type (default: auto-detect)"
+        default="smart",
+        choices=["smart", "auto", "terraform", "kubernetes", "cloudformation", "helm", "ansible", "all"],
+        help="IaC framework type (default: smart). 'smart' automatically uses 'all' for multi-framework projects"
     )
 
     parser.add_argument(
@@ -364,7 +364,16 @@ def main():
             'total': len(results),
             'scanner_used': args.scanner
         }
-
+        report_dict['metadata'] = report_dict.get('metadata', {})
+        gh_ctx = build_gh_actions_context()
+        if gh_ctx['repo'] or gh_ctx['workflow'] or gh_ctx['run_url']:
+            report_dict['metadata'].update({
+                'scan_source': 'github_actions',
+                'github_actions': gh_ctx,
+            })
+            if gh_ctx['repo'] and 'repository_url' not in report_dict['metadata']:
+                report_dict['metadata']['repository_url'] = f"https://github.com/{gh_ctx['repo']}"
+        
         # Output Results to file/stdout
         if args.out:
             logger.info(f"Saving report to {args.out}")

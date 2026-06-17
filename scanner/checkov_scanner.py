@@ -119,7 +119,13 @@ def parse_checkov_json_output(report_data: Dict[str, Any], base_path: str) -> Li
         # Checkov JSON structure can vary:
         # Option 1: {"check_type": "terraform", "results": {"failed_checks": [...]}}
         # Option 2: {"results": {"terraform": {"failed_checks": [...]}}}
-        
+        # Option 3: [ {report}, {report}, ... ] - a list of per-framework reports,
+        #           returned when scanning multiple frameworks (e.g. --framework all)
+        if isinstance(report_data, list):
+            for report in report_data:
+                findings.extend(parse_checkov_json_output(report, base_path))
+            return findings
+
         results = report_data.get('results', {})
         
         # Check if failed_checks is directly under results

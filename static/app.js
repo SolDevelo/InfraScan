@@ -73,20 +73,28 @@ function initApp() {
 
         if (!data) return;
 
-        // Hide all web app specific UI parts
-        if (scanInputContainer) scanInputContainer.style.display = 'none';
-        if (document.querySelector('.tabs')) document.querySelector('.tabs').style.display = 'none';
-        if (landingInfo) landingInfo.style.display = 'none';
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        if (newsletterModal) newsletterModal.style.display = 'none';
-        if (feedbackModal) feedbackModal.style.display = 'none';
+        const isHostedReport = window.location.pathname.startsWith('/report/');
+
+        if (!isHostedReport) {
+            // Hide all web app specific UI parts for standalone CLI
+            if (scanInputContainer) scanInputContainer.style.display = 'none';
+            if (document.querySelector('.tabs')) document.querySelector('.tabs').style.display = 'none';
+            if (landingInfo) landingInfo.style.display = 'none';
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            if (newsletterModal) newsletterModal.style.display = 'none';
+            if (feedbackModal) feedbackModal.style.display = 'none';
+        } else {
+            if (scanInputContainer) scanInputContainer.classList.add('hidden');
+            if (landingInfo) landingInfo.classList.add('collapsed');
+        }
 
         const gradeReport = {
             overall: data.overall,
             cost: data.cost,
             security: data.security,
             container: data.container,
-            analysis: data.analysis
+            analysis: data.analysis,
+            metrics: data.metrics
         };
 
         currentResults = data.results;
@@ -100,8 +108,49 @@ function initApp() {
         setupPdfExport();
 
         // Hide elements that don't make sense in standalone report
-        if (newScanBtn) newScanBtn.style.display = 'none';
-        if (shareBtn) shareBtn.style.display = 'none';
+        if (!isHostedReport) {
+            if (newScanBtn) newScanBtn.style.display = 'none';
+            if (shareBtn) shareBtn.style.display = 'none';
+        } else {
+            // We need currentScanId to be populated for sharing to work
+            const pathParts = window.location.pathname.split('/');
+            const lastPart = pathParts[pathParts.length - 1];
+            // Extract UUID from the last part (e.g. clean-repo-name-uuid)
+            const uuidMatch = lastPart.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+            if (uuidMatch) {
+                currentScanId = uuidMatch[1];
+            }
+
+            // Register hosted-report button listeners (must happen before early return)
+            if (newScanBtn) {
+                newScanBtn.addEventListener('click', () => {
+                    window.location.href = '/';
+                });
+            }
+
+            if (shareBtn) {
+                shareBtn.addEventListener('click', () => {
+                    if (!currentScanId) return;
+                    let cleanRepo = 'report';
+                    if (currentMetadata && currentMetadata.repository_name) {
+                        cleanRepo = currentMetadata.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'report';
+                    }
+                    const shareUrl = `${window.location.origin}/report/${cleanRepo}-${currentScanId}`;
+                    if (shareUrlInput) shareUrlInput.value = shareUrl;
+                    if (shareLinkContainer) shareLinkContainer.classList.remove('hidden');
+                    shareBtn.textContent = 'Results Shared';
+                });
+            }
+
+            if (copyShareBtn) {
+                copyShareBtn.addEventListener('click', () => {
+                    if (shareUrlInput) shareUrlInput.select();
+                    document.execCommand('copy');
+                    copyShareBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyShareBtn.textContent = 'Copy'; }, 2000);
+                });
+            }
+        }
 
         // Ensure container is correctly styled for full-width report
         if (mainContainer) mainContainer.classList.add('expanded');
@@ -114,7 +163,7 @@ function initApp() {
     loadSharedResults();
 
     // Trigger Newsletter Modal after 3 seconds if not already closed
-    if (!localStorage.getItem('newsletter_closed') && !window.location.search.includes('scan_id')) {
+    if (!localStorage.getItem('newsletter_closed') && !window.location.search.includes('scan_id') && !window.location.pathname.startsWith('/report/')) {
         setTimeout(() => {
             if (newsletterModal) newsletterModal.classList.remove('hidden');
         }, 3000);
@@ -253,7 +302,8 @@ function initApp() {
                         cost: data.cost,
                         security: data.security,
                         container: data.container,
-                        analysis: data.analysis
+                        analysis: data.analysis,
+                        metrics: data.metrics
                     };
                 }
 
@@ -277,8 +327,9 @@ function initApp() {
 
     // Tab Switching
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', (e) => {
             const targetTab = tab.dataset.tab;
+            if (!targetTab) return; // Allow normal link navigation for non-tab buttons
 
             tabs.forEach(t => t.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
@@ -401,6 +452,11 @@ function initApp() {
             if (data.branches && data.branches.length > 0) {
                 if (branchSelect) {
                     branchSelect.innerHTML = data.branches.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+                    // Pre-select the repository's actual default branch when available
+                    if (data.default_branch) {
+                        const defaultOption = branchSelect.querySelector(`option[value="${CSS.escape(data.default_branch)}"]`);
+                        if (defaultOption) defaultOption.selected = true;
+                    }
                 }
                 if (branchSelectionContainer) branchSelectionContainer.classList.remove('hidden');
             }
@@ -422,7 +478,11 @@ function initApp() {
 
         try {
             if (currentScanId) {
-                const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${currentScanId}`;
+                let cleanRepo = "report";
+                if (currentMetadata && currentMetadata.repository_name) {
+                    cleanRepo = currentMetadata.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "report";
+                }
+                const shareUrl = `${window.location.origin}/report/${cleanRepo}-${currentScanId}`;
                 shareUrlInput.value = shareUrl;
                 shareLinkContainer.classList.remove('hidden');
                 shareBtn.textContent = 'Results Shared';
@@ -454,7 +514,7 @@ function initApp() {
             if (!response.ok) throw new Error(data.error || `Server error (${response.status})`);
 
             currentScanId = data.id;
-            const shareUrl = `${window.location.origin}${window.location.pathname}?scan_id=${data.id}`;
+            const shareUrl = data.share_url || `${window.location.origin}/report/${data.id}`;
             shareUrlInput.value = shareUrl;
             shareLinkContainer.classList.remove('hidden');
             shareBtn.textContent = 'Results Shared';
@@ -477,6 +537,10 @@ function initApp() {
     // New Scan Button
     if (newScanBtn) {
         newScanBtn.addEventListener('click', () => {
+            if (window.location.pathname.startsWith('/report/')) {
+                window.location.href = '/';
+                return;
+            }
             resultsArea.classList.add('hidden');
             if (scanInputContainer) scanInputContainer.classList.remove('hidden');
             if (landingInfo) landingInfo.classList.remove('collapsed');
@@ -642,7 +706,8 @@ function initApp() {
                 cost: data.cost,
                 security: data.security,
                 container: data.container,
-                analysis: data.analysis
+                analysis: data.analysis,
+                metrics: data.metrics
             };
 
             displayResults(data.results, data.summary, data.metadata, currentGradeReport);
@@ -837,7 +902,11 @@ function initApp() {
 
         const recipientBadge = '';
 
-        const viewUrl = `${window.location.origin}${window.location.pathname}?scan_id=${scan.id}`;
+        let cleanRepo = "report";
+        if (scan.repository_name) {
+            cleanRepo = scan.repository_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "report";
+        }
+        const viewUrl = `${window.location.origin}/report/${cleanRepo}-${scan.id}`;
 
         return `
         <div class="scan-history-card">
@@ -1173,10 +1242,10 @@ function initApp() {
                                                         <span class="cve-expand-icon" id="${cveId}-icon">▼</span>
                                                     </div>
                                                     <div class="cve-details" id="${cveId}" style="display: none;">
-                                                        ${v.scanner === 'grype' && (v.full_description || v.description) ? `
+                                                        ${(v.full_description || v.description) ? `
                                                             <div class="cve-detail-section">
                                                                 <strong>Description:</strong>
-                                                                <p>${escapeHtml(v.full_description || v.description)}</p>
+                                                                <div class="markdown-rendered" style="margin-top: 8px; font-size: 0.85rem; line-height: 1.5;">${window.marked ? window.marked.parse(v.description || v.full_description) : escapeHtml(v.description || v.full_description)}</div>
                                                             </div>
                                                         ` : ''}
                                                         <div class="cve-detail-section">
@@ -1250,9 +1319,8 @@ function initApp() {
         const urlPattern = /(https?:\/\/[^\s<]+)/g;
         escaped = escaped.replace(urlPattern, (fullUrl) => {
             // Keep full URL for href
-            const displayUrl = maxLength && fullUrl.length > maxLength
-                ? fullUrl.substring(0, maxLength) + '...'
-                : fullUrl;
+            // Show full URL text (allow CSS to line-break long URLs)
+            const displayUrl = fullUrl;
             return `<a href="${fullUrl}" target="_blank" rel="noopener noreferrer" class="remediation-link">${displayUrl}</a>`;
         });
 
@@ -1410,29 +1478,34 @@ function initApp() {
                 </div>
             `;
         };
-
+        const singleScannerMode = gradeReport.metrics?.single_scanner_mode;
         const recommendations = gradeReport.analysis?.recommendations || [];
 
         return `
-            <div class="grade-report-section">
-                <h2 class="section-title">📊 Infrastructure Report Card</h2>
-                <div class="grade-cards-container">
-                    ${renderGradeCard('Overall Grade', gradeReport.overall, '🎯')}
-                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
-                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
-                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
-                </div>
-                ${recommendations.length > 0 ? `
-                <div class="recommendations-section">
-                    <h3 class="recommendations-title">💡 Recommendations</h3>
-                    <ul class="recommendations-list">
-                        ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
-                    </ul>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
+           <div class="grade-report-section">
+               <h2 class="section-title">📊 Infrastructure Health Report</h2>
+
+               <div class="grade-cards-container">
+                   ${!singleScannerMode && gradeReport.overall
+                       ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
+                       : ''}
+
+                   ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
+                   ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
+                   ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
+               </div>
+
+               ${recommendations.length > 0 ? `
+               <div class="recommendations-section">
+                   <h3 class="recommendations-title">💡 Recommendations</h3>
+                   <ul class="recommendations-list">
+                       ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                   </ul>
+               </div>
+               ` : ''}
+           </div>
+`       ;
+}
 
     submitFeedbackBtn.addEventListener('click', async () => {
         const review = feedbackReview.value.trim();
@@ -1577,6 +1650,16 @@ function initApp() {
                 subscribeBtn.innerHTML = '<span>✉️</span> Subscribe Now';
             }
         };
+    }
+
+    // Check for tab query parameter on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam) {
+        const targetTabBtn = document.querySelector(`.tab-btn[data-tab="${tabParam}"]`);
+        if (targetTabBtn) {
+            targetTabBtn.click();
+        }
     }
 }
 

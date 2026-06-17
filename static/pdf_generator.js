@@ -6,6 +6,13 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
     const esc = (t) => t == null ? '' : String(t)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    // Render as plain text with line breaks (no CDN dependencies)
+    const parseMarkdown = (t) => {
+        if (!t) return '';
+        const s = esc(String(t));
+        return s.replace(/\n/g, '<br>');
+    };
+
     // ── Meta ──────────────────────────────────────────────────────────────────
     const repoName  = esc(metadata?.repository_name || metadata?.repository_url || '—');
     const repoUrl   = esc(metadata?.repository_url  || '');
@@ -120,11 +127,11 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 `<div class="cell-small" title="${esc(fi.file)}">${esc(trunc(fi.file,50))}${fi.line?':'+fi.line:''}</div>`).join('')
                 + (findings.length>3 ? `<div class="cell-small muted">+${findings.length-3} more…</div>` : '');
             return `<tr style="background:${bg};">
-              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(trunc(f.description))}</div></td>
+              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
               <td class="td"><span style="font-weight:700;color:#059669;">${esc(f.estimated_savings||'—')}</span></td>
-              <td class="td"><div class="cell-small">${esc(trunc(f.remediation,140))}</div>${files}</td>
+              <td class="td"><div class="cell-small">${esc(f.remediation || '')}</div>${files}</td>
             </tr>`;
         }).join('');
 
@@ -160,12 +167,12 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 return `<div class="cell-small">${esc(trunc(res,60))}</div>`;
             }).join('') + (findings.length>4?`<div class="cell-small muted">+${findings.length-4} more…</div>`:'');
             return `<tr style="background:${bg};">
-              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(ruleId)}</td>
-              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(trunc(f.description))}</div></td>
+              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">${esc(ruleId)}</td>
+              <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
               <td class="td">${resources}</td>
-              <td class="td"><div class="cell-small">${esc(trunc(f.remediation,130))}</div></td>
+              <td class="td"><div class="cell-small">${esc(f.remediation || '')}</div></td>
             </tr>`;
         }).join('');
 
@@ -208,13 +215,16 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
                 ${containerScannerName ? `<span style="font-weight:400;color:#94A3B8;font-size:0.72rem;margin-left:6px;">via ${esc(containerScannerName)}</span>` : ''}
               </td>
             </tr>`;
-            const cveRows = ordered.map(v => `<tr>
-              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:nowrap;">${esc(v.rule_id||'—')}</td>
+            const cveRows = ordered.map(v => {
+                const hasRichDesc = v.description && (v.description.includes('**') || v.description.includes('##') || v.description.includes('`'));
+                return `<tr>
+              <td class="td" style="font-family:monospace;font-size:0.72rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">${esc(v.rule_id||'—')}</td>
               <td class="td"><div class="rule-name">${esc(v.package)}</div><div class="cell-small muted">v${esc(v.package_version)}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(v.severity)}</td>
               <td class="td" style="font-size:0.72rem;">${v.fix_version && v.fix_version!=='N/A' ? `<span style="color:#059669;font-weight:700;">→ ${esc(v.fix_version)}</span>` : '<span class="muted">No fix yet</span>'}</td>
-              <td class="td"><div class="cell-small muted">${esc(trunc(v.description,100))}</div></td>
-            </tr>`).join('');
+              <td class="td"><div class="markdown-desc" style="font-size:0.75rem;line-height:1.5;">${parseMarkdown(v.description || v.full_description || '')}</div></td>
+            </tr>`;
+            }).join('');
             return [imgRow, cveRows];
         }).join('');
 
@@ -222,7 +232,7 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   <h2 class="section-title" style="color:#2563EB;">🐳 Container Security — ${containerResults.length} vulnerabilities in ${Object.keys(imageMap).length} image(s)${containerScannerName ? ` · Scanner: <span style="font-weight:600;">${esc(containerScannerName)}</span>` : ''}</h2>
   <table class="data-table" style="--hdr:#EFF6FF;--hdr-bdr:#BFDBFE;--hdr-fg:#1E40AF;">
     <thead><tr style="background:var(--hdr);border-bottom:2px solid var(--hdr-bdr);">
-      ${TH('CVE / ID','12%')}${TH('Package','18%')}${TH('Severity','9%')}${TH('Fix Version','12%')}${TH('Description')}
+      ${TH('CVE / ID','12%')}${TH('Package','16%')}${TH('Severity','9%')}${TH('Fix Version','11%')}${TH('Description')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>
@@ -235,11 +245,10 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
 <head>
 <meta charset="UTF-8">
 <title>InfraScan Report — ${repoName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 12px;
     color: #1E293B;
     background: #FFFFFF;
@@ -257,12 +266,15 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   /* ── Header ── */
   .pdf-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
+    gap: 14px;
     border-bottom: 3px solid #4F46E5;
     padding-bottom: 14px;
     margin-bottom: 20px;
   }
+  .pdf-header > div { min-width: 0; }
   .pdf-logo-block { display: flex; align-items: center; gap: 12px; }
   .pdf-logo-name {
     font-size: 1.6rem;
@@ -311,15 +323,28 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
   .meta-table tr:last-child td { border-bottom: none; }
 
   /* ── Data tables ── */
-  .data-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+  .data-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.75rem; }
+  .data-table thead th,
+  .data-table tbody td { word-break: break-word; white-space: normal; overflow-wrap: anywhere; }
   .data-table thead th { padding: 7px 8px; color: var(--hdr-fg); font-weight: 700; }
   .data-table tbody tr { border-bottom: 1px solid #F1F5F9; }
   .data-table tbody tr:last-child { border-bottom: none; }
-  .td { padding: 6px 8px; vertical-align: top; }
+  .td { padding: 6px 8px; vertical-align: top; min-width: 0; }
   .rule-name { font-weight: 600; color: #1E293B; margin-bottom: 2px; }
-  .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; }
+  .cell-small { font-size: 0.7rem; color: #475569; line-height: 1.4; overflow-wrap: anywhere; word-break: break-word; }
   .muted { color: #94A3B8 !important; }
   .img-cell { border-top: 2px solid #BFDBFE; }
+
+  /* ── Markdown-rendered description ── */
+  .markdown-desc p { margin: 0 0 6px 0; }
+  .markdown-desc p:last-child { margin-bottom: 0; }
+  .markdown-desc strong { font-weight: 700; color: #1E293B; }
+  .markdown-desc code { background: #F1F5F9; padding: 1px 5px; border-radius: 3px; font-size: 0.78em; font-family: monospace; color: #4F46E5; }
+  .markdown-desc ul { margin: 4px 0 4px 16px; padding: 0; }
+  .markdown-desc li { margin-bottom: 2px; }
+  .markdown-desc blockquote { border-left: 3px solid #CBD5E1; padding: 4px 8px; margin: 4px 0; color: #475569; background: #F8FAFC; border-radius: 0 4px 4px 0; }
+  .markdown-desc a { color: #4F46E5; text-decoration: none; word-break: break-all; }
+  .markdown-desc h1, .markdown-desc h2, .markdown-desc h3 { font-size: 0.8rem; font-weight: 700; margin: 6px 0 3px; color: #1E293B; }
 
   /* ── Info box ── */
   .infobox {

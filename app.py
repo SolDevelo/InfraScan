@@ -5,7 +5,7 @@ import uuid
 import json
 import time
 import datetime
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
 from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
@@ -15,6 +15,7 @@ from scanner.checkov_scanner import is_checkov_available
 from scanner.docker_scout_scanner import is_docker_scout_available
 from scanner.grype_scanner import is_grype_available
 from reporter.grading import ReportGenerator
+import traceback
 
 load_dotenv()
 
@@ -25,11 +26,18 @@ app.config['RESULTS_DIR'] = os.path.join(os.getcwd(), 'scan_results')
 app.config['DATA_DIR'] = os.path.join(os.getcwd(), 'data')
 app.config['FEEDBACK_FILE'] = os.path.join(app.config['DATA_DIR'], 'feedback.json')
 app.config['SUBSCRIBERS_FILE'] = os.path.join(app.config['DATA_DIR'], 'subscribers.json')
+app.config['MONITORED_PROJECTS_FILE'] = os.path.join(app.config['DATA_DIR'], 'monitored_projects.json')
+app.config['SHOW_GRADES_PUBLICLY'] = os.getenv('SHOW_GRADES_PUBLICLY', 'True').lower() in ('true', '1', 'yes')
 
 # Create directories if they don't exist
 os.makedirs(app.config['RESULTS_DIR'], exist_ok=True)
 os.makedirs(app.config['DATA_DIR'], exist_ok=True)
 app.config['SLACK_WEBHOOK_URL'] = os.getenv('SLACK_WEBHOOK_URL', '')
+
+# Ensure monitored projects config exists
+if not os.path.exists(app.config['MONITORED_PROJECTS_FILE']):
+    with open(app.config['MONITORED_PROJECTS_FILE'], 'w') as f:
+        json.dump([], f)
 
 # Cache busting - changes on each deployment/restart
 STATIC_VERSION = str(int(time.time()))
@@ -50,23 +58,57 @@ def inject_global_vars():
 def get_slack_webhook_url() -> str:
     return os.getenv('SLACK_WEBHOOK_URL', '').strip()
 
-def build_share_url(result_id: str, req) -> str:
-    referer = req.headers.get('Referer') if req else None
-    if referer:
-        parsed = urlparse(referer)
-        origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
-        path = parsed.path or ""
-        if origin:
-            return f"{origin}{path}?scan_id={result_id}"
-
-    origin = req.headers.get('Origin') if req else None
-    if origin:
-        return f"{origin}/?scan_id={result_id}"
+def build_share_url(result_id: str, req, metadata=None) -> str:
+    clean_repo = "report"
+    if metadata and 'repository_name' in metadata:
+        import re
+        clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-')
+        if not clean_repo:
+            clean_repo = "report"
+    
+    scan_path = f"report/{clean_repo}-{result_id}"
 
     if req and req.host_url:
-        return f"{req.host_url.rstrip('/')}/?scan_id={result_id}"
+        return f"{req.host_url.rstrip('/')}/{scan_path}"
 
+    return f"/{scan_path}"
+
+
+def load_monitored_projects():
+    try:
+        with open(app.config['MONITORED_PROJECTS_FILE'], 'r') as f:
+            items = json.load(f) or []
+    except Exception:
+        return []
+
+    monitored = []
+    for item in items:
+        if isinstance(item, str):
+            monitored.append({
+                'repo_url': item,
+                'branch': 'main',
+                'scanner': 'comprehensive',
+                'is_private': False,
+            })
+        elif isinstance(item, dict) and item.get('repo_url'):
+            monitored.append({
+                'repo_url': item['repo_url'],
+                'branch': item.get('branch', 'main'),
+                'scanner': item.get('scanner', 'comprehensive'),
+                'is_private': item.get('is_private', False),
+            })
+    return monitored
+
+
+def save_scan_result(report_dict):
+    if 'metadata' not in report_dict or report_dict['metadata'] is None:
+        report_dict['metadata'] = {}
+    result_id = str(uuid.uuid4())
+    file_path = os.path.join(app.config['RESULTS_DIR'], f"{result_id}.json")
+    with open(file_path, 'w') as f:
+        json.dump(report_dict, f)
     return result_id
+
 
 def send_slack_notification(message: str) -> None:
     webhook_url = get_slack_webhook_url()
@@ -86,12 +128,105 @@ def send_slack_notification(message: str) -> None:
 
 @app.route('/')
 def index():
+    scan_id = request.args.get('scan_id')
+    if scan_id:
+        import re
+        match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$', scan_id.lower())
+        real_uuid = match.group(1) if match else scan_id
+        
+        file_path = os.path.join(app.config['RESULTS_DIR'], f"{real_uuid}.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                metadata = data.get('metadata', {})
+                clean_repo = "report"
+                if 'repository_name' in metadata:
+                    clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+                return redirect(url_for('report_view', scan_id=f"{clean_repo}-{real_uuid}"), code=301)
+            except Exception:
+                pass
+        return redirect(url_for('report_view', scan_id=scan_id), code=301)
+        
     return render_template('index.html')
 
 @app.route('/robots.txt')
-@app.route('/sitemap.xml')
 def static_from_root():
     return send_from_directory(app.static_folder, request.path[1:])
+
+@app.route('/sitemap.xml')
+def sitemap():
+    results_dir = app.config['RESULTS_DIR']
+    try:
+        files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        files = []
+
+    urls = []
+    host_url = request.host_url.rstrip('/')
+    urls.append(f"{host_url}/")
+    
+    import re
+    for filename in files:
+        file_path = os.path.join(results_dir, filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            metadata = data.get('metadata', {})
+            if not metadata.get('is_private', False):
+                real_uuid = filename.replace('.json', '')
+                clean_repo = "report"
+                if 'repository_name' in metadata:
+                    clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+                urls.append(f"{host_url}/report/{clean_repo}-{real_uuid}")
+        except Exception:
+            continue
+            
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for url in urls:
+        xml += f'  <url><loc>{url}</loc></url>\n'
+    xml += '</urlset>'
+    
+    return app.response_class(xml, mimetype='application/xml')
+
+@app.route('/report/<path:scan_id>')
+def report_view(scan_id):
+    import re
+    match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$', scan_id.lower())
+    real_uuid = match.group(1) if match else scan_id
+
+    if '..' in real_uuid or '/' in real_uuid or '\\' in real_uuid or not real_uuid.replace('-', '').isalnum():
+        return "Invalid scan ID", 400
+
+    file_path = os.path.join(app.config['RESULTS_DIR'], f"{real_uuid}.json")
+    if not os.path.exists(file_path):
+        return "Report not found", 404
+        
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        return "Error reading report", 500
+
+    metadata = data.get('metadata', {})
+    clean_repo = "report"
+    if 'repository_name' in metadata:
+        clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-') or "report"
+    canonical_scan_id = f"{clean_repo}-{real_uuid}"
+    
+    return render_template('report.html', 
+                           data=data, 
+                           report_json=json.dumps(data).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026').replace("'", '\\u0027'), 
+                           current_scan_id=canonical_scan_id,
+                           metadata=metadata,
+                           summary=data.get('summary', {}),
+                           grade_report={
+                               'overall': data.get('overall', {}),
+                               'cost': data.get('cost', {}),
+                               'security': data.get('security', {}),
+                               'container': data.get('container', {}),
+                           })
 
 @app.route('/api/scanner/status')
 def scanner_status():
@@ -116,7 +251,11 @@ def scanner_status():
 
 @app.route('/api/repo/branches', methods=['POST'])
 def get_branches():
-    """Fetch branches for a given repository URL."""
+    """Fetch branches for a given repository URL.
+    
+    For GitHub repositories, also returns the default_branch as reported
+    by the GitHub REST API so the UI can pre-select it.
+    """
     data = request.get_json()
     repo_url = data.get('url')
     
@@ -125,6 +264,32 @@ def get_branches():
     
     # Strip query parameters and hash fragments from URL
     repo_url = repo_url.split('?')[0].split('#')[0]
+
+    # --- Detect GitHub URL and fetch default branch via the GitHub API ---
+    default_branch = None
+    import re as _re
+    github_match = _re.match(
+        r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$',
+        repo_url,
+        _re.IGNORECASE
+    )
+    if github_match:
+        owner, repo_name = github_match.group(1), github_match.group(2)
+        try:
+            gh_headers = {'Accept': 'application/vnd.github+json'}
+            gh_token = os.getenv('GITHUB_TOKEN', '').strip()
+            if gh_token:
+                gh_headers['Authorization'] = f'Bearer {gh_token}'
+            gh_resp = requests.get(
+                f'https://api.github.com/repos/{owner}/{repo_name}',
+                headers=gh_headers,
+                timeout=10
+            )
+            if gh_resp.status_code == 200:
+                default_branch = gh_resp.json().get('default_branch')
+        except Exception:
+            pass  # Non-fatal – fall back to ls-remote ordering
+    # --- End GitHub detection ---
     
     try:
         g = cmd.Git()
@@ -135,23 +300,34 @@ def get_branches():
             if '\trefs/heads/' in line:
                 branches.append(line.split('\trefs/heads/')[-1])
         
-        # Sort branches, but keep 'main' or 'master' at the top if they exist
+        # Sort branches alphabetically
         if branches:
             branches.sort()
-            for primary in ['main', 'master']:
-                if primary in branches:
-                    branches.remove(primary)
-                    branches.insert(0, primary)
+            # Promote the actual default branch to the top
+            top_branch = default_branch if default_branch and default_branch in branches else None
+            if top_branch is None:
+                # Fallback: prefer 'main', then 'master'
+                for primary in ['main', 'master']:
+                    if primary in branches:
+                        top_branch = primary
+                        break
+            if top_branch and top_branch in branches:
+                branches.remove(top_branch)
+                branches.insert(0, top_branch)
         else:
             # If no heads found, return common defaults as a fallback
             branches = ['main', 'master']
+            if default_branch and default_branch not in branches:
+                branches.insert(0, default_branch)
             
-        return jsonify({'branches': branches})
+        return jsonify({'branches': branches, 'default_branch': default_branch})
     except Exception as e:
+        print(f"Error: {e}")
         error_msg = str(e).lower()
         if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
-             return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
+            return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
         return jsonify({'error': f'Failed to fetch branches: {str(e)}'}), 500
+
 
 @app.route('/api/scan/github', methods=['POST'])
 def scan_github():
@@ -237,7 +413,7 @@ def scan_github():
             raise clone_error
         
         # Scan directory and get results with resource count
-        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='terraform')
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
         
         # Generate comprehensive report with grades
         report_generator = ReportGenerator()
@@ -260,6 +436,7 @@ def scan_github():
         report_dict['metadata'].update({
             'repository_url': repo_url,
             'repository_name': repo_name,
+            'scan_source': 'web_app',
 
             'scan_timestamp': scan_timestamp,
             'is_private': is_private,
@@ -284,11 +461,27 @@ def scan_github():
         findings_summary = ", ".join(findings_parts)
         
         # Build grades summary
-        grades_parts = [f"Overall {overall_grade.letter} ({overall_grade.percentage}%)"]
-        grades_parts.append(f"Cost {cost_grade.letter} ({cost_grade.percentage}%)")
-        grades_parts.append(f"Security {security_grade.letter} ({security_grade.percentage}%)")
-        if container_findings > 0:
-            grades_parts.append(f"Containers {container_grade.letter} ({container_grade.percentage}%)")
+        grades_parts = []
+
+        if overall_grade:
+            grades_parts.append(
+                f"Overall {overall_grade.letter} ({overall_grade.percentage}%)"
+            )
+        
+        if cost_grade:
+            grades_parts.append(
+                f"Cost {cost_grade.letter} ({cost_grade.percentage}%)"
+            )
+        
+        if security_grade:
+            grades_parts.append(
+                f"Security {security_grade.letter} ({security_grade.percentage}%)"
+            )
+        
+        if container_grade:
+            grades_parts.append(
+                f"Containers {container_grade.letter} ({container_grade.percentage}%)"
+            )
         grades_summary = " ".join(grades_parts)
         
         slack_message = (
@@ -320,6 +513,7 @@ def scan_github():
         
         return jsonify(report_dict)
     except Exception as e:
+        print(f"Error: {e}")
         # User-friendly error message without exposing technical details
         error_msg = str(e).lower()
         if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
@@ -333,6 +527,87 @@ def scan_github():
     finally:
         # Clean up
         shutil.rmtree(temp_dir, ignore_errors=True)
+        
+
+def scan_repository(repo_url, branch='main', scanner_type='comprehensive', is_private=False, scan_source='monitored_scan'):
+    temp_dir = tempfile.mkdtemp()
+    try:
+        Repo.clone_from(repo_url, temp_dir, branch=branch, depth=1)
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise RuntimeError(f"Unable to clone repository: {e}")
+
+    try:
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
+        report_generator = ReportGenerator()
+        report = report_generator.generate_report(
+            findings=results,
+            resource_count=resource_count,
+            scanner_type=scanner_type,
+            extra_recommendations=recommendations
+        )
+
+        repo_name = repo_url.rstrip('/').split('/')[-1] if '/' in repo_url else repo_url
+        scan_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+        report_dict = report.to_dict()
+        report_dict['metadata'] = report_dict.get('metadata', {})
+        report_dict['metadata'].update({
+            'repository_url': repo_url,
+            'repository_name': repo_name,
+            'scan_source': scan_source,
+            'scan_timestamp': scan_timestamp,
+            'is_private': is_private,
+            'branch': branch
+        })
+
+        report_dict['results'] = results
+        report_dict['summary'] = {
+            'total': len(results),
+            'unique_rules': report.metrics.get('unique_rules_triggered', 0),
+            'scanner_used': scanner_type
+        }
+
+        scan_id = save_scan_result(report_dict)
+        return scan_id, report_dict
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.route('/api/scans/monitored/refresh', methods=['POST'])
+def refresh_monitored_scans():
+    monitored = load_monitored_projects()
+    if not monitored:
+        return jsonify({'error': 'No monitored repositories configured.', 'monitored_projects': []}), 400
+
+    refresh_results = []
+    for project in monitored:
+        try:
+            scan_id, report_dict = scan_repository(
+                project['repo_url'],
+                branch=project.get('branch', 'main'),
+                scanner_type=project.get('scanner', 'comprehensive'),
+                is_private=project.get('is_private', False),
+                scan_source='monitored_project'
+            )
+            refresh_results.append({
+                'repo_url': project['repo_url'],
+                'scan_id': scan_id,
+                'status': 'ok',
+                'grade': report_dict.get('overall', {}).get('letter', '?'),
+                'scan_timestamp': report_dict['metadata'].get('scan_timestamp')
+            })
+        except Exception as e:
+            refresh_results.append({
+                'repo_url': project['repo_url'],
+                'status': 'error',
+                'message': str(e)
+            })
+
+    return jsonify({
+        'results': refresh_results,
+        'refreshed_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+    })
 
 
 @app.route('/api/results/save', methods=['POST'])
@@ -370,7 +645,7 @@ def save_results():
     repo_url = metadata.get('repository_url', 'unknown')
 
 
-    share_url = build_share_url(result_id, request)
+    share_url = build_share_url(result_id, request, metadata)
 
     slack_message = (
         "🔗 InfraScan results shared | "
@@ -379,7 +654,7 @@ def save_results():
     )
     send_slack_notification(slack_message)
     
-    return jsonify({'id': result_id})
+    return jsonify({'id': result_id, 'share_url': share_url})
 
 @app.route('/api/results/<scan_id>', methods=['GET'])
 def get_results(scan_id):
@@ -462,6 +737,231 @@ def get_recent_scans():
 
     # Return only the 500 most recent
     return jsonify({'scans': scans[:500]})
+
+
+def normalize_repository_url(repo_url):
+    import re
+    if not repo_url:
+        return repo_url
+
+    url = repo_url.strip()
+    if url.startswith('git@'):
+        match = re.match(r'^git@([^:]+):(.+)$', url)
+        if match:
+            host = match.group(1)
+            path = match.group(2)
+            path = path.rstrip('/')
+            if path.endswith('.git'):
+                path = path[:-4]
+            return f'https://{host}/{path}'
+
+    if '://' not in url:
+        url = f'https://{url}'
+
+    parsed = urlparse(url)
+    path = parsed.path.rstrip('/')
+    if path.endswith('.git'):
+        path = path[:-4]
+
+    return f'{parsed.scheme}://{parsed.netloc}{path}'
+
+
+def extract_project_name(repo_url):
+    import re
+    if not repo_url:
+        return 'Unknown'
+
+    url = repo_url.strip()
+
+    # Normalize SSH-style URLs to a path-like string
+    if url.startswith('git@') or '://git@' in url:
+        if '://' in url:
+            url = url.split('://', 1)[1]
+        url = url.replace(':', '/')
+
+    try:
+        parsed = urlparse(url if '://' in url else f'https://{url}')
+        path = parsed.path.strip('/')
+    except Exception:
+        path = url.strip('/')
+
+    if path.endswith('.git'):
+        path = path[:-4]
+
+    parts = [p for p in path.split('/') if p]
+    if parts:
+        # Use repo name (last segment) when available
+        return parts[-1]
+
+    # Fallback: remove common host segments and return last remaining piece
+    parts = [p for p in re.split(r'[:/]', url) if p and p.lower() not in ['github.com', 'gitlab.com', 'bitbucket.org', 'https', 'http', 'git']]
+    return parts[-1] if parts else 'Unknown'
+
+
+def get_display_name(proj_name):
+    if not proj_name:
+        return 'Unknown'
+
+    if proj_name.islower():
+        return proj_name.replace('-', ' ').replace('_', ' ').title()
+
+    if '-' in proj_name or '_' in proj_name:
+        import re
+        parts = re.split(r'[-_]', proj_name)
+        return ' '.join(part.capitalize() if part.islower() else part for part in parts)
+
+    return proj_name
+
+
+@app.route('/supported-projects')
+def supported_projects():
+    """Render the Supported Projects page."""
+    return render_template('supported_projects.html')
+
+
+@app.route('/api/scans/supported-projects', methods=['GET'])
+def get_supported_projects():
+    """Return an aggregated list of infrastructure projects using InfraScan in the last 12 months."""
+    results_dir = app.config['RESULTS_DIR']
+    projects_map = {}
+    
+    try:
+        files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        files = []
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    twelve_months_ago = now - datetime.timedelta(days=365)
+
+    import re
+    for filename in files:
+        file_path = os.path.join(results_dir, filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+
+            metadata = data.get('metadata', {}) or {}
+            repo_url = metadata.get('repository_url')
+            scan_timestamp = metadata.get('scan_timestamp')
+            is_private = metadata.get('is_private', False)
+
+            # Skip entries without essential data or private scans
+            if not repo_url or not scan_timestamp or is_private:
+                continue
+
+            # Parse scan_timestamp
+            scan_dt = None
+            clean_ts = scan_timestamp.replace(' UTC', '').split('.')[0]
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d'):
+                try:
+                    scan_dt = datetime.datetime.strptime(clean_ts, fmt).replace(tzinfo=datetime.timezone.utc)
+                    break
+                except ValueError:
+                    continue
+
+            if not scan_dt:
+                continue
+
+            proj_name = extract_project_name(repo_url)
+            proj_key = proj_name.lower()
+            
+            # Check rolling 12-month window
+            in_window = scan_dt >= twelve_months_ago
+
+            latest_scan_letter = data.get('overall', {}).get('letter') if data.get('overall') else None
+            latest_scan_pct = data.get('overall', {}).get('percentage') if data.get('overall') else None
+            latest_scan_source = metadata.get('scan_source') or 'unknown'
+
+            normalized_repo_url = normalize_repository_url(repo_url)
+            if proj_key not in projects_map:
+                projects_map[proj_key] = {
+                    'raw_name': proj_name,
+                    'repository_url': normalized_repo_url,
+                    'scans_in_window': 0,
+                    'latest_scan_dt': scan_dt,
+                    'latest_scan_letter': latest_scan_letter,
+                    'latest_scan_pct': latest_scan_pct,
+                    'latest_scan_source': latest_scan_source,
+                    'web_scans': 0,
+                    'github_actions_scans': 0,
+                    'other_scans': 0,
+                    'pct_sum': 0,
+                    'pct_count': 0,
+                }
+            else:
+                if scan_dt > projects_map[proj_key]['latest_scan_dt']:
+                    projects_map[proj_key]['latest_scan_dt'] = scan_dt
+                    projects_map[proj_key]['latest_scan_letter'] = latest_scan_letter
+                    projects_map[proj_key]['latest_scan_pct'] = latest_scan_pct
+                    projects_map[proj_key]['latest_scan_source'] = latest_scan_source
+                    projects_map[proj_key]['repository_url'] = normalized_repo_url
+
+            if in_window:
+                projects_map[proj_key]['scans_in_window'] += 1
+                if latest_scan_source == 'github_actions':
+                    projects_map[proj_key]['github_actions_scans'] += 1
+                elif latest_scan_source == 'web_app':
+                    projects_map[proj_key]['web_scans'] += 1
+                else:
+                    projects_map[proj_key]['other_scans'] += 1
+                pct = latest_scan_pct
+                if pct is not None:
+                    try:
+                        projects_map[proj_key]['pct_sum'] += float(pct)
+                        projects_map[proj_key]['pct_count'] += 1
+                    except (TypeError, ValueError):
+                        pass
+
+        except Exception as e:
+            print(f"Error reading scan file {filename}: {e}")
+            continue
+    
+    def pct_to_letter(pct):
+        if pct >= 90: return 'A'
+        if pct >= 75: return 'B'
+        if pct >= 60: return 'C'
+        if pct >= 45: return 'D'
+        return 'F'
+
+    projects_list = []
+    for key, info in projects_map.items():
+        if info['scans_in_window'] > 0:
+            latest_grade = info.get('latest_scan_letter')
+            if not latest_grade and info.get('latest_scan_pct') is not None:
+                try:
+                    latest_grade = pct_to_letter(float(info['latest_scan_pct']))
+                except (TypeError, ValueError):
+                    latest_grade = None
+            if not latest_grade:
+                latest_grade = '?'
+            projects_list.append({
+                'project_name': get_display_name(info['raw_name']),
+                'repository_url': info.get('repository_url'),
+                'scan_count': info['scans_in_window'],
+                'latest_scan': info['latest_scan_dt'].strftime('%Y-%m-%d'),
+                'latest_scan_source': info.get('latest_scan_source', 'unknown'),
+                'web_scans': info.get('web_scans', 0),
+                'github_actions_scans': info.get('github_actions_scans', 0),
+                'other_scans': info.get('other_scans', 0),
+                'grade': latest_grade
+            })
+
+    # Sort descending by scan count, then latest scan date descending, then alphabetically by project name
+    projects_list.sort(key=lambda p: p['project_name'].lower())
+    projects_list.sort(key=lambda p: p['latest_scan'], reverse=True)
+    projects_list.sort(key=lambda p: p['scan_count'], reverse=True)
+
+    # Filter grade output if grade visibility is disabled
+    show_grades = app.config['SHOW_GRADES_PUBLICLY']
+    for p in projects_list:
+        if not show_grades:
+            p['grade'] = None
+
+    return jsonify({
+        'projects': projects_list,
+        'show_grades': show_grades
+    })
+
 
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():

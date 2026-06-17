@@ -166,7 +166,8 @@ def create_finding_dict(
     image: str,
     cvss_score: Any = 'N/A',
     package_type: str = 'unknown',
-    occurrences: int = 1
+    occurrences: int = 1,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Create a normalized finding dictionary.
@@ -174,7 +175,7 @@ def create_finding_dict(
     Returns:
         Finding dictionary in internal format
     """
-    short_desc = f"{description[:200]}..." if len(description) > 200 else description
+    
     
     # Build base remediation for package update
     base_remediation = (
@@ -190,13 +191,49 @@ def create_finding_dict(
     remediation = base_remediation
     if image_recommendation:
         remediation = f"{base_remediation}. {image_recommendation}"
+        
+    # Create a professional Markdown description — skip info already visible in table columns
+    if fix_version:
+        client_description = f"**Recommended Action:** Update the `{package_name}` package to version `{fix_version}` to patch this vulnerability.\n\n"
+    else:
+        client_description = "**Recommended Action:** Currently, there is no official patch. Consider monitoring for future updates or mitigating exposure.\n\n"
+
+    client_description += "**Risk Metrics:**\n"
+    if cvss_score != 'N/A':
+        client_description += f"- **CVSS Score:** `{cvss_score}`\n"
+    if kwargs.get('cvss_vector') and kwargs.get('cvss_vector') != 'N/A':
+        client_description += f"- **CVSS Vector:** `{kwargs.get('cvss_vector')}`\n"
+    if kwargs.get('epss_score'):
+        epss_pct = float(kwargs.get('epss_percentile', 0)) * 100
+        client_description += f"- **EPSS Probability:** `{kwargs.get('epss_score')}` ({epss_pct:.1f}% percentile)\n"
+    if kwargs.get('cwes'):
+        cwe_str = ", ".join([f"`{c}`" for c in kwargs.get('cwes', []) if c])
+        if cwe_str:
+            client_description += f"- **Weaknesses (CWE):** {cwe_str}\n"
+
+    client_description += "\n**Technical Details:**\n"
+    tech_desc = description.strip()
+    if tech_desc and tech_desc != 'No description available':
+        if tech_desc.startswith('#') or '```' in tech_desc:
+            client_description += f"{tech_desc}\n"
+        else:
+            client_description += f"> {tech_desc}\n"
+    else:
+        client_description += "> No detailed technical description provided by the scanner.\n"
+
+    refs = kwargs.get('references', [])
+    if refs:
+        client_description += "\n**References:**\n"
+        clean_refs = [r.get('url') if isinstance(r, dict) else str(r) for r in refs]
+        for ref in [r for r in clean_refs if r][:3]:
+            client_description += f"- [{ref}]({ref})\n"
     
     return {
         'file': file_path,
         'rule_id': rule_id,
         'rule_name': f"Vulnerability in {package_name}",
         'severity': severity,
-        'description': short_desc,
+        'description': client_description,
         'full_description': description,
         'remediation': remediation,
         'estimated_savings': f"Security risk mitigation ({severity})",
@@ -461,12 +498,21 @@ def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str
     
     try:
         for run in sarif_data.get('runs', []):
+            rules_dict = {r.get('id'): r for r in run.get('tool', {}).get('driver', {}).get('rules', [])}
+            
             for result in run.get('results', []):
                 # Extract basic info
                 rule_id = result.get('ruleId', 'UNKNOWN')
                 level = result.get('level', 'warning')
                 message = result.get('message', {}).get('text', 'No description available')
                 properties = result.get('properties', {})
+                rule_def = rules_dict.get(rule_id, {})
+                rule_props = rule_def.get('properties', {})
+                
+                # Check if there is a richer description in the rule definition
+                rich_desc = rule_def.get('help', {}).get('markdown') or rule_def.get('help', {}).get('text') or rule_def.get('fullDescription', {}).get('text')
+                if rich_desc and len(rich_desc) > len(message):
+                    message = rich_desc
                 
                 # Map SARIF level to severity
                 severity = {'error': 'High', 'warning': 'Medium', 'note': 'Low', 'none': 'Info'}.get(level, 'Medium')
@@ -496,15 +542,21 @@ def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str
                     message
                 )
                 
-                # Extract CVSS score
-                cvss = properties.get('cvss', {})
-                cvss_score = cvss.get('baseScore') or properties.get('cvssScore', 'N/A') if isinstance(cvss, dict) else 'N/A'
+                # Extract CVSS score and vector
+                cvss = properties.get('cvss', {}) or rule_props.get('cvss', {})
+                cvss_score = cvss.get('baseScore') or cvss.get('score') or properties.get('cvssScore', 'N/A') if isinstance(cvss, dict) else 'N/A'
+                cvss_vector = cvss.get('vectorString') or cvss.get('vector', 'N/A') if isinstance(cvss, dict) else 'N/A'
+                
+                # Extract CWEs
+                tags = rule_props.get('tags', [])
+                cwes = [t for t in tags if str(t).startswith('CWE')]
                 
                 # Build finding
                 file_path = os.path.relpath(compose_file, base_path) if compose_file and base_path else compose_file
                 findings.append(create_finding_dict(
                     file_path, rule_id, package_name, package_version,
-                    severity, message, fix_version, image, cvss_score
+                    severity, message, fix_version, image, cvss_score,
+                    cvss_vector=cvss_vector, cwes=cwes
                 ))
     
     except Exception as e:
@@ -642,16 +694,29 @@ def normalize_docker_scout_finding(vuln: Dict[str, Any], package: Dict[str, Any]
     severity_map = {'CRITICAL': 'Critical', 'HIGH': 'High', 'MEDIUM': 'Medium', 'LOW': 'Low', 'NEGLIGIBLE': 'Info', 'UNSPECIFIED': 'Info', 'UNKNOWN': 'Info'}
     normalized_severity = severity_map.get(severity_raw.upper(), 'Info')
     
-    # Extract CVSS score
-    cvss_score = vuln.get('cvss', {})
-    cvss_base = cvss_score.get('baseScore') or cvss_score.get('score', 'N/A') if isinstance(cvss_score, dict) else 'N/A'
+    # Extract CVSS score and vector
+    cvss_score_data = vuln.get('cvss', {})
+    cvss_base = cvss_score_data.get('baseScore') or cvss_score_data.get('score', 'N/A') if isinstance(cvss_score_data, dict) else 'N/A'
+    cvss_vector = cvss_score_data.get('vectorString') or cvss_score_data.get('vector', 'N/A') if isinstance(cvss_score_data, dict) else 'N/A'
+    
+    # Extract EPSS and CWE
+    epss_score = vuln.get('epss', {}).get('score')
+    epss_percentile = vuln.get('epss', {}).get('percentile')
+    
+    cwes = vuln.get('cwe', [])
+    if cwes and isinstance(cwes[0], dict):
+        cwes = [c.get('id', '') for c in cwes if isinstance(c, dict)]
+        
+    references = vuln.get('links', [])
     
     # Build finding
     file_path = os.path.relpath(compose_file, base_path) if compose_file and base_path else compose_file
     return create_finding_dict(
         file_path, cve_id, package_name, package_version,
         normalized_severity, description, fix_version, image,
-        cvss_base, package_type, count
+        cvss_base, package_type, count,
+        cvss_vector=cvss_vector, epss_score=epss_score, epss_percentile=epss_percentile,
+        cwes=cwes, references=references
     )
 
 
