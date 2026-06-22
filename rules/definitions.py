@@ -277,7 +277,7 @@ RULES = [
     InverseRegexRule(
         id="COST-011",
         name="Missing AWS Budget",
-        severity="High",
+        severity="Low",
         description="No AWS budget configured. Budgets help monitor and control spending with alerts.",
         remediation="Create AWS budgets with alerts for forecasted and actual costs to avoid unexpected charges.",
         estimated_savings="Prevention of cost overruns (potentially thousands)",
