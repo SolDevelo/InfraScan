@@ -1,0 +1,23 @@
+{
+  "nat_gb_per_day":                10.0,
+  "cw_log_gb_per_month":            5.0,
+  "s3_gb_standard":                50.0,
+  "lambda_invocations_per_mo":  1000000,
+  "lambda_avg_duration_ms":       200.0,
+  "lambda_memory_after_mb":      1024.0,
+  "api_calls_per_mo":           1000000,
+  "sqs_requests_per_mo":        1000000,
+  "dynamo_reads_per_mo":        1000000,
+  "dynamo_writes_per_mo":       1000000,
+  "s3_dynamo_pct_of_nat":          0.20,
+  "dynamo_idle_pct":               0.70,
+  "ecs_overprovisioning_pct":      0.25,
+  "vpc_endpoint_data_gb_per_mo":   20.0,
+  "tgw_data_processed_gb_per_mo": 50.0,
+  "secretsmanager_requests_per_mo": 10000,
+  "lb_data_processed_gb":          10.0,
+  "cloudfront_requests_per_mo": 1000000,
+  "cloudfront_gb_out_per_mo":      50.0,
+  "efs_gb_stored":                100.0,
+  "ecr_gb_stored":                 10.0
+}

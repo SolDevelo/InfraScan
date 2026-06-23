@@ -421,7 +421,8 @@ def scan_github():
             findings=results,
             resource_count=resource_count,
             scanner_type=scanner_type,
-            extra_recommendations=recommendations
+            extra_recommendations=recommendations,
+            scan_path=temp_dir
         )
         
         # Extract repository name from URL for display
@@ -544,7 +545,8 @@ def scan_repository(repo_url, branch='main', scanner_type='comprehensive', is_pr
             findings=results,
             resource_count=resource_count,
             scanner_type=scanner_type,
-            extra_recommendations=recommendations
+            extra_recommendations=recommendations,
+            scan_path=temp_dir
         )
 
         repo_name = repo_url.rstrip('/').split('/')[-1] if '/' in repo_url else repo_url
@@ -628,7 +630,8 @@ def save_results():
         'cost': data.get('cost'),
         'security': data.get('security'),
         'container': data.get('container'),
-        'analysis': data.get('analysis')
+        'analysis': data.get('analysis'),
+        'metrics': data.get('metrics'),
     }
     
     # Ensure is_private is preserved in metadata

@@ -503,6 +503,7 @@ function initApp() {
                     security: currentGradeReport ? currentGradeReport.security : null,
                     container: currentGradeReport ? currentGradeReport.container : null,
                     analysis: currentGradeReport ? currentGradeReport.analysis : null,
+                    metrics: currentGradeReport ? currentGradeReport.metrics : null,
                     is_private: currentMetadata ? currentMetadata.is_private : false
                 })
             });
@@ -756,6 +757,7 @@ function initApp() {
                     security: data.security,
                     container: data.container,
                     analysis: data.analysis,
+                    metrics: data.metrics,
                     is_private: data.metadata ? data.metadata.is_private : false
                 })
             });
@@ -1097,10 +1099,37 @@ function initApp() {
                     <strong>Problem:</strong> ${escapeHtml(first.description)}
                 </div>
                 ` : ''}
-                ${first.scanner === 'regex' ? `
-                <div class="finding-detail">
-                    <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(first.estimated_savings)}</span>
-                </div>` : ''}
+                ${first.scanner === 'regex' ? (() => {
+                    // Look for computed cost data from the cost estimator (Phase 1+2)
+                    const perFinding = currentGradeReport?.metrics?.savings_estimate?.per_finding || [];
+                    const costData = perFinding.find(
+                        pf => pf.rule_id === first.rule_id && pf.file === first.file && pf.line === first.line
+                    );
+                    if (costData && (costData.saving_high > 0 || costData.before_usd > 0)) {
+                        const savingStr = costData.saving_low === costData.saving_high
+                            ? `$${costData.saving_low.toFixed(2)}`
+                            : `$${costData.saving_low.toFixed(2)} – $${costData.saving_high.toFixed(2)}`;
+                        const confIcon = costData.confidence === 'high' ? '🟢' : costData.confidence === 'medium' ? '🟡' : '⚪';
+                        const assumptions = (costData.assumptions || []).join('; ');
+                        let afterStr = '';
+                        if (costData.before_usd > 0) {
+                            const afterBest  = Math.max(0, costData.before_usd - costData.saving_high);
+                            const afterWorst = Math.max(0, costData.before_usd - costData.saving_low);
+                            afterStr = afterBest === afterWorst
+                                ? `$${afterBest.toFixed(2)}`
+                                : `$${afterBest.toFixed(2)}–$${afterWorst.toFixed(2)}`;
+                        }
+                        return `<div class="finding-detail">
+                            <strong>Estimated Saving:</strong>
+                            <span style="color:var(--success);font-weight:600;" title="${escapeHtml(assumptions)}">${savingStr}/mo ${confIcon}</span>
+                            ${afterStr ? `<span style="color:var(--text-secondary);font-size:0.85em;margin-left:6px;">current: $${costData.before_usd.toFixed(2)} → after: ${afterStr}</span>` : ''}
+                        </div>`;
+                    }
+                    // Fall back to the static estimated_savings text
+                    return `<div class="finding-detail">
+                        <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(first.estimated_savings)}</span>
+                    </div>`;
+                })() : ''}
                 <div class="finding-detail">
                     <strong>Occurrences:</strong> ${fileCount} ${fileCount === 1 ? 'location' : 'locations'}
                 </div>
@@ -1410,6 +1439,67 @@ function initApp() {
         });
     }
 
+    function renderSavingsCard(est, trafficProfile) {
+        if (!est || (est.low_usd_month === 0 && est.high_usd_month === 0 && !est.total_infra_cost_usd_month)) return '';
+
+        const low  = est.low_usd_month  || 0;
+        const high = est.high_usd_month || 0;
+        const total = est.total_infra_cost_usd_month;
+        const pctLoTot = est.savings_pct_of_total_low;
+        const pctHiTot = est.savings_pct_of_total_high;
+        const pctLoDet = est.savings_pct_of_detectable_low;
+        const pctHiDet = est.savings_pct_of_detectable_high;
+        const provider = est.cost_provider || 'internal';
+        const profile  = trafficProfile || 'small';
+
+        const savingRange = low === high
+            ? `$${low.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+            : `$${low.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} – $${high.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        let pctLine = '';
+        if (pctLoTot != null && total) {
+            pctLine = `<span class="savings-pct">${pctLoTot}%–${pctHiTot}% of $${Math.round(total).toLocaleString()}/mo total infra cost</span>`;
+        } else if (pctLoDet != null) {
+            pctLine = `<span class="savings-pct">${pctLoDet}%–${pctHiDet}% of detectable resource cost</span>`;
+        }
+
+        // Top 3 findings by saving
+        const topFindings = (est.per_finding || [])
+            .filter(f => f.saving_high > 0)
+            .sort((a, b) => b.saving_high - a.saving_high)
+            .slice(0, 3);
+
+        const topRows = topFindings.map(f => {
+            const s = f.saving_low === f.saving_high
+                ? `$${f.saving_low.toFixed(2)}`
+                : `$${f.saving_low.toFixed(2)}–$${f.saving_high.toFixed(2)}`;
+            const fname = (f.file || '').split('/').pop().split('\\\\').pop();
+            const conf  = f.confidence === 'high' ? '🟢' : f.confidence === 'medium' ? '🟡' : '⚪';
+            return `<tr>
+                <td><code>${escapeHtml(f.rule_id || '')}</code></td>
+                <td>${escapeHtml(fname)}${f.line ? ':' + f.line : ''}</td>
+                <td style="color:var(--success);font-weight:600;">${s}/mo</td>
+                <td title="${escapeHtml((f.assumptions||[]).join('; '))}">${conf}</td>
+            </tr>`;
+        }).join('');
+
+        return `
+        <div class="savings-card">
+            <div class="savings-card-header">
+                <span class="savings-icon">💰</span>
+                <span class="savings-title">Estimated Monthly Savings</span>
+                <span class="savings-badge">${escapeHtml(provider)} · ${escapeHtml(profile)} profile</span>
+            </div>
+            <div class="savings-amount">${savingRange}<span class="savings-unit">/month</span></div>
+            ${pctLine ? `<div class="savings-pct-line">${pctLine}</div>` : ''}
+            ${topRows ? `
+            <table class="savings-table">
+                <thead><tr><th>Rule</th><th>Resource</th><th>Saving</th><th title="Confidence">Confidence</th></tr></thead>
+                <tbody>${topRows}</tbody>
+            </table>` : ''}
+        </div>`;
+    }
+
     function renderGradeReport(gradeReport) {
         if (!gradeReport || !gradeReport.overall) return '';
 
@@ -1439,7 +1529,7 @@ function initApp() {
             return explanations[title] || '';
         };
 
-        const renderGradeCard = (title, grade, icon) => {
+        const renderGradeCard = (title, grade, icon, extra = '') => {
             if (!grade) return '';
 
             // Context-aware label for violations
@@ -1474,12 +1564,128 @@ function initApp() {
                             ${grade.severity_breakdown.low > 0 ? `<span class="severity-tag low-tag">${grade.severity_breakdown.low} Low</span>` : ''}
                         </div>
                         ` : ''}
+                        ${extra}
                     </div>
                 </div>
             `;
         };
         const singleScannerMode = gradeReport.metrics?.single_scanner_mode;
-        const recommendations = gradeReport.analysis?.recommendations || [];
+        const recommendations = [...(gradeReport.analysis?.recommendations || [])];
+        const est = gradeReport.metrics?.savings_estimate;
+
+        // Build savings panel: per-resource savings via exact block_file/block_line join
+        const savingsPanelHtml = (() => {
+            if (!est || (est.low_usd_month === 0 && est.high_usd_month === 0 && !est.total_infra_cost_usd_month)) return '';
+            const lo  = est.low_usd_month  || 0;
+            const hi  = est.high_usd_month || 0;
+            const tot = est.total_infra_cost_usd_month;
+            const fmt = n => `$${Math.round(n).toLocaleString('en-US')}`;
+            const savingStr = lo === hi ? fmt(lo) : `${fmt(lo)} – ${fmt(hi)}`;
+            const pctLo = est.savings_pct_of_total_low;
+            const pctHi = est.savings_pct_of_total_high;
+
+            // Group per_finding by block coords (new) or finding coords (old scans)
+            const findingsByBlock = {};
+            (est.per_finding || []).forEach(pf => {
+                const bf = pf.block_file != null ? pf.block_file : pf.file;
+                const bl = pf.block_line  != null ? pf.block_line  : pf.line;
+                const key = `${bf}::${bl}`;
+                if (!findingsByBlock[key]) findingsByBlock[key] = [];
+                findingsByBlock[key].push(pf);
+            });
+
+            // Attach per-resource savings and sort by savings desc
+            const resources = (gradeReport.metrics?.resource_costs || [])
+                .filter(r => r.total_usd_month > 0)
+                .map(r => {
+                    const matched = findingsByBlock[`${r.file}::${r.line}`] || [];
+                    const sLow  = Math.min(matched.reduce((s, pf) => s + pf.saving_low,  0), r.total_usd_month);
+                    const sHigh = Math.min(matched.reduce((s, pf) => s + pf.saving_high, 0), r.total_usd_month);
+                    return { ...r, savings_low: sLow, savings_high: sHigh };
+                })
+                .sort((a, b) => b.savings_high - a.savings_high || b.total_usd_month - a.total_usd_month);
+
+            const makeRow = r => {
+                const confLevel = r.confidence === 'high' ? 'high' : r.confidence === 'medium' ? 'medium' : 'low';
+                const confIcon  = confLevel === 'high' ? '🟢' : confLevel === 'medium' ? '🟡' : '⚪';
+                const confLabels = { high: 'High — price read directly from config', medium: 'Medium — partially inferred (variable reference or missing field)', low: 'Low — inferred from variable defaults or fallback estimate' };
+                const confTip = [confLabels[confLevel], ...(r.assumptions || [])].join('\n');
+                const conf = `<span title="${escapeHtml(confTip)}" style="cursor:help;">${confIcon}</span>`;
+                const fmtS = n => n < 1 ? `<$1` : `$${Math.round(n).toLocaleString('en-US')}`;
+                const sStr = r.savings_high > 0
+                    ? `<span style="color:var(--success);font-weight:600;">${
+                        r.savings_low === r.savings_high
+                          ? `${fmtS(r.savings_high)}/mo`
+                          : `${fmtS(r.savings_low)}–${fmtS(r.savings_high)}/mo`
+                      }</span>`
+                    : `<span style="color:var(--text-secondary);">–</span>`;
+                return `<tr>
+                    <td>${escapeHtml(r.resource_type.replace('aws_', ''))}</td>
+                    <td style="color:var(--text-secondary);">${escapeHtml(r.resource_name || (r.file||'').split('/').pop())}</td>
+                    <td>${sStr}</td>
+                    <td style="color:var(--text-secondary);">${fmt(r.total_usd_month)}/mo</td>
+                    <td>${conf}</td>
+                </tr>`;
+            };
+
+            // Columns: 20% type, 30% resource, 22% savings, 22% cost, 6% conf
+            const colgroup = `<colgroup>
+                <col style="width:20%"><col style="width:30%">
+                <col style="width:22%"><col style="width:22%"><col style="width:6%">
+            </colgroup>`;
+            const thead = `<thead><tr><th>Type</th><th>Resource</th><th>Savings</th><th>Cost</th><th title="Confidence">Conf.</th></tr></thead>`;
+
+            const top  = resources.slice(0, 3);
+            // In expanded section only show resources that have savings to review
+            const rest = resources.slice(3).filter(r => r.savings_high > 0);
+
+            return `
+            <div class="savings-panel">
+                <h3 class="savings-panel-title">💰 Cost Savings Estimate</h3>
+                <div class="savings-panel-amount">${savingStr}<span class="savings-panel-unit">/mo</span></div>
+                ${(pctLo != null && tot && pctHi < 99)
+                    ? `<div class="savings-panel-pct">${pctLo}%–${pctHi}% of ${fmt(tot)}/mo total infra cost</div>`
+                    : (tot ? `<div class="savings-panel-pct">vs. ${fmt(tot)}/mo measured infra cost <span title="Savings may exceed measured cost; pricing model covers ${(est.covered_resource_types||[]).length} resource types" style="cursor:help;">ⓘ</span></div>` : '')
+                }
+                ${top.length ? `
+                <table class="savings-table" style="margin-top:0.8rem;width:100%;">
+                    ${colgroup}${thead}
+                    <tbody>${top.map(makeRow).join('')}</tbody>
+                </table>` : ''}
+                ${rest.length ? `
+                <details class="savings-expand">
+                    <summary>${rest.length} more resource${rest.length !== 1 ? 's' : ''} with savings</summary>
+                    <table class="savings-table" style="width:100%;">
+                        ${colgroup}<tbody>${rest.map(makeRow).join('')}</tbody>
+                    </table>
+                </details>` : ''}
+                ${(() => {
+                    const total = est.total_block_count || 0;
+                    const covered = est.covered_block_count || 0;
+                    const unpriced = (est.uncovered_resource_types || [])
+                        .filter(t => !['aws_vpc','aws_subnet','aws_route_table','aws_route','aws_internet_gateway',
+                            'aws_security_group','aws_security_group_rule','aws_iam_role','aws_iam_policy',
+                            'aws_iam_role_policy','aws_iam_role_policy_attachment','aws_iam_instance_profile',
+                            'aws_network_acl','aws_network_acl_rule','aws_vpc_dhcp_options',
+                            'aws_vpc_dhcp_options_association','aws_main_route_table_association',
+                            'aws_route_table_association','aws_vpc_endpoint','aws_vpn_gateway',
+                            'aws_customer_gateway','aws_acm_certificate','aws_acm_certificate_validation',
+                            'aws_key_pair','aws_placement_group','aws_ssm_parameter','aws_secretsmanager_secret',
+                            'aws_secretsmanager_secret_version','aws_kms_key','aws_kms_alias',
+                            'aws_cloudwatch_log_subscription_filter'].includes(t));
+                    if (!total || covered >= total) return '';
+                    const unpriced3 = unpriced.slice(0,3).map(t => t.replace('aws_','')).join(', ');
+                    const more = unpriced.length > 3 ? ` +${unpriced.length - 3} more` : '';
+                    return `<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.5rem;">Priced ${covered} of ${total} resources${unpriced.length ? ` · potentially unpriced: ${unpriced3}${more}` : ''}</div>`;
+                })()}
+            </div>`;
+        })();
+
+        const hasSavings = savingsPanelHtml !== '';
+
+        // Only show recommendations panel when there are real actionable security alerts,
+        // not the generic fallback "no significant issues" placeholder.
+        const actionableRecs = recommendations.filter(r => !r.startsWith('✅'));
 
         return `
            <div class="grade-report-section">
@@ -1489,20 +1695,22 @@ function initApp() {
                    ${!singleScannerMode && gradeReport.overall
                        ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
                        : ''}
-
                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
                </div>
 
-               ${recommendations.length > 0 ? `
-               <div class="recommendations-section">
-                   <h3 class="recommendations-title">💡 Recommendations</h3>
-                   <ul class="recommendations-list">
-                       ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
-                   </ul>
-               </div>
-               ` : ''}
+               ${(actionableRecs.length > 0 || hasSavings) ? `
+               <div class="insights-row${actionableRecs.length > 0 && hasSavings ? ' has-savings' : ''}">
+                   ${actionableRecs.length > 0 ? `
+                   <div class="recommendations-section">
+                       <h3 class="recommendations-title">💡 Recommendations</h3>
+                       <ul class="recommendations-list">
+                           ${actionableRecs.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                       </ul>
+                   </div>` : ''}
+                   ${hasSavings ? savingsPanelHtml : ''}
+               </div>` : ''}
            </div>
 `       ;
 }

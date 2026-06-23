@@ -113,6 +113,32 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
     const TH = (txt, w='') =>
         `<th style="text-align:left;padding:7px 8px;font-weight:700;${w?'width:'+w+';':''}">${txt}</th>`;
 
+    // Build a lookup: rule_id+file+line -> computed cost data from savings_estimate
+    const perFindingLookup = {};
+    (gradeReport?.metrics?.savings_estimate?.per_finding || []).forEach(pf => {
+        const key = `${pf.rule_id}::${pf.file}::${pf.line}`;
+        perFindingLookup[key] = pf;
+    });
+
+    // For a rule group, return the best computed saving string across all occurrences,
+    // or fall back to the static estimated_savings text.
+    function computedSavingStr(ruleId, findings, staticFallback) {
+        let totalLow = 0, totalHigh = 0, hasData = false;
+        findings.forEach(f => {
+            const pf = perFindingLookup[`${ruleId}::${f.file}::${f.line}`];
+            if (pf && (pf.saving_high > 0 || pf.before_usd > 0)) {
+                totalLow  += pf.saving_low  || 0;
+                totalHigh += pf.saving_high || 0;
+                hasData = true;
+            }
+        });
+        if (!hasData) return esc(staticFallback || '—');
+        const fmtN = n => (n > 0 && n < 1) ? '<$1' : `$${Math.round(n).toLocaleString('en-US')}`;
+        return totalLow === totalHigh
+            ? `${fmtN(totalHigh)}/mo`
+            : `${fmtN(totalLow)}–${fmtN(totalHigh)}/mo`;
+    }
+
     function costTable() {
         if (costGroups.length === 0) return showIaC() || containerScannerName ? `
 <section class="section">
@@ -126,11 +152,12 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
             const files = findings.slice(0,3).map(fi =>
                 `<div class="cell-small" title="${esc(fi.file)}">${esc(trunc(fi.file,50))}${fi.line?':'+fi.line:''}</div>`).join('')
                 + (findings.length>3 ? `<div class="cell-small muted">+${findings.length-3} more…</div>` : '');
+            const savingDisplay = computedSavingStr(f.rule_id, findings, f.estimated_savings);
             return `<tr style="background:${bg};">
               <td class="td"><div class="rule-name">${esc(f.rule_name)}</div><div class="cell-small muted">${esc(f.description || '')}</div></td>
               <td class="td" style="text-align:center;">${sevBadge(f.severity)}</td>
               <td class="td" style="text-align:center;font-weight:700;">${findings.length}</td>
-              <td class="td"><span style="font-weight:700;color:#059669;">${esc(f.estimated_savings||'—')}</span></td>
+              <td class="td"><span style="font-weight:700;color:#059669;">${savingDisplay}</span></td>
               <td class="td"><div class="cell-small">${esc(f.remediation || '')}</div>${files}</td>
             </tr>`;
         }).join('');
@@ -424,6 +451,28 @@ function buildPdfDocument(results, summary, metadata, gradeReport) {
 
 <!-- ── GRADE REPORT CARD ── -->
 ${gradesSection}
+
+<!-- ── SAVINGS BANNER ── -->
+${(() => {
+    const est = gradeReport?.metrics?.savings_estimate;
+    if (!est) return '';
+    const low   = est.low_usd_month  || 0;
+    const high  = est.high_usd_month || 0;
+    if (high === 0) return '';
+    const total  = est.total_infra_cost_usd_month;
+    const pctLo  = est.savings_pct_of_total_low;
+    const pctHi  = est.savings_pct_of_total_high;
+    const fmt    = n => `$${Math.round(n).toLocaleString('en-US')}`;
+    const rangeStr = low === high ? `${fmt(high)}/mo` : `${fmt(low)} – ${fmt(high)}/mo`;
+    const pctStr   = (pctLo != null && total)
+        ? `${pctLo}%–${pctHi}% of ${fmt(total)}/mo total infrastructure cost`
+        : (total ? `vs. ${fmt(total)}/mo measured infrastructure cost` : '');
+    return `<section class="section" style="background:#F0FDF4;border:1.5px solid #A7F3D0;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+  <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.08em;color:#166534;font-weight:700;margin-bottom:4px;">💰 Cost Savings Estimate</div>
+  <div style="font-size:1.9rem;font-weight:900;color:#15803D;line-height:1.2;">${rangeStr}</div>
+  ${pctStr ? `<div style="font-size:0.82rem;color:#166534;margin-top:4px;">${pctStr}</div>` : ''}
+</section>`;
+})()}
 
 <!-- ── COST FINDINGS ── -->
 ${costTable()}

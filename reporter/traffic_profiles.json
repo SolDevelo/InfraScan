@@ -1,0 +1,24 @@
+{
+  "_comment": "nat_gb_per_day = total daily NAT transfer across ALL gateways (split per-gateway in scale_usage_defaults). cw_log_gb_per_month = per log-group ingestion.",
+  "small": {
+    "nat_gb_per_day":            1.0,
+    "cw_log_gb_per_month":        2.0,
+    "s3_gb_standard":            50.0,
+    "lambda_invocations_per_mo":  1000000,
+    "api_calls_per_mo":           1000000
+  },
+  "medium": {
+    "nat_gb_per_day":            10.0,
+    "cw_log_gb_per_month":       20.0,
+    "s3_gb_standard":           500.0,
+    "lambda_invocations_per_mo": 10000000,
+    "api_calls_per_mo":          10000000
+  },
+  "large": {
+    "nat_gb_per_day":            50.0,
+    "cw_log_gb_per_month":      100.0,
+    "s3_gb_standard":          5000.0,
+    "lambda_invocations_per_mo": 100000000,
+    "api_calls_per_mo":          100000000
+  }
+}

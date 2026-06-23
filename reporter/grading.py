@@ -304,7 +304,9 @@ class ReportGenerator:
                        findings: List[Dict[str, Any]],
                        resource_count: int = 0,
                        scanner_type: str = 'comprehensive',
-                       extra_recommendations: List[str] = None) -> ScanReport:
+                       extra_recommendations: List[str] = None,
+                       scan_path: str = None,
+                       traffic_profile: str = None) -> ScanReport:
         """
         Generate complete scan report.
         
@@ -396,6 +398,48 @@ class ReportGenerator:
         
         # Additional metrics (extensible)
         metrics = self._calculate_additional_metrics(findings, resource_count)
+
+        # ── Cost estimation (Phases 1 + 2) ───────────────────────────────────
+        if scan_path and 'cost' in enabled_scanners:
+            try:
+                from reporter.cost_estimator import (
+                    load_pricing, extract_all_blocks, detect_traffic_profile,
+                    scale_usage_defaults, USAGE_DEFAULTS,
+                    estimate_savings, estimate_total_cost,
+                )
+                from dataclasses import asdict as _asdict
+                pricing = load_pricing()
+                blocks  = extract_all_blocks(scan_path)
+
+                # Auto-detect traffic profile when not explicitly supplied.
+                effective_profile = traffic_profile
+                if not effective_profile or effective_profile == 'auto':
+                    effective_profile = detect_traffic_profile(blocks)
+
+                usage    = scale_usage_defaults(USAGE_DEFAULTS, effective_profile, blocks)
+                savings  = estimate_savings(cost_findings, blocks, pricing, usage)
+                rc_list  = estimate_total_cost(blocks, pricing, usage)
+
+                total_cost = sum(rc.total_usd_month for rc in rc_list)
+                savings['total_infra_cost_usd_month'] = round(total_cost, 2)
+                if total_cost > 0:
+                    # Per-block capping handles most overlap, but fleet-level rules
+                    # (e.g. COST-012) can still push the total above 100% when their
+                    # fleet before_usd exceeds individual block costs.  Final safety net:
+                    lo = min(savings['low_usd_month'],  total_cost)
+                    hi = min(savings['high_usd_month'], total_cost)
+                    savings['low_usd_month']  = round(lo, 2)
+                    savings['high_usd_month'] = round(hi, 2)
+                    savings['savings_pct_of_total_low']  = round(lo / total_cost * 100, 1)
+                    savings['savings_pct_of_total_high'] = round(hi / total_cost * 100, 1)
+
+                metrics['savings_estimate']  = savings
+                metrics['resource_costs']    = [_asdict(rc) for rc in rc_list]
+                metrics['traffic_profile']   = effective_profile
+            except Exception as _ce:
+                import logging as _logging
+                _logging.getLogger(__name__).warning('Cost estimation failed: %s', _ce)
+        # ─────────────────────────────────────────────────────────────────────
 
         single_scanner_mode = len(enabled_scanners) == 1
         
@@ -575,12 +619,7 @@ class ReportGenerator:
                 f"vulnerabilities - update container images or patch affected packages"
             )
         
-        # Cost - show only if high priority
-        if cost_grade and cost_grade.severity_breakdown.get('high', 0) > 0:
-            recommendations.append(
-                f"💰 Optimize {cost_grade.severity_breakdown['high']} high-cost "
-                f"{'issue' if cost_grade.severity_breakdown['high'] == 1 else 'issues'} for significant savings"
-            )
+        # Cost - removed: the savings panel in the UI owns this story now
         
         # Overall assessment - max 1
         available_letters = [
@@ -593,18 +632,10 @@ class ReportGenerator:
         
         if worst_grade in ['D', 'F']:
             recommendations.append(
-                "⚠️ Infrastructure needs improvement - consider professional review"
+                "⚠️ Infrastructure needs significant improvement - consider a professional review"
             )
-        elif all(
-            g.letter == 'A'
-            for g in [cost_grade, security_grade, container_grade]
-            if g
-        ) and total_findings > 0:
-            recommendations.append("✅ Excellent infrastructure health - maintain current practices")
-        elif worst_grade in ['B', 'C']:
-            recommendations.append("👍 Good foundation - address remaining issues for optimal results")
         
-        return recommendations or ["✅ No significant issues found"]
+        return recommendations or ["✅ No significant security issues found"]
     
     def _identify_top_issues(self, findings: List[Dict[str, Any]], 
                            top_n: int = 5) -> List[Dict[str, Any]]:
@@ -636,7 +667,4 @@ class ReportGenerator:
             'unique_rules_triggered': len(set(f.get('rule_id') for f in findings)),
             'files_affected': len(set(f.get('file') for f in findings if f.get('file'))),
         }
-        
-        # Calculate estimated potential savings (for cost findings)
-        # This is extensible - add more calculations as needed
-       
+        return metrics
