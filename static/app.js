@@ -911,7 +911,7 @@ function initApp() {
         return `
         <div class="scan-history-card">
             <div class="scan-history-main">
-                <a class="scan-repo-name" href="${escapeHtml(scan.repository_url)}" target="_blank" rel="noopener noreferrer">
+                <a class="scan-repo-name" href="${viewUrl}" target="_blank">
                     <span class="scan-repo-icon">📦</span>${escapeHtml(scan.repository_name)}
                 </a>
                 <div class="scan-grades">
