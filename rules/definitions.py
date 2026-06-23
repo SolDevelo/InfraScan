@@ -213,9 +213,9 @@ RULES = [
     ),
      RegexRule(
         id="COST-004",
-        name="Provisioned IOPS (io1/io2)",
+        name="EBS Provisioned IOPS (io1/io2)",
         severity="High",
-        description="Usage of Provisioned IOPS SSD (io1/io2). These are very expensive.",
+        description="EBS volume using Provisioned IOPS (io1/io2) type. These are very expensive — io2 costs 56× more than gp3 per GB plus per-IOPS charges.",
         remediation="Verify if gp3 can meet performance requirements at a lower cost.",
         estimated_savings="$50-200+/month per volume",
         pattern=r'type\s*=\s*["\'](io1|io2)["\']'
@@ -292,7 +292,7 @@ RULES = [
         remediation="Use spot instances for batch jobs, data analysis, and optional tasks. Consider aws_spot_instance_request or spot_price in launch templates.",
         estimated_savings="50-90% savings on compute (hundreds to thousands per month)",
         pattern=r'(spot_instance_request|spot_price|spot\s*=|provisioning_model|market_type)',
-        resource_pattern=r'(instance_type\s*=|aws_instance|aws_launch)'
+        resource_pattern=r'resource\s*["\']aws_instance["\']'
     ),
     RegexRule(
         id="COST-013",
