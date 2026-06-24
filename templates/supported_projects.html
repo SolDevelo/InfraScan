@@ -147,9 +147,9 @@
                     <table class="projects-table">
                         <thead>
                             <tr id="table-headers">
-                                <th>Project</th>
-                                <th style="text-align: center;">Scans (12m)</th>
-                                <th>Latest Scan</th>
+                                <th data-sort="project_name" style="cursor: pointer; user-select: none;">Project <span class="sort-indicator"></span></th>
+                                <th data-sort="scan_count" style="text-align: center; cursor: pointer; user-select: none;">Scans (12m) <span class="sort-indicator"></span></th>
+                                <th data-sort="latest_scan" style="cursor: pointer; user-select: none;">Latest Scan <span class="sort-indicator"></span></th>
                                 <!-- Grade column will be dynamically loaded if show_grades is true -->
                             </tr>
                         </thead>
@@ -159,10 +159,21 @@
                     </table>
                 </div>
 
-                <div id="projects-pagination" class="pagination-container hidden">
-                    <button id="prev-page-btn" class="pagination-btn" disabled>&larr; Previous</button>
-                    <div id="page-numbers" class="page-numbers"></div>
-                    <button id="next-page-btn" class="pagination-btn">Next &rarr;</button>
+                <div id="projects-pagination" class="pagination-container hidden" style="justify-content: space-between; flex-wrap: wrap;">
+                    <div class="page-size-selector" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="page-size-select" style="font-size: 0.85rem; color: var(--text-muted);">Rows per page:</label>
+                        <select id="page-size-select" style="background: var(--glass); border: 1px solid var(--border); color: var(--text-main); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <button id="prev-page-btn" class="pagination-btn" disabled>&larr; Previous</button>
+                        <div id="page-numbers" class="page-numbers"></div>
+                        <button id="next-page-btn" class="pagination-btn">Next &rarr;</button>
+                    </div>
                 </div>
             </div>
         </main>
@@ -347,8 +358,11 @@
             let allProjects = [];
             let filteredProjects = [];
             let currentPage = 1;
-            const pageSize = 10;
+            let pageSize = parseInt(sessionStorage.getItem('infrascan_page_size')) || 10;
             let showGrades = false;
+
+            let sortColumn = null;
+            let sortDirection = 'asc';
 
             const searchInput = document.getElementById('projects-search');
             const loadingEl = document.getElementById('projects-loading');
@@ -357,6 +371,17 @@
             const listEl = document.getElementById('projects-list');
             const tableHeaders = document.getElementById('table-headers');
             const paginationEl = document.getElementById('projects-pagination');
+            const pageSizeSelect = document.getElementById('page-size-select');
+
+            if (pageSizeSelect) {
+                pageSizeSelect.value = pageSize.toString();
+                pageSizeSelect.addEventListener('change', (e) => {
+                    pageSize = parseInt(e.target.value);
+                    sessionStorage.setItem('infrascan_page_size', pageSize);
+                    currentPage = 1;
+                    displayPage();
+                });
+            }
 
             async function loadProjects() {
                 loadingEl.classList.remove('hidden');
@@ -375,14 +400,20 @@
 
                     // Add headers conditionally
                     if (showGrades) {
-                        const thExists = Array.from(tableHeaders.querySelectorAll('th')).some(th => th.textContent === 'Grade');
+                        const thExists = Array.from(tableHeaders.querySelectorAll('th')).some(th => th.textContent.includes('Grade'));
                         if (!thExists) {
                             const th = document.createElement('th');
-                            th.textContent = 'Grade';
+                            th.innerHTML = 'Grade <span class="sort-indicator"></span>';
                             th.style.textAlign = 'center';
+                            th.style.cursor = 'pointer';
+                            th.style.userSelect = 'none';
+                            th.dataset.sort = 'grade';
                             tableHeaders.appendChild(th);
                         }
                     }
+
+                    // Bind sorting events
+                    bindSorting();
 
                     loadingEl.classList.add('hidden');
 
@@ -398,6 +429,72 @@
                     listEl.innerHTML = `<tr><td colspan="${showGrades ? 4 : 3}" style="text-align: center; color: var(--danger);">Error loading data.</td></tr>`;
                     wrapperEl.classList.remove('hidden');
                 }
+            }
+
+            function sortData() {
+                if (!sortColumn) return;
+
+                filteredProjects.sort((a, b) => {
+                    let valA = a[sortColumn];
+                    let valB = b[sortColumn];
+
+                    if (sortColumn === 'scan_count') {
+                        valA = parseInt(valA) || 0;
+                        valB = parseInt(valB) || 0;
+                    } else if (sortColumn === 'grade') {
+                        // Custom sorting for grades A -> F (A is best, F is worst)
+                        const gradeOrder = { 'A': 1, 'B': 2, 'C': 3, 'D': 4, 'F': 5, '?': 6, 'unknown': 6, null: 6 };
+                        valA = gradeOrder[valA] || 6;
+                        valB = gradeOrder[valB] || 6;
+                    } else {
+                        // project_name, latest_scan (strings)
+                        valA = (valA || '').toString().toLowerCase();
+                        valB = (valB || '').toString().toLowerCase();
+                    }
+
+                    if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            function updateSortIndicators() {
+                const headers = tableHeaders.querySelectorAll('th[data-sort]');
+                headers.forEach(th => {
+                    const indicator = th.querySelector('.sort-indicator');
+                    if (!indicator) return;
+                    
+                    if (th.dataset.sort === sortColumn) {
+                        indicator.textContent = sortDirection === 'asc' ? ' ↑' : ' ↓';
+                    } else {
+                        indicator.textContent = '';
+                    }
+                });
+            }
+
+            function bindSorting() {
+                const headers = tableHeaders.querySelectorAll('th[data-sort]');
+                headers.forEach(th => {
+                    // Remove existing listeners to prevent duplicates
+                    const newTh = th.cloneNode(true);
+                    th.parentNode.replaceChild(newTh, th);
+                    
+                    newTh.addEventListener('click', () => {
+                        const column = newTh.dataset.sort;
+                        if (sortColumn === column) {
+                            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            sortColumn = column;
+                            sortDirection = 'asc';
+                        }
+                        
+                        updateSortIndicators();
+                        sortData();
+                        currentPage = 1;
+                        displayPage();
+                    });
+                });
+                updateSortIndicators();
             }
 
             function displayPage() {
@@ -520,6 +617,9 @@
                     filteredProjects = allProjects.filter(proj => 
                         proj.project_name.toLowerCase().includes(query)
                     );
+                    if (sortColumn) {
+                        sortData();
+                    }
                     currentPage = 1;
                     displayPage();
                 });
