@@ -151,9 +151,13 @@
                     <table class="projects-table">
                         <thead>
                             <tr id="table-headers">
-                                <th data-sort="project_name" style="cursor: pointer; user-select: none;">Project <span class="sort-indicator"></span></th>
-                                <th data-sort="scan_count" style="text-align: center; cursor: pointer; user-select: none;">Scans (12m) <span class="sort-indicator"></span></th>
-                                <th data-sort="latest_scan" style="cursor: pointer; user-select: none;">Latest Scan <span class="sort-indicator"></span></th>
+                                <th data-sort="project_name" style="cursor: pointer; user-select: none;">Project <span
+                                        class="sort-indicator"></span></th>
+                                <th data-sort="scan_count"
+                                    style="text-align: center; cursor: pointer; user-select: none;">Scans (12m) <span
+                                        class="sort-indicator"></span></th>
+                                <th data-sort="latest_scan" style="cursor: pointer; user-select: none;">Latest Scan
+                                    <span class="sort-indicator"></span></th>
                                 <!-- Grade column will be dynamically loaded if show_grades is true -->
                             </tr>
                         </thead>
@@ -163,10 +167,13 @@
                     </table>
                 </div>
 
-                <div id="projects-pagination" class="pagination-container hidden" style="justify-content: space-between; flex-wrap: wrap;">
+                <div id="projects-pagination" class="pagination-container hidden"
+                    style="justify-content: space-between; flex-wrap: wrap;">
                     <div class="page-size-selector" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <label for="page-size-select" style="font-size: 0.85rem; color: var(--text-muted);">Rows per page:</label>
-                        <select id="page-size-select" style="background: var(--glass); border: 1px solid var(--border); color: var(--text-main); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                        <label for="page-size-select" style="font-size: 0.85rem; color: var(--text-muted);">Rows per
+                            page:</label>
+                        <select id="page-size-select"
+                            style="background: var(--glass); border: 1px solid var(--border); color: var(--text-main); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.85rem; cursor: pointer;">
                             <option value="10">10</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
@@ -187,7 +194,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.8 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.9 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
@@ -370,19 +377,19 @@
              * Extend this map to add new source types in the future.
              */
             const SCAN_SOURCE_LABELS = {
-                'github_actions':   'Automated CI Scan',
+                'github_actions': 'Automated CI Scan',
                 'monitored_project': 'Scheduled Scan',
-                'web_app':          'Manual Scan',
-                'cli':              'CLI Scan',
-                'webhook':          'Webhook Triggered Scan',
-                'unknown':          '',
+                'web_app': 'Manual Scan',
+                'cli': 'CLI Scan',
+                'webhook': 'Webhook Triggered Scan',
+                'unknown': '',
             };
 
             function getScanSourceLabel(source) {
                 if (!source) return '';
                 return SCAN_SOURCE_LABELS[source] ?? 'Manual Scan';
             }
-          
+
             let sortColumn = null;
             let sortDirection = 'asc';
 
@@ -485,7 +492,7 @@
                 headers.forEach(th => {
                     const indicator = th.querySelector('.sort-indicator');
                     if (!indicator) return;
-                    
+
                     if (th.dataset.sort === sortColumn) {
                         indicator.textContent = sortDirection === 'asc' ? ' ↑' : ' ↓';
                     } else {
@@ -500,7 +507,7 @@
                     // Remove existing listeners to prevent duplicates
                     const newTh = th.cloneNode(true);
                     th.parentNode.replaceChild(newTh, th);
-                    
+
                     newTh.addEventListener('click', () => {
                         const column = newTh.dataset.sort;
                         if (sortColumn === column) {
@@ -509,7 +516,7 @@
                             sortColumn = column;
                             sortDirection = 'asc';
                         }
-                        
+
                         updateSortIndicators();
                         sortData();
                         currentPage = 1;
@@ -560,7 +567,7 @@
 
                     const sourceLabel = getScanSourceLabel(proj.latest_scan_source);
                     const sourceBadge = sourceLabel
-                    ? `<span style="
+                        ? `<span style="
                         display:inline-flex;
                         align-items:center;
                         gap:4px;
@@ -578,7 +585,7 @@
                         ${sourceLabel === 'Automated CI Scan' ? '⚡' : '🖱️'}
                         ${escapeHtml(sourceLabel)}
                     </span>`
-                    : '';
+                        : '';
                     const ownerUrl = repoUrl ? repoUrl.split('/').slice(0, 4).join('/') : '#';
 
                     return `
@@ -673,7 +680,7 @@
             if (searchInput) {
                 searchInput.addEventListener('input', () => {
                     const query = searchInput.value.toLowerCase().trim();
-                    filteredProjects = allProjects.filter(proj => 
+                    filteredProjects = allProjects.filter(proj =>
                         proj.project_name.toLowerCase().includes(query)
                     );
                     if (sortColumn) {

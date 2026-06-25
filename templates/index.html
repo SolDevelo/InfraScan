@@ -15,15 +15,19 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ site_domain }}/">
     <meta property="og:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
-    <meta property="og:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
-    <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="og:description"
+        content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    <meta property="og:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary">
     <meta property="twitter:url" content="{{ site_domain }}/">
     <meta property="twitter:title" content="InfraScan - Free Infrastructure as Code Security Scanner">
-    <meta property="twitter:description" content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
-    <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="twitter:description"
+        content="Scan Infrastructure as Code for security vulnerabilities and cost optimization. Supports Terraform, CloudFormation, Kubernetes, and more.">
+    <meta property="twitter:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Canonical -->
     <link rel="canonical" href="{{ site_domain }}/">
@@ -229,13 +233,25 @@
                 <div class="release-notes-container">
                     <div class="release-entry">
                         <div class="release-header">
+                            <span class="version">v1.0.9</span>
+                            <span class="date">June 25, 2026</span>
+                        </div>
+                        <ul class="release-list">
+                            <li><strong>Cloud Cost Estimation</strong>: Implemented cost estimation and added 8 new cost rules.</li>
+                            <li><strong>GitHub Integrations</strong>: Added support for GitHub Actions scans in Supported Projects and automatic fetching of the default branch for GitHub repositories.</li>
+                            <li><strong>UX/UI Improvements</strong>: Added column sorting and configurable page size to projects table, simplified Markdown rendering in PDF report, and enhanced table layout.</li>
+                            <li><strong>Action Updates</strong>: Revised GitHub action name and description.</li>
+                        </ul>
+                    </div>
+                    <div class="release-entry">
+                        <div class="release-header">
                             <span class="version">v1.0.8</span>
                             <span class="date">June 12, 2026</span>
                         </div>
                         <ul class="release-list">
                             <li><strong>UX/UI</strong>: Add support for monitoring of InfraScan projects.</li>
                         </ul>
-                    </div>                   
+                    </div>
                     <div class="release-entry">
                         <div class="release-header">
                             <span class="version">v1.0.7</span>
@@ -419,7 +435,7 @@
     run: |
       docker run --rm \
         -v ${{ github.workspace }}:/scan \
-        soldevelo/infrascan:v1.0.8 \
+        soldevelo/infrascan:v1.0.9 \
         --fail-on high_critical">
                                         <span>Copy</span>
                                     </button>
@@ -430,7 +446,7 @@
     <span class="keyword">run:</span> |
       docker run --rm \
         -v <span class="string">${{ github.workspace }}</span>:/scan \
-        soldevelo/infrascan<span class="variable">:v1.0.8</span> \
+        soldevelo/infrascan<span class="variable">:v1.0.9</span> \
         --fail-on <span class="string">high_critical</span></code></pre>
                             </div>
                             {% endraw %}
@@ -545,7 +561,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.8 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.9 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
