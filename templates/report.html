@@ -15,15 +15,19 @@
     <meta property="og:type" content="article">
     <meta property="og:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
     <meta property="og:title" content="InfraScan Report for {{ metadata.repository_name }}">
-    <meta property="og:description" content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
-    <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="og:description"
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
+    <meta property="og:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary">
     <meta property="twitter:url" content="{{ site_domain }}/report/{{ current_scan_id }}">
     <meta property="twitter:title" content="InfraScan Report for {{ metadata.repository_name }}">
-    <meta property="twitter:description" content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
-    <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="twitter:description"
+        content="Infrastructure security and cost optimization report for {{ metadata.repository_name }}.">
+    <meta property="twitter:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Canonical -->
     <link rel="canonical" href="{{ site_domain }}/report/{{ current_scan_id }}">
@@ -383,7 +387,7 @@
     run: |
       docker run --rm \
         -v ${{ github.workspace }}:/scan \
-        soldevelo/infrascan:v1.0.8 \
+        soldevelo/infrascan:v1.0.9 \
         --fail-on high_critical">
                                         <span>Copy</span>
                                     </button>
@@ -394,7 +398,7 @@
     <span class="keyword">run:</span> |
       docker run --rm \
         -v <span class="string">${{ github.workspace }}</span>:/scan \
-        soldevelo/infrascan<span class="variable">:v1.0.8</span> \
+        soldevelo/infrascan<span class="variable">:v1.0.9</span> \
         --fail-on <span class="string">high_critical</span></code></pre>
                             </div>
                             {% endraw %}
@@ -548,7 +552,7 @@
                 <button id="open-feedback-btn" class="text-link-btn">Leave Feedback</button>
             </p>
 
-            <p>InfraScan v1.0.8 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+            <p>InfraScan v1.0.9 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
             <p style="font-size: 0.9rem; opacity: 0.8; margin-top:4px;">This tool is <a
                     href="https://github.com/SolDevelo/InfraScan" target="_blank"><strong>Open Source</strong></a> –
                 contributions are welcome!
