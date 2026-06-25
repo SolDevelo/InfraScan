@@ -85,7 +85,7 @@ CONTAINER_SCANNER=docker-scout
 ### 🔍 Scanner Options
 
 InfraScan offers several scanning modes:
-- **regex** (Fast): Quick cost optimization scan (19 regex rules)
+- **regex** (Fast): Quick cost optimization scan (27 regex rules)
 - **containers**: Container vulnerability scanning (Docker Scout or Grype)
 - **checkov**: IaC Security checks only
 - **comprehensive**: All scanners combined (Cost + Security + Containers)
@@ -160,6 +160,7 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
   - **Explicit framework**: Scan only that specific framework (terraform, kubernetes, etc.).
 - `-f`, `--include`: Select specific files or directories to scan. Can be used multiple times (e.g., `-f dir1 -f file2.tf`). This is useful in large repositories to avoid scanning redundant or test deployments.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
+- `--traffic-profile`: `auto`, `small`, `medium`, `large` (default: `auto`). Controls usage-based cost assumptions for NAT transfer, CloudWatch log ingestion, Lambda invocations, S3 storage, and API calls. `auto` detects the profile from infra size (EC2/NAT/Lambda/RDS counts). Profiles are defined in `reporter/traffic_profiles.json` and can be edited without code changes.
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
 
 #### Selective Scanning (Partial Scans)
@@ -286,7 +287,81 @@ InfraScan supports advanced container scanning features:
   - **Other Registries**: Pre-authenticate manually using `docker login` before running InfraScan, and it will use your existing local Docker credentials.
 
 
-## 📊 Grading System
+## � Cost Estimation
+
+InfraScan calculates actual dollar savings for every finding — not just static text like "$10-50/month", but a computed before/after cost derived from real AWS pricing.
+
+### How it works
+
+1. **Pricing table** (`reporter/pricing_table.json`) — static AWS `us-east-1` prices for EC2, RDS, EBS, NAT Gateway, Lambda, API Gateway, CloudWatch, S3, DynamoDB, SQS, Fargate, Kinesis, and more. Updated on each InfraScan release.
+2. **Per-rule savings models** — every COST-* rule has a `savings_fn` that reads the actual HCL config (instance type, volume size, RCU/WCU, etc.) and computes a precise before/after cost.
+3. **Per-resource total cost** — InfraScan also computes the monthly cost of every resource found, giving a total infrastructure cost estimate and a savings-as-%-of-total headline.
+4. **Traffic profile** — usage-based resources (NAT transfer, Lambda invocations, CW log ingestion) use configurable defaults from `reporter/usage_defaults.json`, scaled by the active traffic profile.
+
+### Traffic profiles
+
+| Profile | NAT transfer/day | CW log ingestion/mo | Lambda invocations/function/mo | S3 storage |
+|---|---|---|---|---|
+| `small` (auto-detected default for small infra) | 10 GB | 5 GB | 1M | 50 GB |
+| `medium` | 100 GB | 50 GB | 10M | 500 GB |
+| `large` | 1 TB | 500 GB | 100M | 5,000 GB |
+
+The `auto` mode (default) **detects the profile automatically** from the scanned repo: it scores the infra by counting EC2 instances, NAT gateways, load balancers, RDS instances, Lambda functions, and ECS tasks. Large instance types (8xlarge+) add extra weight. No manual flag needed in most cases.
+
+```bash
+# Let InfraScan auto-detect the profile (recommended)
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner regex
+
+# Force a profile when auto-detection doesn't match your actual traffic
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner regex --traffic-profile medium
+```
+
+### Customising defaults
+
+Edit `reporter/usage_defaults.json` or `reporter/traffic_profiles.json` directly — no Python changes needed. This is useful when you know your actual traffic numbers:
+
+```json
+// reporter/usage_defaults.json — Tier 1 baseline assumptions
+{
+  "nat_gb_per_day": 10.0,
+  "lambda_invocations_per_mo": 1000000,
+  ...
+}
+```
+
+### Confidence levels
+
+- 🟢 **high** — derived entirely from config (instance type, volume size, Multi-AZ flag)
+- 🟡 **medium** — requires one usage assumption (invocation count, transfer volume)
+- ⚪ **low** — governance rules with no direct cost delta, or highly variable resources
+
+### PR comments
+
+When running in GitHub Actions with `GITHUB_TOKEN` set, InfraScan posts a comment on the PR **only when there are actual cost savings to act on** (i.e., `low_usd_month > 0`). The comment also includes the top 3 critical/high security findings so reviewers get a full health check in one place:
+
+> **🔍 InfraScan Report**
+>
+> | Metric | Value |
+> |---|---|
+> | Estimated monthly infrastructure cost | **$6,941** |
+> | Potential savings (low) | **$4,999/mo** (72.0%) |
+> | Potential savings (high) | **$5,469/mo** (78.8%) |
+> | Overall grade | **C (71.7%)** |
+>
+> **💰 Top cost savings opportunities**
+> | Rule | File | Saving/month |
+> |---|---|---|
+> | COST-005 | main.tf:46 | $1,415.25 |
+> | COST-027 | main.tf:46 | $270.00 |
+> | COST-012 | main.tf:11 | $587.65–$1,057.77 |
+>
+> **🔒 Top security issues (critical/high)**
+> | Severity | Rule | Location |
+> |---|---|---|
+> | 🔴 CRITICAL | CKV_AWS_8 | ec2.tf:21 |
+> | 🟠 HIGH | CKV_AWS_3 | s3.tf:14 |
+
+## �📊 Grading System
 
 InfraScan provides four separate grades:
 
@@ -329,15 +404,34 @@ The system is designed to be extensible for future enhancements like historical 
 
 ## 📋 Detection Rules
 
-**19 Cost Optimization Rules** including:
-- COST-001: Old generation instances (t2, m3, c4, r3)
-- COST-002: Over-provisioned large instances
+**27 Cost Optimization Rules** including:
+- COST-001: Old generation EC2 instances (t2, m3, c4, r3)
+- COST-002: Over-provisioned large instances (8xlarge+)
+- COST-003: Unencrypted EBS volumes
 - COST-004: Expensive Provisioned IOPS (io1/io2)
 - COST-005: Expensive NAT Gateways
+- COST-006: Unassociated Elastic IPs
+- COST-007: DynamoDB Provisioned billing mode
+- COST-008: EC2 detailed monitoring enabled
 - COST-009: Old generation storage (gp2 vs gp3)
 - COST-010: Missing S3 lifecycle policies
 - COST-011: Missing AWS budgets
 - COST-012: Missing Spot instance usage
+- COST-013: Expensive premium storage (Premium_LRS)
+- COST-014: Unnecessary Route53 health checks
+- COST-015: CloudWatch log groups without retention period
+- COST-016: Oversized root EBS volumes
+- COST-017: Missing Cost and Usage Report
+- COST-018: High DynamoDB provisioned capacity
+- COST-019: Load balancers on single-instance deployments
+- COST-020: Old generation RDS instance classes (db.t2, db.m4, db.r3, db.r4)
+- COST-021: Lambda over-provisioned memory (≥3008 MB)
+- COST-022: API Gateway REST API instead of HTTP API (3.5× cheaper)
+- COST-023: SQS queues at maximum 14-day message retention
+- COST-024: RDS Multi-AZ enabled in non-production environments
+- COST-025: ECS task definitions without CPU/memory limits
+- COST-026: Multiple NAT Gateways (potential redundancy)
+- COST-027: Missing VPC Endpoints for S3/DynamoDB (NAT data-processing charges)
 - Plus Checkov's 100+ security/compliance checks
 
 ## 🏅 Badge

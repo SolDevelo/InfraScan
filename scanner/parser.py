@@ -537,7 +537,7 @@ def scan_directory_level(directory, file_paths, rules):
     Returns:
         List of findings
     """
-    from rules.definitions import InverseRegexRule
+    from rules.definitions import InverseRegexRule, CompoundInverseRule
     findings = []
     
     # Read all files into a dictionary to keep track of content per file
@@ -589,5 +589,37 @@ def scan_directory_level(directory, file_paths, rules):
                                         "match_content": line.strip()
                                     })
                                     break
-    
+        elif isinstance(rule, CompoundInverseRule):
+            # All required_patterns must be present AND absent_pattern must be missing.
+            absent_found = bool(re.search(rule.absent_pattern, all_content, re.MULTILINE | re.DOTALL))
+            if absent_found:
+                continue
+            all_required = all(
+                re.search(p, all_content, re.MULTILINE | re.DOTALL)
+                for p in rule.required_patterns
+            )
+            if not all_required:
+                continue
+            # Conditions met — attach the finding to the first file matching any required pattern.
+            for filepath, content in file_contents.items():
+                for p in rule.required_patterns:
+                    resource_match = re.search(p, content, re.MULTILINE | re.DOTALL)
+                    if resource_match:
+                        for i, line in enumerate(content.splitlines()):
+                            if re.search(p, line):
+                                findings.append({
+                                    "file": filepath,
+                                    "rule_id": rule.id,
+                                    "rule_name": rule.name,
+                                    "severity": rule.severity,
+                                    "description": rule.description,
+                                    "remediation": rule.remediation,
+                                    "estimated_savings": rule.estimated_savings,
+                                    "line": i + 1,
+                                    "match_content": line.strip()
+                                })
+                                break
+                        break
+                break
+
     return findings

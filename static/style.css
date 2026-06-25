@@ -2226,6 +2226,12 @@ textarea:focus {
     font-size: 0.9rem;
 }
 
+.grade-savings-inline {
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+}
+
 .grade-detail-label {
     color: var(--text-muted);
 }
@@ -2272,11 +2278,180 @@ textarea:focus {
     color: #93c5fd;
 }
 
+/* ── Savings Card ── */
+.savings-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.06));
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.25rem 0;
+}
+
+.savings-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.savings-icon { font-size: 1.4rem; }
+
+.savings-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main);
+    flex: 1;
+}
+
+.savings-badge {
+    font-size: 0.75rem;
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.savings-amount {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #10b981;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+
+.savings-unit {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #6ee7b7;
+    margin-left: 4px;
+}
+
+.savings-pct-line {
+    margin-top: 0.35rem;
+    font-size: 0.87rem;
+    color: var(--text-secondary);
+}
+
+.savings-pct { color: #fbbf24; font-weight: 600; }
+
+.savings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    table-layout: fixed;
+}
+
+.savings-table th {
+    text-align: left;
+    color: var(--text-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 0.4rem 0.5rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.savings-table td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: top;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 0;
+}
+
+.savings-table tr:last-child td { border-bottom: none; }
+/* ───────────────── */
+
 .recommendations-section {
     background: rgba(99, 102, 241, 0.1);
     border: 1px solid rgba(99, 102, 241, 0.3);
     border-radius: 8px;
     padding: 1.5rem;
+}
+
+/* Two-column insights row: recommendations (left) + savings panel (right) */
+.insights-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.insights-row.has-savings {
+    grid-template-columns: 1fr 1fr;
+}
+
+/* Savings panel */
+.savings-panel {
+    background: rgba(16, 185, 129, 0.07);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.savings-panel-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text-main);
+}
+
+.savings-panel-amount {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--success);
+    line-height: 1.2;
+}
+
+.savings-panel-unit {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 2px;
+}
+
+.savings-panel-pct {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.savings-expand {
+    margin-top: 0.4rem;
+}
+
+.savings-expand summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 0.3rem 0;
+    user-select: none;
+    list-style: none;       /* Firefox */
+}
+
+.savings-expand summary::-webkit-details-marker {
+    display: none;          /* Chrome / Safari / Edge */
+}
+
+.savings-expand summary::before {
+    content: '▶ ';
+    font-size: 0.7em;
+    vertical-align: middle;
+}
+
+.savings-expand[open] summary::before {
+    content: '▼ ';
+}
+
+.savings-expand summary:hover {
+    color: var(--text-main);
 }
 
 .recommendations-title {
@@ -3132,6 +3307,18 @@ textarea:focus {
     .severity-tag.low-tag      { color: #64748b !important; }
 
     /* ---- Recommendations ---- */
+    .insights-row.has-savings {
+        grid-template-columns: 1fr !important;
+    }
+
+    .savings-panel {
+        background: #f0fdf4 !important;
+        border: 1px solid #86efac !important;
+    }
+
+    .savings-panel-amount { color: #15803d !important; }
+    .savings-panel-pct    { color: #374151 !important; }
+
     .recommendations-section {
         background: #f1f5f9 !important;
         border: 1px solid #cbd5e1 !important;

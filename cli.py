@@ -36,6 +36,55 @@ def send_slack_notification(message: str) -> None:
     except Exception as e:
         print(f"Slack notification error: {e}", file=sys.stderr)
 
+def post_pr_comment(body: str) -> None:
+    """Post (or update) a PR comment via the GitHub REST API."""
+    token      = os.getenv('GITHUB_TOKEN', '').strip()
+    event_path = os.getenv('GITHUB_EVENT_PATH', '').strip()
+    repo       = os.getenv('GITHUB_REPOSITORY', '').strip()
+    if not (token and event_path and repo):
+        return
+    try:
+        with open(event_path, 'r', encoding='utf-8') as f:
+            event = json.load(f)
+        pr_number = (
+            event.get('pull_request', {}).get('number')
+            or event.get('issue', {}).get('number')
+        )
+        if not pr_number:
+            return
+        marker   = '<!-- infrascan-cost-report -->'
+        full_body = f"{marker}\n{body}"
+        api_url  = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
+        headers  = {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        }
+        # Check for an existing comment with the marker to update rather than post duplicate.
+        existing_resp = requests.get(api_url, headers=headers, timeout=10)
+        if existing_resp.status_code == 200:
+            for comment in existing_resp.json():
+                if marker in comment.get('body', ''):
+                    patch_url = comment['url']
+                    requests.patch(patch_url, json={'body': full_body}, headers=headers, timeout=10)
+                    return
+        requests.post(api_url, json={'body': full_body}, headers=headers, timeout=10)
+    except Exception as e:
+        print(f"PR comment error: {e}", file=sys.stderr)
+
+
+def write_gh_step_summary(content: str) -> None:
+    """Append *content* to the GitHub Actions step summary file."""
+    summary_path = os.getenv('GITHUB_STEP_SUMMARY', '').strip()
+    if not summary_path:
+        return
+    try:
+        with open(summary_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"Step summary write error: {e}", file=sys.stderr)
+
+
 def build_gh_actions_context() -> dict:
     """Extract GitHub Actions context from environment variables."""
     repo = os.getenv('GITHUB_REPOSITORY', '')
@@ -116,7 +165,16 @@ def setup_args():
         version=f"InfraScan v{__version__}",
         help="Show version information and exit"
     )
-    
+
+    parser.add_argument(
+        "--traffic-profile",
+        choices=["auto", "small", "medium", "large"],
+        default="auto",
+        dest="traffic_profile",
+        help="Usage-based cost scaling profile (default: auto — detected from infra size). "
+             "small=10GB/d NAT, medium=100GB/d, large=1TB/d."
+    )
+
     return parser.parse_args()
 
 def print_text_report(report_dict, resource_count, scanner_type):
@@ -234,6 +292,56 @@ def print_text_report(report_dict, resource_count, scanner_type):
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{'=' * 60}\n")
 
 
+def _print_savings_block(report_dict: dict) -> None:
+    """Print the '💰 Estimated Savings' block after the grading summary."""
+    init(autoreset=True)
+    est = (report_dict.get('metrics') or {}).get('savings_estimate')
+    if not est:
+        return
+
+    low   = est.get('low_usd_month', 0)
+    high  = est.get('high_usd_month', 0)
+    total = est.get('total_infra_cost_usd_month')
+    pct_lo_det = est.get('savings_pct_of_detectable_low')
+    pct_hi_det = est.get('savings_pct_of_detectable_high')
+    pct_lo_tot = est.get('savings_pct_of_total_low')
+    pct_hi_tot = est.get('savings_pct_of_total_high')
+    profile    = (report_dict.get('metrics') or {}).get('traffic_profile', 'small')
+    provider   = est.get('cost_provider', 'internal')
+
+    print(f"\n{Fore.GREEN}{Style.BRIGHT}💰 ESTIMATED SAVINGS:")
+    print(f"{'-' * 30}")
+
+    if low == high:
+        print(f"  Potential saving: {Fore.GREEN}{Style.BRIGHT}${low:,.2f}/month{Style.RESET_ALL}")
+    else:
+        print(f"  Potential saving: {Fore.GREEN}{Style.BRIGHT}${low:,.2f} – ${high:,.2f}/month{Style.RESET_ALL}")
+
+    if pct_lo_tot is not None and pct_hi_tot is not None:
+        print(f"  vs total infra cost: {Fore.YELLOW}{pct_lo_tot}% – {pct_hi_tot}%{Style.RESET_ALL}", end='')
+        if total:
+            print(f"  (total: ${total:,.0f}/mo)", end='')
+        print()
+    elif pct_lo_det is not None:
+        print(f"  vs detectable resources: {Fore.YELLOW}{pct_lo_det}% – {pct_hi_det}%{Style.RESET_ALL}")
+
+    print(f"  Traffic profile: {profile} | Pricing source: {provider}")
+
+    per = sorted(
+        est.get('per_finding', []),
+        key=lambda f: f.get('saving_high', 0), reverse=True
+    )[:3]
+    if per:
+        print(f"  {Style.BRIGHT}Top opportunities:{Style.RESET_ALL}")
+        for pf in per:
+            s_lo = pf.get('saving_low', 0)
+            s_hi = pf.get('saving_high', 0)
+            saving_str = f"${s_lo:,.2f}" if s_lo == s_hi else f"${s_lo:,.2f}–${s_hi:,.2f}"
+            import os as _os
+            fname = _os.path.basename(pf.get('file', ''))
+            print(f"    • {pf.get('rule_id', '')}: {saving_str}/mo  ({fname}:{pf.get('line', '')})")
+
+
 def should_fail(args, report_dict, results):
     if not args.fail_on:
         return False
@@ -308,7 +416,9 @@ def main():
             findings=results,
             resource_count=resource_count,
             scanner_type=args.scanner,
-            extra_recommendations=recommendations
+            extra_recommendations=recommendations,
+            scan_path=target_path,
+            traffic_profile=getattr(args, 'traffic_profile', 'auto'),
         )
         
         report_dict = report.to_dict()
@@ -350,8 +460,41 @@ def main():
             # If format is text OR if output is saved to record/html/json
             # always show the text summary in the console
             print_text_report(report_dict, resource_count, args.scanner)
+            _print_savings_block(report_dict)
             if args.out:
                  print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
+
+        # Phase 3 — GitHub Actions step summary
+        savings_est = (report_dict.get('metrics') or {}).get('savings_estimate')
+        overall_g   = report_dict.get('overall', {})
+        if savings_est and os.getenv('GITHUB_STEP_SUMMARY'):
+            from reporter.cost_estimator import format_savings_summary_md
+            summary_md = format_savings_summary_md(
+                savings_est,
+                overall_grade=overall_g.get('letter'),
+                overall_pct=overall_g.get('percentage'),
+                security_findings=report_dict.get('findings', {}).get('security', []),
+                container_findings=report_dict.get('findings', {}).get('container', []),
+            )
+            write_gh_step_summary(summary_md)
+
+        # Phase 3 — PR comment: only when there are actual savings to act on
+        has_savings = savings_est and savings_est.get('low_usd_month', 0) > 0
+        has_security = bool(
+            report_dict.get('findings', {}).get('security') or
+            report_dict.get('findings', {}).get('container')
+        )
+        if (has_savings or has_security) and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
+            from reporter.cost_estimator import format_savings_summary_md
+            comment_md = format_savings_summary_md(
+                savings_est if has_savings else {},
+                overall_grade=overall_g.get('letter'),
+                overall_pct=overall_g.get('percentage'),
+                security_findings=report_dict.get('findings', {}).get('security', []),
+                container_findings=report_dict.get('findings', {}).get('container', []),
+            )
+            if comment_md:
+                post_pr_comment(comment_md)
             
         # Send Slack notification if configured
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
@@ -386,6 +529,18 @@ def main():
                 lines.append(f"Triggered by: {ctx['actor']}")
             lines.append(f"Grades: {grades_summary}")
             lines.append(f"Findings: {total_findings} | Scanner: {args.scanner}")
+
+            # Cost savings summary (if available)
+            slack_savings = (report_dict.get('metrics') or {}).get('savings_estimate')
+            if slack_savings:
+                s_lo  = slack_savings.get('low_usd_month', 0)
+                s_hi  = slack_savings.get('high_usd_month', 0)
+                total_c = slack_savings.get('total_infra_cost_usd_month')
+                if total_c:
+                    lines.append(f"Infra cost: ~${total_c:,.0f}/mo | Potential savings: ${s_lo:,.0f}–${s_hi:,.0f}/mo")
+                else:
+                    lines.append(f"Potential savings: ${s_lo:,.0f}–${s_hi:,.0f}/mo")
+
             if ctx['run_url']:
                 lines.append(f"<{ctx['run_url']}|View run>")
 
