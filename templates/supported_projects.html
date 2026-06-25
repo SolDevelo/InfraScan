@@ -17,7 +17,8 @@
     <meta property="og:title" content="InfraScan - Supported Projects Dashboard">
     <meta property="og:description"
         content="Track open source and enterprise adoption of InfraScan. Audit grades, scans count, and latest activity dashboard.">
-    <meta property="og:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="og:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary">
@@ -25,7 +26,8 @@
     <meta property="twitter:title" content="InfraScan - Supported Projects Dashboard">
     <meta property="twitter:description"
         content="Track open source and enterprise adoption of InfraScan. Audit grades, scans count, and latest activity dashboard.">
-    <meta property="twitter:image" content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
+    <meta property="twitter:image"
+        content="{{ site_domain }}{{ url_for('static', filename='images/logo_transparent.png') }}">
 
     <!-- Canonical -->
     <link rel="canonical" href="{{ site_domain }}/supported-projects">
@@ -124,12 +126,14 @@
             <div class="tab-content active" id="supported-projects-tab">
                 <div class="supported-projects-header">
                     <div>
-                        <h2 class="recent-scans-title">💼 Supported Projects</h2>
-                        <p class="recent-scans-subtitle">Infrastructure projects actively audited by InfraScan in the last 12 months.</p>
+                        <h2 class="recent-scans-title">Supported Projects</h2>
+                        <p class="recent-scans-subtitle">Infrastructure projects actively audited by InfraScan in the
+                            last 12 months.</p>
                     </div>
                     <div class="projects-search-container">
                         <span class="projects-search-icon">🔍</span>
-                        <input type="text" id="projects-search" class="projects-search-input" placeholder="Search projects...">
+                        <input type="text" id="projects-search" class="projects-search-input"
+                            placeholder="Search projects...">
                     </div>
                 </div>
 
@@ -361,6 +365,24 @@
             let pageSize = parseInt(sessionStorage.getItem('infrascan_page_size')) || 10;
             let showGrades = false;
 
+            /**
+             * Maps internal scan_source values to user-friendly display labels.
+             * Extend this map to add new source types in the future.
+             */
+            const SCAN_SOURCE_LABELS = {
+                'github_actions':   'Automated CI Scan',
+                'monitored_project': 'Scheduled Scan',
+                'web_app':          'Manual Scan',
+                'cli':              'CLI Scan',
+                'webhook':          'Webhook Triggered Scan',
+                'unknown':          '',
+            };
+
+            function getScanSourceLabel(source) {
+                if (!source) return '';
+                return SCAN_SOURCE_LABELS[source] ?? 'Manual Scan';
+            }
+          
             let sortColumn = null;
             let sortDirection = 'asc';
 
@@ -426,7 +448,7 @@
                     displayPage();
                 } catch (e) {
                     loadingEl.classList.add('hidden');
-                    listEl.innerHTML = `<tr><td colspan="${showGrades ? 4 : 3}" style="text-align: center; color: var(--danger);">Error loading data.</td></tr>`;
+                    listEl.innerHTML = `<tr><td colspan="${showGrades ? 5 : 4}" style="text-align: center; color: var(--danger);">Error loading data.</td></tr>`;
                     wrapperEl.classList.remove('hidden');
                 }
             }
@@ -515,32 +537,69 @@
 
                 listEl.innerHTML = pageProjects.map(proj => {
                     const repoUrl = proj.repository_url || '#';
-                    const githubUrl = repoUrl;
+
+                    // Parse owner and repo name from repository_url
+                    let ownerDisplay = '';
+                    let repoDisplay = proj.project_name || repoUrl;
+                    try {
+                        const urlObj = new URL(repoUrl);
+                        const parts = urlObj.pathname.replace(/^\//, '').split('/');
+                        if (parts.length >= 2) {
+                            ownerDisplay = parts[0];
+                            repoDisplay = parts[1].replace(/-/g, ' ').replace(/_/g, ' ');
+                            // Title-case each word
+                            repoDisplay = repoDisplay.replace(/\b\w/g, c => c.toUpperCase());
+                        }
+                    } catch (e) { }
 
                     let gradeHtml = '';
                     if (showGrades) {
-                        const gradeClass = (proj.grade && ['A','B','C','D','F'].includes(proj.grade)) ? proj.grade : 'unknown';
+                        const gradeClass = (proj.grade && ['A', 'B', 'C', 'D', 'F'].includes(proj.grade)) ? proj.grade : 'unknown';
                         gradeHtml = `<td style="text-align: center;"><span class="grade-badge-cell ${gradeClass}">${proj.grade || '?'}</span></td>`;
                     }
 
-                    const sourceLabel = proj.latest_scan_source === 'github_actions'
-                        ? 'GitHub Actions'
-                        : proj.latest_scan_source === 'web_app'
-                            ? 'Web App'
-                            : proj.latest_scan_source === 'unknown'
-                                ? ''
-                                : 'Other';
-                    const sourceBadge = sourceLabel ? `<span style="display:inline-block;margin-left:0.5rem;padding:2px 6px;border-radius:999px;background:#e2e8f0;color:#0f172a;font-size:0.75rem;vertical-align:middle;">${escapeHtml(sourceLabel)}</span>` : '';
+                    const sourceLabel = getScanSourceLabel(proj.latest_scan_source);
+                    const sourceBadge = sourceLabel
+                    ? `<span style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:4px;
+                        margin-left:0;
+                        padding:3px 8px;
+                        border-radius:999px;
+                        font-size:0.72rem;
+                        font-weight:500;
+                        line-height:1;
+                        background:rgba(99,102,241,0.12);
+                        color:#4f46e5;
+                        border:1px solid rgba(99,102,241,0.25);
+                        white-space:nowrap;
+                    ">
+                        ${sourceLabel === 'Automated CI Scan' ? '⚡' : '🖱️'}
+                        ${escapeHtml(sourceLabel)}
+                    </span>`
+                    : '';
+                    const ownerUrl = repoUrl ? repoUrl.split('/').slice(0, 4).join('/') : '#';
 
                     return `
                         <tr>
                             <td>
+                                <div class="project-name-cell" style="white-space:nowrap;">
+                                    <a href="${ownerUrl}" target="_blank" class="project-link" style="font-size:0.85rem;opacity:0.75;">${escapeHtml(ownerDisplay)}</a>
+                                </div>
+                            </td>
+                            <td>
                                 <div class="project-name-cell">
-                                    📁 <a href="${githubUrl}" target="_blank" class="project-link">${escapeHtml(proj.project_name)}</a>
+                                    <a href="${repoUrl}" target="_blank" class="project-link">${escapeHtml(repoDisplay)}</a>
                                 </div>
                             </td>
                             <td style="text-align: center; font-weight: 600;">${proj.scan_count}</td>
-                            <td>${proj.latest_scan}${sourceBadge}</td>
+                            <td>
+                                <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+                                    <span>${proj.latest_scan}</span>
+                                    ${sourceBadge}
+                                </div>
+                            </td>
                             ${gradeHtml}
                         </tr>
                     `;
