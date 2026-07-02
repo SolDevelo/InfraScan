@@ -9,7 +9,7 @@ class Rule:
         self.remediation = remediation
         self.estimated_savings = estimated_savings
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         raise NotImplementedError
 
 class RegexRule(Rule):
@@ -17,7 +17,7 @@ class RegexRule(Rule):
         super().__init__(id, name, severity, description, remediation, estimated_savings)
         self.pattern = pattern
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         matches = []
         for i, line in enumerate(content.splitlines()):
             if line.lstrip().startswith(('#', '//')):
@@ -36,7 +36,7 @@ class InverseRegexRule(Rule):
         self.pattern = pattern
         self.resource_pattern = resource_pattern
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         matches = []
         if self.resource_pattern:
             resource_found = re.search(self.resource_pattern, content, re.MULTILINE | re.DOTALL)
@@ -61,7 +61,7 @@ class CompoundInverseRule(Rule):
         self.absent_pattern = absent_pattern
         self.required_patterns = required_patterns  # all must be present in all_content
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         return []  # Only evaluated at directory level
 
 
@@ -103,7 +103,7 @@ class RdsMultiAzNonProdRule(BlockAnalysisRule):
     """Flag RDS instances with multi_az=true whose resource name suggests a non-production environment."""
     _NON_PROD = re.compile(r'(dev|staging|stage|test|qa|nonprod|non.prod)', re.IGNORECASE)
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         matches = []
         for block in self._extract_blocks(content, r'aws_db_instance'):
             if self._NON_PROD.search(block['name']):
@@ -115,7 +115,7 @@ class RdsMultiAzNonProdRule(BlockAnalysisRule):
 class EcsNoCpuMemoryRule(BlockAnalysisRule):
     """Flag ECS task definitions that do not specify a top-level cpu or memory value."""
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         matches = []
         for block in self._extract_blocks(content, r'aws_ecs_task_definition'):
             if not re.search(r'^\s*cpu\s*=', block['content'], re.MULTILINE):
@@ -126,7 +126,7 @@ class EcsNoCpuMemoryRule(BlockAnalysisRule):
 class CwLogGroupNoRetentionRule(BlockAnalysisRule):
     """Flag CloudWatch log groups that do not set retention_in_days."""
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         matches = []
         for block in self._extract_blocks(content, r'aws_cloudwatch_log_group'):
             if not re.search(r'retention_in_days\s*=', block['content']):
@@ -137,7 +137,7 @@ class CwLogGroupNoRetentionRule(BlockAnalysisRule):
 class MultipleNatGatewayRule(Rule):
     """Flag when more than one aws_nat_gateway is defined in the same file (likely redundancy)."""
 
-    def check(self, content):
+    def check(self, content, filepath=None):
         nat_lines = [
             (i + 1, line.strip())
             for i, line in enumerate(content.splitlines())
@@ -149,7 +149,22 @@ class MultipleNatGatewayRule(Rule):
 
 
 class UnassociatedEipRule(Rule):
-    def check(self, content):
+    def check(self, content, filepath=None):
+        import os
+        # Build a combined view of all .tf files in the same directory
+        # so cross-file references (e.g. EIP in vpc/main.tf, NAT GW in vpc/outputs.tf)
+        # are visible to the association check.
+        module_content = content
+        if filepath:
+            try:
+                dir_path = os.path.dirname(filepath)
+                for fname in os.listdir(dir_path):
+                    if fname.endswith('.tf') and os.path.join(dir_path, fname) != filepath:
+                        with open(os.path.join(dir_path, fname), 'r', encoding='utf-8') as f:
+                            module_content += '\n' + f.read()
+            except Exception:
+                pass
+
         matches = []
         lines = content.splitlines()
         i = 0
@@ -173,7 +188,7 @@ class UnassociatedEipRule(Rule):
                     is_associated = False
                     if name_match:
                         eip_name = name_match.group(1)
-                        if re.search(rf'aws_eip\.{re.escape(eip_name)}(\.(id|allocation_id)|\[)', content):
+                        if re.search(rf'aws_eip\.{re.escape(eip_name)}(\.(id|allocation_id)|\[)', module_content):
                             is_associated = True
                             
                     if not is_associated:
@@ -441,7 +456,7 @@ def check_rules(filepath, content):
         if isinstance(rule, (InverseRegexRule, CompoundInverseRule)):
             continue
             
-        matches = rule.check(content)
+        matches = rule.check(content, filepath)
         for match in matches:
             findings.append({
                 "file": filepath,
