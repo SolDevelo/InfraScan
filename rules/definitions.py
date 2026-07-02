@@ -20,6 +20,8 @@ class RegexRule(Rule):
     def check(self, content):
         matches = []
         for i, line in enumerate(content.splitlines()):
+            if line.lstrip().startswith(('#', '//')):
+                continue
             if re.search(self.pattern, line):
                 matches.append({
                     "line": i + 1,
@@ -171,7 +173,7 @@ class UnassociatedEipRule(Rule):
                     is_associated = False
                     if name_match:
                         eip_name = name_match.group(1)
-                        if re.search(rf'aws_eip\.{eip_name}\.(id|allocation_id)', content):
+                        if re.search(rf'aws_eip\.{re.escape(eip_name)}(\.(id|allocation_id)|\[)', content):
                             is_associated = True
                             
                     if not is_associated:
