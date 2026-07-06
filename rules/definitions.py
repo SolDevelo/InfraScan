@@ -213,7 +213,7 @@ RULES = [
     RegexRule(
         id="COST-002",
         name="Expensive Instance Type",
-        severity="High",
+        severity="Medium",
         description="Usage of very large instance types (xlarge+). Ensure this capacity is actually needed.",
         remediation="Review utilization metrics. Consider rightsizing or Spot Instances.",
         estimated_savings="$100-500+/month per instance",
@@ -231,7 +231,7 @@ RULES = [
      RegexRule(
         id="COST-004",
         name="EBS Provisioned IOPS (io1/io2)",
-        severity="High",
+        severity="Medium",
         description="EBS volume using Provisioned IOPS (io1/io2) type. These are very expensive — io2 costs 56× more than gp3 per GB plus per-IOPS charges.",
         remediation="Verify if gp3 can meet performance requirements at a lower cost.",
         estimated_savings="$50-200+/month per volume",
@@ -240,7 +240,7 @@ RULES = [
     RegexRule(
         id="COST-005",
         name="Expensive NAT Gateway",
-        severity="High",
+        severity="Medium",
         description="NAT Gateways are expensive managed services. Ensure they are strictly necessary.",
         remediation="Consider using VPC Endpoints, NAT Instances for non-critical workloads, or share a single NAT Gateway across multiple subnets.",
         estimated_savings="$30-40/month + data processing fees per gateway",
