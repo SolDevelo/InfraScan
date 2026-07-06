@@ -356,21 +356,35 @@ def _savings_cost001(block_content: str, pricing: dict, usage: dict) -> SavingsR
 
 def _savings_cost004(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
     """COST-004 io1/io2 → gp3."""
-    ebs = pricing.get("ebs_per_gb_month", {})
+    ebs          = pricing.get("ebs_per_gb_month", {})
     iops_pricing = pricing.get("ebs_iops_per_iops_month", {})
     size_m = re.search(r'(?:volume_size|size)\s*=\s*(\d+)', block_content)
     iops_m = re.search(r'\biops\s*=\s*(\d+)', block_content)
     vol_m  = re.search(r'(?:volume_type|type)\s*=\s*["\']([^"\']+)["\']', block_content)
-    size     = int(size_m.group(1)) if size_m else 100
+    size: Optional[int] = int(size_m.group(1)) if size_m else None
     iops     = int(iops_m.group(1)) if iops_m else 3000
     vol_type = vol_m.group(1) if vol_m else "io1"
-    before = size * 0.125 + iops * iops_pricing.get("io1", 0.065)
-    after  = size * ebs.get("gp3", 0.08)
-    saving = max(0.0, before - after)
+
+    if size is None:
+        # Try variable resolution; default to 50
+        filepath = usage.get("_filepath", "")
+        var_ref_m = re.search(r'(?:volume_size|size)\s*=\s*((?:var|local)\.\S+)', block_content)
+        if var_ref_m and filepath:
+            resolved = _resolve_number_from_files(var_ref_m.group(1), filepath)
+            if resolved is not None:
+                size = resolved
+    if size is None:
+        size = 50
+
+    per_gb   = ebs.get(vol_type, ebs.get("io1", 0.125))
+    per_iops = iops_pricing.get(vol_type, iops_pricing.get("io1", 0.065))
+    before = round(size * per_gb + iops * per_iops, 2)
+    after  = round(size * ebs.get("gp3", 0.08), 2)
+    saving = round(max(0.0, before - after), 2)
     conf   = "high" if (size_m and iops_m) else "medium"
     return SavingsResult(
         saving, saving, before, after,
-        [f"{vol_type} {size}GB {iops}IOPS → gp3"],
+        [f"{vol_type} {size}GB {iops}IOPS → gp3 (${before:.2f} → ${after:.2f})"],
         conf,
     )
 
@@ -426,6 +440,72 @@ def _savings_cost007(block_content: str, pricing: dict, usage: dict) -> SavingsR
     )
 
 
+def _resolve_number_from_files(var_expr: str, filepath: str) -> Optional[int]:
+    """
+    Resolve a Terraform variable reference (e.g. ``var.grq["root_dev_size"]``,
+    ``var.root_dev_size``, ``local.size``) to a concrete integer by scanning all
+    sibling ``.tf`` files in the same directory for matching assignments.
+
+    Returns the most-common numeric value found, or ``None`` if unresolvable.
+    """
+    if not filepath:
+        return None
+
+    # Extract the attribute key from expressions such as:
+    #   var.grq["root_dev_size"]          → root_dev_size
+    #   var.metrics["root_dev_size"]       → root_dev_size
+    #   var.root_dev_size                  → root_dev_size
+    #   local.volume_size                  → volume_size
+    key_m = re.search(r'\["([^"]+)"\]', var_expr)
+    if not key_m:
+        key_m = re.search(r'(?:var|local)\.(\w+)\.(\w+)', var_expr)
+        if key_m:
+            key_m = type('_M', (), {'group': lambda self, n: key_m.group(n)})()
+            # Use the last segment as the key
+            key_m = re.search(r'\.(\w+)$', var_expr)
+    if not key_m:
+        key_m = re.search(r'(?:var|local)\.(\w+)', var_expr)
+
+    if not key_m:
+        return None
+
+    key = key_m.group(1)
+
+    # Read all sibling .tf files in the same directory
+    try:
+        dir_path = os.path.dirname(filepath)
+        combined = ""
+        for fname in sorted(os.listdir(dir_path)):
+            if fname.endswith(".tf"):
+                try:
+                    with open(
+                        os.path.join(dir_path, fname), "r", encoding="utf-8", errors="replace"
+                    ) as fh:
+                        combined += fh.read() + "\n"
+                except Exception:
+                    pass
+    except Exception:
+        return None
+
+    if not combined:
+        return None
+
+    # Find all assignments: key = <integer> (quoted or unquoted key)
+    values = [
+        int(m)
+        for m in re.findall(
+            rf'["\']?{re.escape(key)}["\']?\s*=\s*(\d+)', combined
+        )
+    ]
+
+    if not values:
+        return None
+
+    # Return the most common value as the representative estimate
+    from collections import Counter
+    return Counter(values).most_common(1)[0][0]
+
+
 def _savings_cost008(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
     """COST-008 EC2 detailed monitoring — fixed $2.10/instance/month."""
     before = 2.10
@@ -438,16 +518,34 @@ def _savings_cost008(block_content: str, pricing: dict, usage: dict) -> SavingsR
 
 def _savings_cost009(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
     """COST-009 gp2 → gp3 EBS volume."""
-    ebs  = pricing.get("ebs_per_gb_month", {})
+    ebs = pricing.get("ebs_per_gb_month", {})
     size_m = re.search(r'volume_size\s*=\s*(\d+)', block_content)
-    size   = int(size_m.group(1)) if size_m else 20
+    size: Optional[int] = int(size_m.group(1)) if size_m else None
+    conf = "high"
+    assumptions: list = []
+
+    if size is None:
+        # Try to resolve a variable reference such as var.grq["root_dev_size"]
+        filepath = usage.get("_filepath", "")
+        var_ref_m = re.search(r'volume_size\s*=\s*((?:var|local)\.\S+)', block_content)
+        if var_ref_m and filepath:
+            resolved = _resolve_number_from_files(var_ref_m.group(1), filepath)
+            if resolved is not None:
+                size = resolved
+                conf = "medium"
+                assumptions.append(
+                    f"volume_size resolved from variable ({var_ref_m.group(1)} = {size}GB)"
+                )
+
+    if size is None:
+        size = 50
+        conf = "medium"
+        assumptions.append("volume_size not found, assumed 50 GB")
+
     before = size * ebs.get("gp2", 0.10)
     after  = size * ebs.get("gp3", 0.08)
     saving = before - after
-    conf   = "high" if size_m else "medium"
-    assumptions = [f"{size}GB gp2→gp3 ($0.02/GB/mo saving)"]
-    if not size_m:
-        assumptions.append("volume_size not found, assumed 20 GB")
+    assumptions.insert(0, f"{size}GB gp2→gp3 ($0.02/GB/mo saving)")
     return SavingsResult(saving, saving, before, after, assumptions, conf)
 
 
@@ -793,8 +891,15 @@ def estimate_savings(
         # Track which block this finding belongs to for per-block cap (see below).
         block_key = (block["file"], block["start_line"]) if block else None
 
+        # Pass the block's filepath so savings functions can resolve variable references
+        # (e.g. volume_size = var.grq["root_dev_size"]) via sibling .tf files.
+        usage_for_finding = {
+            **usage_with_hints,
+            "_filepath": block["file"] if block else fpath,
+        }
+
         try:
-            result: SavingsResult = savings_fn(block_content, pricing, usage_with_hints)
+            result: SavingsResult = savings_fn(block_content, pricing, usage_for_finding)
         except Exception as exc:
             logger.warning("savings_fn for %s failed: %s", rule_id, exc)
             continue
@@ -1044,22 +1149,35 @@ def _cost_aws_db_instance(block: dict, pricing: dict, usage: dict) -> ResourceCo
 def _cost_aws_ebs_volume(block: dict, pricing: dict, usage: dict) -> ResourceCost:
     ebs          = pricing.get("ebs_per_gb_month", {})
     iops_pricing = pricing.get("ebs_iops_per_iops_month", {})
-    size_m = re.search(r'(?:size|volume_size)\s*=\s*(\d+)', block["content"])
-    vol_m  = re.search(r'(?:type|volume_type)\s*=\s*["\']([^"\']+)["\']', block["content"])
-    size     = int(size_m.group(1)) if size_m else 20
+    content  = block["content"]
+    size_m   = re.search(r'(?:size|volume_size)\s*=\s*(\d+)', content)
+    vol_m    = re.search(r'(?:type|volume_type)\s*=\s*["\']([^"\']+)["\']', content)
+    size: Optional[int] = int(size_m.group(1)) if size_m else None
     vol_type = vol_m.group(1) if vol_m else "gp3"
-    cost     = size * ebs.get(vol_type, 0.08)
+
+    if size is None:
+        # Try to resolve variable reference such as var.foo["volume_size"]
+        size_var_m = re.search(r'(?:size|volume_size)\s*=\s*((?:var|local)\.\S+)', content)
+        if size_var_m:
+            resolved = _resolve_number_from_files(size_var_m.group(1), block.get("file", ""))
+            if resolved is not None:
+                size = resolved
+
+    if size is None:
+        size = 20
+
+    cost      = size * ebs.get(vol_type, 0.08)
     iops_cost = 0.0
-    iops = 0
+    iops      = 0
     if vol_type in ("io1", "io2"):
-        iops_m = re.search(r'\biops\s*=\s*(\d+)', block["content"])
-        iops   = int(iops_m.group(1)) if iops_m else 3000  # default: provisioned IOPS minimum practical value
-        iops_cost = iops * iops_pricing.get("io1", 0.065)
-    conf = "high" if (size_m and vol_m) else "medium"
+        iops_m    = re.search(r'\biops\s*=\s*(\d+)', content)
+        iops      = int(iops_m.group(1)) if iops_m else 3000
+        iops_cost = iops * iops_pricing.get(vol_type, iops_pricing.get("io1", 0.065))
+    conf = "high" if (size_m and vol_m) else ("medium" if (size_m or vol_m) else "low")
     assumptions = [f"{vol_type} {size}GB"]
     if iops:
         assumptions.append(f"{iops} IOPS")
-    return _rc(block, cost + iops_cost, 0.0, assumptions, conf)
+    return _rc(block, round(cost + iops_cost, 2), 0.0, assumptions, conf)
 
 
 def _cost_aws_nat_gateway(block: dict, pricing: dict, usage: dict) -> ResourceCost:

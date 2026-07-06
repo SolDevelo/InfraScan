@@ -1100,34 +1100,59 @@ function initApp() {
                 </div>
                 ` : ''}
                 ${first.scanner === 'regex' ? (() => {
-                    // Look for computed cost data from the cost estimator (Phase 1+2)
+                    // Aggregate savings across ALL occurrences of this rule
                     const perFinding = currentGradeReport?.metrics?.savings_estimate?.per_finding || [];
-                    const costData = perFinding.find(
-                        pf => pf.rule_id === first.rule_id && pf.file === first.file && pf.line === first.line
-                    );
-                    if (costData && (costData.saving_high > 0 || costData.before_usd > 0)) {
-                        const savingStr = costData.saving_low === costData.saving_high
-                            ? `$${costData.saving_low.toFixed(2)}`
-                            : `$${costData.saving_low.toFixed(2)} – $${costData.saving_high.toFixed(2)}`;
-                        const confIcon = costData.confidence === 'high' ? '🟢' : costData.confidence === 'medium' ? '🟡' : '⚪';
-                        const assumptions = (costData.assumptions || []).join('; ');
+                    const allMatches = perFinding.filter(pf => pf.rule_id === first.rule_id);
+                    const totalLow  = allMatches.reduce((s, pf) => s + (pf.saving_low  || 0), 0);
+                    const totalHigh = allMatches.reduce((s, pf) => s + (pf.saving_high || 0), 0);
+                    const totalBefore = allMatches.reduce((s, pf) => s + (pf.before_usd || 0), 0);
+                    // For confidence: use lowest across all matches
+                    const confRank = { high: 2, medium: 1, low: 0 };
+                    const minConf = allMatches.reduce((c, pf) => {
+                        const r = confRank[pf.confidence] ?? 0;
+                        return r < confRank[c] ? pf.confidence : c;
+                    }, 'high');
+                    const confIcon = minConf === 'high' ? '🟢' : minConf === 'medium' ? '🟡' : '⚪';
+                    if (totalHigh > 0) {
+                        const fmt2 = n => `$${n.toFixed(2)}`;
+                        const savingStr = Math.abs(totalLow - totalHigh) < 0.01
+                            ? fmt2(totalLow)
+                            : `${fmt2(totalLow)} – ${fmt2(totalHigh)}`;
+                        const countNote = allMatches.length > 1 ? ` across ${allMatches.length} occurrences` : '';
+                        const assumptions = allMatches[0]?.assumptions?.join('; ') || '';
                         let afterStr = '';
-                        if (costData.before_usd > 0) {
-                            const afterBest  = Math.max(0, costData.before_usd - costData.saving_high);
-                            const afterWorst = Math.max(0, costData.before_usd - costData.saving_low);
-                            afterStr = afterBest === afterWorst
-                                ? `$${afterBest.toFixed(2)}`
-                                : `$${afterBest.toFixed(2)}–$${afterWorst.toFixed(2)}`;
+                        if (totalBefore > 0) {
+                            const afterBest  = Math.max(0, totalBefore - totalHigh);
+                            const afterWorst = Math.max(0, totalBefore - totalLow);
+                            afterStr = Math.abs(afterBest - afterWorst) < 0.01
+                                ? fmt2(afterBest)
+                                : `${fmt2(afterBest)}–${fmt2(afterWorst)}`;
                         }
                         return `<div class="finding-detail">
                             <strong>Estimated Saving:</strong>
-                            <span style="color:var(--success);font-weight:600;" title="${escapeHtml(assumptions)}">${savingStr}/mo ${confIcon}</span>
-                            ${afterStr ? `<span style="color:var(--text-secondary);font-size:0.85em;margin-left:6px;">current: $${costData.before_usd.toFixed(2)} → after: ${afterStr}</span>` : ''}
+                            <span style="color:var(--success);font-weight:600;" title="${escapeHtml(assumptions)}">${savingStr}/mo ${confIcon}</span>${countNote}
+                            ${afterStr ? `<span style="color:var(--text-secondary);font-size:0.85em;margin-left:6px;">current: ${fmt2(totalBefore)} → after: ${afterStr}</span>` : ''}
                         </div>`;
                     }
-                    // Fall back to the static estimated_savings text
+                    // Fall back to the static estimated_savings text — try to multiply by occurrence count
+                    const rawSavings = first.estimated_savings || '';
+                    let aggregatedSavings = rawSavings;
+                    if (fileCount > 1 && rawSavings) {
+                        // Match "$10-50" or "$10–50" or "$10-50+"
+                        const rangeMatch = rawSavings.match(/\$(\d+(?:\.\d+)?)\s*[-–]\s*\$?(\d+(?:\.\d+)?)\+?/);
+                        // Match single "$10" or "$10+"
+                        const singleMatch = !rangeMatch && rawSavings.match(/\$(\d+(?:\.\d+)?)\+?/);
+                        if (rangeMatch) {
+                            const lo = (parseFloat(rangeMatch[1]) * fileCount).toFixed(0);
+                            const hi = (parseFloat(rangeMatch[2]) * fileCount).toFixed(0);
+                            aggregatedSavings = `$${lo}–$${hi}/mo across ${fileCount} occurrences`;
+                        } else if (singleMatch) {
+                            const v = (parseFloat(singleMatch[1]) * fileCount).toFixed(0);
+                            aggregatedSavings = `$${v}+/mo across ${fileCount} occurrences`;
+                        }
+                    }
                     return `<div class="finding-detail">
-                        <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(first.estimated_savings)}</span>
+                        <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(aggregatedSavings)}</span>
                     </div>`;
                 })() : ''}
                 <div class="finding-detail">
