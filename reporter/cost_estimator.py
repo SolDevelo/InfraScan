@@ -552,7 +552,7 @@ def _savings_cost009(block_content: str, pricing: dict, usage: dict) -> SavingsR
 def _savings_cost010(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
     """COST-010 Missing S3 Lifecycle Policy — estimate from storage tiering.
 
-    Assumes a default bucket size of 2 TB.  Two tiering scenarios:
+    Assumes a default bucket size of 200 GB.  Two tiering scenarios:
       low:  40 % of data transitions to Standard-IA
       high: 70 % of data transitions to Glacier
     Confidence is "low" because actual stored GB is unknown from Terraform.
@@ -962,38 +962,54 @@ def estimate_savings(
     if cost012_idx is not None:
         fleet_pf = per_finding[cost012_idx]
         cost012_all = [f for f in findings if f.get("rule_id") == "COST-012"]
-        # Resolve each finding to its resource block; drop those without a match
-        # (data sources, unmapped types) to prevent orphaned headline inflation.
+        # Resolve each finding to its resource block; drop those without a match.
         cost012_resolved = [
             (f, b)
             for f in cost012_all
             for b in [_find_block(blocks, f.get("file", ""), f.get("line", 0))]
             if b is not None
         ]
+        # If fewer findings resolved than there are aws_instance blocks, fall back
+        # to distributing across ALL instance blocks.  This handles the common case
+        # where COST-012 fires once per file (the first aws_instance) but the fleet
+        # actually contains several instances — without this the entire fleet saving
+        # is pinned to one cheap block and the JS cap silently swallows it.
+        all_instance_blocks = blocks.get("aws_instance", [])
+        if len(cost012_resolved) < len(all_instance_blocks) and all_instance_blocks:
+            cost012_resolved = [
+                (cost012_all[0] if cost012_all else {}, b)
+                for b in all_instance_blocks
+            ]
+
         n = len(cost012_resolved)
         if n == 0:
             # No resolvable blocks — remove the entry entirely
             per_finding.pop(cost012_idx)
-        elif n == 1:
-            # Single instance — rewrite in-place with resolved block coords
-            f0, b0 = cost012_resolved[0]
-            per_finding[cost012_idx].update({
-                "file":       f0.get("file", ""),
-                "line":       f0.get("line", 0),
-                "block_file": b0["file"],
-                "block_line": b0["start_line"],
-            })
         else:
+            # Proportional distribution: each instance saves spot_pct × its own
+            # EC2 compute cost.  Using EC2-only cost (same basis as fleet_before)
+            # prevents EBS storage from inflating the per-instance saving.
+            fleet_before  = fleet_pf["before_usd"] or 1.0
+            spot_pct_low  = fleet_pf["saving_low"]  / fleet_before
+            spot_pct_high = fleet_pf["saving_high"] / fleet_before
+            ec2_prices_local = pricing.get("ec2_instances", {})
+
             distributed = []
             for f, b in cost012_resolved:
+                m2 = re.search(r'instance_type\s*=\s*["\'](\S+)["\']', b.get("content", ""))
+                inst_cost = ec2_prices_local.get(m2.group(1).strip(), ec2_fallback) if m2 else ec2_fallback
+                # For blocks that were synthesised (no direct finding), fall back
+                # to the block's own coordinates so the UI can still render them.
+                f_file = f.get("file", b["file"]) if isinstance(f, dict) and f else b["file"]
+                f_line = f.get("line", b["start_line"]) if isinstance(f, dict) and f else b["start_line"]
                 distributed.append({
                     "rule_id":    "COST-012",
-                    "file":       f.get("file", ""),
-                    "line":       f.get("line", 0),
-                    "before_usd": round(fleet_pf["before_usd"] / n, 2),
-                    "after_usd":  round(fleet_pf["after_usd"]  / n, 2),
-                    "saving_low":  round(fleet_pf["saving_low"]  / n, 2),
-                    "saving_high": round(fleet_pf["saving_high"] / n, 2),
+                    "file":       f_file,
+                    "line":       f_line,
+                    "before_usd": round(inst_cost, 2),
+                    "after_usd":  round(inst_cost * (1 - spot_pct_high), 2),
+                    "saving_low":  round(inst_cost * spot_pct_low,  2),
+                    "saving_high": round(inst_cost * spot_pct_high, 2),
                     "assumptions": fleet_pf["assumptions"],
                     "confidence":  fleet_pf["confidence"],
                     "block_file":  b["file"],

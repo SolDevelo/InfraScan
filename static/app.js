@@ -1626,8 +1626,13 @@ function initApp() {
                 .filter(r => r.total_usd_month > 0)
                 .map(r => {
                     const matched = findingsByBlock[`${r.file}::${r.line}`] || [];
-                    const sLow  = Math.min(matched.reduce((s, pf) => s + pf.saving_low,  0), r.total_usd_month);
-                    const sHigh = Math.min(matched.reduce((s, pf) => s + pf.saving_high, 0), r.total_usd_month);
+                    // Spot savings (COST-012) apply to EC2 compute only, not attached
+                    // storage — cap at 90 % of resource cost so we don't imply the
+                    // instance is free even when EC2+EBS combined is $9 vs $8 saving.
+                    const hasSpot = matched.some(pf => pf.rule_id === 'COST-012');
+                    const cap = hasSpot ? r.total_usd_month * 0.90 : r.total_usd_month;
+                    const sLow  = Math.min(matched.reduce((s, pf) => s + pf.saving_low,  0), cap);
+                    const sHigh = Math.min(matched.reduce((s, pf) => s + pf.saving_high, 0), cap);
                     return { ...r, savings_low: sLow, savings_high: sHigh };
                 })
                 .sort((a, b) => b.savings_high - a.savings_high || b.total_usd_month - a.total_usd_month);
