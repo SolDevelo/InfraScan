@@ -1155,9 +1155,10 @@ function initApp() {
                         <strong>Potential Savings:</strong> <span style="color: var(--success); font-weight: 600;">${escapeHtml(aggregatedSavings)}</span>
                     </div>`;
                 })() : ''}
-                <div class="finding-detail">
-                    <strong>Occurrences:</strong> ${fileCount} ${fileCount === 1 ? 'location' : 'locations'}
-                </div>
+                <details class="occurrences-expand">
+                    <summary class="finding-detail occurrences-summary">
+                        <strong>Occurrences:</strong> ${fileCount} ${fileCount === 1 ? 'location' : 'locations'}
+                    </summary>
                 <div class="occurrences-list">
                     ${findings.map(f => {
                 // Different display for different scanners
@@ -1180,6 +1181,7 @@ function initApp() {
                         </div>
                     `}).join('')}
                 </div>
+                </details>
                 <div class="finding-detail">
                     <strong>Fix:</strong> <span>${linkifyUrls(first.remediation, 500)}</span>
                 </div>
