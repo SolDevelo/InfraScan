@@ -549,6 +549,34 @@ def _savings_cost009(block_content: str, pricing: dict, usage: dict) -> SavingsR
     return SavingsResult(saving, saving, before, after, assumptions, conf)
 
 
+def _savings_cost010(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
+    """COST-010 Missing S3 Lifecycle Policy — estimate from storage tiering.
+
+    Assumes a default bucket size of 2 TB.  Two tiering scenarios:
+      low:  40 % of data transitions to Standard-IA
+      high: 70 % of data transitions to Glacier
+    Confidence is "low" because actual stored GB is unknown from Terraform.
+    """
+    per_gb_std = pricing.get("s3_per_gb_standard", 0.023)
+    per_gb_ia  = pricing.get("s3_per_gb_ia",       0.0125)
+    per_gb_glc = pricing.get("s3_per_gb_glacier",  0.004)
+    gb         = usage.get("s3_lifecycle_gb",       200.0)  # 200 GB default
+
+    before       = round(gb * per_gb_std, 2)
+    saving_low   = round(gb * 0.40 * (per_gb_std - per_gb_ia),  2)
+    saving_high  = round(gb * 0.70 * (per_gb_std - per_gb_glc), 2)
+    after_high   = round(max(0.0, before - saving_high), 2)
+    return SavingsResult(
+        saving_low, saving_high,
+        before, after_high,
+        [
+            f"Assumed {int(gb)}GB stored; low=40% to Standard-IA, high=70% to Glacier",
+            "Actual savings depend on real data volume and access patterns",
+        ],
+        "low",
+    )
+
+
 def _savings_cost014(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
     """COST-014 Route53 health check."""
     before = pricing.get("route53_health_check_per_month", 0.50)
@@ -767,7 +795,7 @@ SAVINGS_MODELS: Dict[str, Callable] = {
     "COST-007": _savings_cost007,
     "COST-008": _savings_cost008,
     "COST-009": _savings_cost009,
-    "COST-010": _savings_zero("S3 lifecycle saving depends on object churn; no static estimate"),
+    "COST-010": _savings_cost010,
     "COST-011": _savings_zero("AWS Budget is a governance control; no direct cost delta"),
     "COST-014": _savings_cost014,
     "COST-015": _savings_cost015,
