@@ -123,6 +123,8 @@
   "cloudwatch_logs_per_gb_ingested": 0.5,
   "cloudwatch_logs_per_gb_stored": 0.03,
   "s3_per_gb_standard": 0.023,
+  "s3_per_gb_ia": 0.0125,
+  "s3_per_gb_glacier": 0.004,
   "dynamodb_per_rcu_hour": 0.00013,
   "dynamodb_per_wcu_hour": 0.00065,
   "sqs_per_1m_requests": 0.4,

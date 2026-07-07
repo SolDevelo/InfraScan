@@ -1543,6 +1543,36 @@ select option:disabled {
 }
 
 /* Occurrences list styling */
+.occurrences-expand {
+    margin: 0.5rem 0;
+}
+
+.occurrences-summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none; 
+    display: block;
+}
+
+.occurrences-summary::-webkit-details-marker {
+    display: none;
+}
+
+.occurrences-summary::before {
+    content: '\25B6  ';
+    font-size: 0.7em;
+    vertical-align: middle;
+    color: var(--text-secondary);
+}
+
+.occurrences-expand[open] .occurrences-summary::before {
+    content: '\25BC  ';
+}
+
+.occurrences-summary:hover {
+    color: var(--text-main);
+}
+
 .occurrences-list {
     margin: 1rem 0;
     padding: 0.5rem;
