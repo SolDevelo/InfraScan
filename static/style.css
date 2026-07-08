@@ -3511,6 +3511,23 @@ textarea:focus {
     border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
+/* Last scan link */
+.last-scan-link {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--primary);
+    text-decoration: none;
+    opacity: 0.75;
+    transition: opacity 0.2s ease, text-decoration 0.2s ease;
+    border-bottom: 1px solid transparent;
+}
+
+.last-scan-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+    border-bottom-color: var(--primary);
+}
+
 /* Supported Projects Header & Filters */
 .supported-projects-header {
     display: flex;
