@@ -1148,12 +1148,16 @@ def get_supported_projects():
             latest_scan_pct = data.get('overall', {}).get('percentage') if data.get('overall') else None
             latest_scan_source = metadata.get('scan_source') or 'unknown'
 
+            # Extract scan ID from filename (remove .json extension)
+            scan_id = filename.replace('.json', '')
+            
             if proj_key not in projects_map:
                 projects_map[proj_key] = {
                     'raw_name': display_name,
                     'repository_url': normalized_repo_url,
                     'scans_in_window': 0,
                     'latest_scan_dt': scan_dt,
+                    'latest_scan_id': scan_id,
                     'latest_scan_letter': latest_scan_letter,
                     'latest_scan_pct': latest_scan_pct,
                     'latest_scan_source': latest_scan_source,
@@ -1166,6 +1170,7 @@ def get_supported_projects():
             else:
                 if scan_dt > projects_map[proj_key]['latest_scan_dt']:
                     projects_map[proj_key]['latest_scan_dt'] = scan_dt
+                    projects_map[proj_key]['latest_scan_id'] = scan_id
                     projects_map[proj_key]['latest_scan_letter'] = latest_scan_letter
                     projects_map[proj_key]['latest_scan_pct'] = latest_scan_pct
                     projects_map[proj_key]['latest_scan_source'] = latest_scan_source
@@ -1214,6 +1219,7 @@ def get_supported_projects():
                 'repository_url': info.get('repository_url'),
                 'scan_count': info['scans_in_window'],
                 'latest_scan': info['latest_scan_dt'].strftime('%Y-%m-%d'),
+                'latest_scan_id': info.get('latest_scan_id'),
                 'latest_scan_source': info.get('latest_scan_source', 'unknown'),
                 'web_scans': info.get('web_scans', 0),
                 'github_actions_scans': info.get('github_actions_scans', 0),

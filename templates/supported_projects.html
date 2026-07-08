@@ -563,7 +563,16 @@
                     let gradeHtml = '';
                     if (showGrades) {
                         const gradeClass = (proj.grade && ['A', 'B', 'C', 'D', 'F'].includes(proj.grade)) ? proj.grade : 'unknown';
-                        gradeHtml = `<td style="text-align: center;"><span class="grade-badge-cell ${gradeClass}">${proj.grade || '?'}</span></td>`;
+                        let lastScanLink = '';
+                        if (proj.latest_scan_id) {
+                            lastScanLink = `<a href="/report/${proj.latest_scan_id}" class="last-scan-link" target="_blank">Last scan</a>`;
+                        }
+                        gradeHtml = `<td style="text-align: center;">
+                            <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                                <span class="grade-badge-cell ${gradeClass}">${proj.grade || '?'}</span>
+                                ${lastScanLink}
+                            </div>
+                        </td>`;
                     }
 
                     const sourceLabel = getScanSourceLabel(proj.latest_scan_source);
