@@ -1079,6 +1079,70 @@ def supported_projects():
     return render_template('supported_projects.html')
 
 
+@app.route('/project-scans')
+def project_scans():
+    """Render the project scans page."""
+    repo_url = request.args.get('url')
+    if not repo_url:
+        return redirect(url_for('supported_projects'))
+    
+    project_name = extract_project_name(repo_url)
+    display_name = get_display_name(project_name)
+        
+    return render_template('project_scans.html', 
+                           repo_url=repo_url, 
+                           project_name=display_name)
+
+
+@app.route('/api/scans/project', methods=['GET'])
+def get_project_scans():
+    """Return all scans for a specific project URL."""
+    repo_url = request.args.get('url')
+    if not repo_url:
+        return jsonify({'error': 'Missing repo_url'}), 400
+
+    normalized_target_url = normalize_repository_url(repo_url)
+    results_dir = app.config['RESULTS_DIR']
+    project_scans = []
+    
+    try:
+        files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        files = []
+
+    for filename in files:
+        file_path = os.path.join(results_dir, filename)
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+
+            metadata = data.get('metadata', {}) or {}
+            scan_repo_url = metadata.get('repository_url')
+            if not scan_repo_url:
+                continue
+
+            if normalize_repository_url(scan_repo_url) == normalized_target_url:
+                scan_timestamp = metadata.get('scan_timestamp')
+                is_private = metadata.get('is_private', False)
+                if is_private:
+                    continue
+
+                summary = data.get('summary', {})
+                project_scans.append({
+                    'scan_id': data.get('scan_id') or filename.replace('.json', ''),
+                    'scan_timestamp': scan_timestamp,
+                    'grade': summary.get('grade', '?'),
+                    'total_issues': summary.get('total_issues', 0),
+                    'scan_source': metadata.get('scan_source', 'unknown'),
+                })
+        except Exception as e:
+            continue
+            
+    # Sort scans by timestamp descending
+    project_scans.sort(key=lambda x: x['scan_timestamp'], reverse=True)
+    return jsonify({'scans': project_scans})
+
+
 @app.route('/api/scans/supported-projects', methods=['GET'])
 def get_supported_projects():
     """Return an aggregated list of infrastructure projects using InfraScan in the last 12 months."""

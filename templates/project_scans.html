@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="All scans for {{ project_name }}">
+    <title>{{ project_name }} Scans - InfraScan - Infrastructure Auditor Adoption Dashboard</title>
+
+    {% if google_tag_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_tag_id }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', '{{ google_tag_id }}');
+    </script>
+    {% endif %}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ static_version }}">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="main-brand-row">
+                    <a href="{{ url_for('index') }}" class="logo-link">
+                        <img src="{{ url_for('static', filename='images/logo_transparent.png') }}" alt="InfraScan"
+                            class="main-logo" loading="eager" decoding="async">
+                        <h1 class="sr-only">InfraScan</h1>
+                    </a>
+                    <div class="soldevelo-brand">
+                        <span class="brand-divider"></span>
+                        <a href="https://soldevelo.com" target="_blank">
+                            <img src="{{ url_for('static', filename='images/soldevelo.png') }}" alt="SolDevelo"
+                                class="header-logo">
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <p class="subtitle">Open Source Infrastructure Auditor by <strong>SolDevelo</strong></p>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <a href="{{ url_for('index') }}" class="tab-btn">Scan GitHub Repo</a>
+                <a href="{{ url_for('index') }}?tab=recent-scans" class="tab-btn">Recent Scans</a>
+                <a href="{{ url_for('supported_projects') }}" class="tab-btn active">Supported Projects</a>
+                <a href="{{ url_for('index') }}?tab=release-notes" class="tab-btn">Release Notes</a>
+                <a href="{{ url_for('index') }}?tab=local-usage" class="tab-btn">Local & CI/CD</a>
+            </div>
+
+            <div class="tab-content active" id="project-scans-tab">
+                <div class="breadcrumb" style="margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    <a href="{{ url_for('supported_projects') }}"
+                        style="color: var(--primary); text-decoration: none;">Supported Projects</a>
+                    <span style="color: var(--text-muted);"> / </span>
+                    <span style="color: var(--text-main);">{{ project_name }}</span>
+                </div>
+
+                <div class="supported-projects-header" style="margin-bottom: 2rem;">
+                    <div>
+                        <h2 class="recent-scans-title">Project Scans: {{ project_name }}</h2>
+                        <p class="recent-scans-subtitle">History of all audits performed by InfraScan.</p>
+                        <a href="{{ repo_url }}" target="_blank"
+                            style="font-size: 0.85rem; color: var(--primary); text-decoration: none; display: inline-block; margin-top: 0.5rem;">{{
+                            repo_url }} ↗</a>
+                    </div>
+                </div>
+
+                <div id="scans-loading" class="recent-scans-loading">
+                    <div class="spinner"></div>
+                    <p>Loading scans history...</p>
+                </div>
+
+                <div id="scans-empty" class="recent-scans-empty hidden">
+                    <div class="empty-icon">📭</div>
+                    <p>No scans found for this project.</p>
+                </div>
+
+                <div id="scans-table-wrapper" class="projects-table-container hidden">
+                    <table class="projects-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Grade</th>
+                                <th>Total Issues</th>
+                                <th>Source</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scans-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>InfraScan v1.0.9 &copy; 2026 SolDevelo. Advanced Infrastructure Auditor.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingEl = document.getElementById('scans-loading');
+            const emptyEl = document.getElementById('scans-empty');
+            const wrapperEl = document.getElementById('scans-table-wrapper');
+            const listEl = document.getElementById('scans-list');
+
+            const repoUrl = new URLSearchParams(window.location.search).get('url');
+
+            const SCAN_SOURCE_LABELS = {
+                'github_actions': 'Automated CI Scan',
+                'monitored_project': 'Scheduled Scan',
+                'web_app': 'Manual Scan',
+                'cli': 'CLI Scan',
+                'webhook': 'Webhook Triggered Scan',
+                'unknown': 'Manual Scan',
+            };
+
+            function escapeHtml(unsafe) {
+                return (unsafe || '').toString()
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            async function loadScans() {
+                if (!repoUrl) {
+                    loadingEl.classList.add('hidden');
+                    emptyEl.classList.remove('hidden');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/scans/project?url=${encodeURIComponent(repoUrl)}`);
+                    if (!response.ok) throw new Error('Failed to load project scans.');
+
+                    const data = await response.json();
+                    const scans = data.scans || [];
+
+                    loadingEl.classList.add('hidden');
+
+                    if (scans.length === 0) {
+                        emptyEl.classList.remove('hidden');
+                        return;
+                    }
+
+                    wrapperEl.classList.remove('hidden');
+
+                    listEl.innerHTML = scans.map(scan => {
+                        const sourceLabel = SCAN_SOURCE_LABELS[scan.scan_source] || 'Manual Scan';
+                        const sourceBadge = sourceLabel
+                            ? `<span style="
+                            display:inline-flex;
+                            align-items:center;
+                            gap:4px;
+                            padding:3px 8px;
+                            border-radius:999px;
+                            font-size:0.72rem;
+                            font-weight:500;
+                            line-height:1;
+                            background:rgba(99,102,241,0.12);
+                            color:#4f46e5;
+                            border:1px solid rgba(99,102,241,0.25);
+                            white-space:nowrap;
+                        ">
+                            ${sourceLabel === 'Automated CI Scan' ? '⚡' : '🖱️'}
+                            ${escapeHtml(sourceLabel)}
+                        </span>` : '';
+
+                        const gradeClass = (scan.grade && ['A', 'B', 'C', 'D', 'F'].includes(scan.grade)) ? scan.grade : 'unknown';
+
+                        return `
+                            <tr>
+                                <td>${escapeHtml(scan.scan_timestamp)}</td>
+                                <td><span class="grade-badge-cell ${gradeClass}">${escapeHtml(scan.grade)}</span></td>
+                                <td>${scan.total_issues}</td>
+                                <td>${sourceBadge}</td>
+                                <td><a href="/report/${scan.scan_id}" class="last-scan-link" target="_blank" style="font-size: 0.85rem;">View Report</a></td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                } catch (e) {
+                    loadingEl.classList.add('hidden');
+                    listEl.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading data.</td></tr>`;
+                    wrapperEl.classList.remove('hidden');
+                }
+            }
+
+            loadScans();
+        });
+    </script>
+</body>
+
+</html>
