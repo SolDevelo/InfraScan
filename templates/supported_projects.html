@@ -607,7 +607,10 @@
                             </td>
                             <td>
                                 <div class="project-name-cell">
-                                    <a href="${repoUrl}" target="_blank" class="project-link">${escapeHtml(repoDisplay)}</a>
+                                    <a href="/project-scans?url=${encodeURIComponent(repoUrl)}" class="project-link">${escapeHtml(repoDisplay)}</a>
+                                </div>
+                                <div style="font-size: 0.75rem; margin-top: 4px;">
+                                    <a href="${repoUrl}" target="_blank" style="color: var(--text-muted); text-decoration: none;">GitHub ↗</a>
                                 </div>
                             </td>
                             <td style="text-align: center; font-weight: 600;">${proj.scan_count}</td>
