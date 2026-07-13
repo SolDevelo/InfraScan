@@ -30,11 +30,17 @@ fi
 
 DEST="${INSTALL_DIR}/${BIN_NAME}"
 
+if [ -e "$DEST" ]; then
+  echo "Existing ${BIN_NAME} found at ${DEST}, overwriting..."
+fi
+
 if [ -w "$INSTALL_DIR" ]; then
+  rm -f "$DEST"
   install -m 0755 "$TMP_FILE" "$DEST"
   chmod +x "$DEST"
 else
   echo "Elevated permissions required to write to ${INSTALL_DIR}."
+  sudo rm -f "$DEST"
   sudo install -m 0755 "$TMP_FILE" "$DEST"
   sudo chmod +x "$DEST"
 fi
