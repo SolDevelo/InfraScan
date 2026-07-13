@@ -80,46 +80,45 @@ InfraScan offers several scanning modes:
 
 ### CLI / CI/CD Usage
 
-InfraScan provides two modes for command‑line operation:
+InfraScan provides a CLI script, which is installed as described above. This script runs the Docker container underneath, which in turn runs the real Python CLI script inside of it.
 
-* **Standalone Python script** (after cloning the repo or installing dependencies). Run `python3 cli.py [options]` from the project root or install a virtual environment.
-* **Docker image** – the preferred way for CI/CD; the official image `soldevelo/infrascan` bundles all dependencies and scanners. **New in v1.0.4**: The CLI now provides a beautiful, colored findings summary directly in your CI/CD logs, even when generating HTML or JSON reports, so you can see results immediately without downloading artifacts.
-* **Detailed Guide**: See [docs/PIPELINE_INTEGRATION.md](./docs/PIPELINE_INTEGRATION.md) for best practices and a gradual rollout strategy.
+Because of this, no matter whether you are running the CLI `infrascan` script you installed, or you are inside the InfraScan container in a CI/CD context, the usage is the same. 
 
-> **Pro Tip:** The official Docker image includes a helper binary called `infrascan`. When using the image directly as your pipeline execution environment (e.g., in Bitbucket or GitLab), you can invoke the scanner directly:
-> ```bash
-> infrascan --scanner comprehensive --format html --out report.html
-> ```
-
-No Python installation or dependency management is required when using the Docker image.
+No Python installation or dependency management is required.
 
 ```bash
-# Pull the image
-docker pull soldevelo/infrascan:latest
+# Get help
+infrascan --help
 
 # Scan current directory and print results (text)
-docker run --rm -v $(pwd):/scan soldevelo/infrascan
+infrascan
 
 # Generate a standalone interactive HTML report
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --format html --out /scan/report.html
+infrascan --format html --out /scan/report.html
 
 # Generate a JSON artifact
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --format json --out /scan/report.json
+infrascan --format json --out /scan/report.json
 
 # Fail CI if high or critical findings exist
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive --fail-on high_critical
+infrascan --scanner comprehensive --fail-on high_critical
 
 # Fail CI if overall grade is C or worse
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_c
+infrascan --fail-on grade_c
 
 # Fail CI if overall grade is F
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_f
+infrascan --fail-on grade_f
 
 # Scan a Kubernetes project (auto-detected)
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+infrascan --scanner comprehensive
 
 # Explicitly specify Kubernetes framework
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner comprehensive
+infrascan --framework kubernetes --scanner comprehensive
+
+# Use a specific infrascan version
+INFRASCAN_VERSION=1.0.10 infrascan
+
+# Do not pull for updates
+infrascan --no-update
 ```
 
 **CLI Arguments:**
@@ -136,6 +135,7 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --sca
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--traffic-profile`: `auto`, `small`, `medium`, `large` (default: `auto`). Controls usage-based cost assumptions for NAT transfer, CloudWatch log ingestion, Lambda invocations, S3 storage, and API calls. `auto` detects the profile from infra size (EC2/NAT/Lambda/RDS counts). Profiles are defined in `reporter/traffic_profiles.json` and can be edited without code changes.
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
+- `--no-update`: Does not update to the latest InfraScan version (does not pull the latest image)
 
 #### Selective Scanning (Partial Scans)
 
@@ -143,13 +143,13 @@ In larger projects, you might want to scan only specific subdirectories or files
 
 ```bash
 # Scan only a specific directory
-docker run --rm -v $(pwd):/scan soldevelo/infrascan -f production/terraform
+infrascan -f production/terraform
 
 # Scan multiple specific files
-docker run --rm -v $(pwd):/scan soldevelo/infrascan -f main.tf -f database.tf
+infrascan -f main.tf -f database.tf
 
 # Combine directories and files
-docker run --rm -v $(pwd):/scan soldevelo/infrascan -f modules/network -f app/deployment.yaml
+infrascan -f modules/network -f app/deployment.yaml
 ```
 
 #### GitLab CI
@@ -213,16 +213,16 @@ InfraScan natively supports **Kubernetes manifest files** (`.yml`/`.yaml`). When
 **Example — scanning a Kubernetes project:**
 ```bash
 # Auto-detected
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+infrascan --scanner comprehensive
 
 # Explicit framework
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner comprehensive
+infrascan --framework kubernetes --scanner comprehensive
 
 # Security checks only
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner checkov
+infrascan --framework kubernetes --scanner checkov
 
 # Container CVE scan only
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner containers
+infrascan --framework kubernetes --scanner containers
 ```
 
 ## � Ansible Support
@@ -237,16 +237,16 @@ InfraScan natively supports **Ansible playbooks** (`.yml`/`.yaml`). When Ansible
 **Example — scanning Ansible playbooks:**
 ```bash
 # Auto-detected
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+infrascan --scanner comprehensive
 
 # Explicit framework
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner comprehensive
+infrascan --framework ansible --scanner comprehensive
 
 # Security checks only
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible --scanner checkov
+infrascan --framework ansible --scanner checkov
 
 # Scan specific Ansible files
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework ansible -f playbooks/ -f roles/
+infrascan --framework ansible -f playbooks/ -f roles/
 ```
 
 ## �🐳 Advanced Container Scanning
@@ -284,10 +284,10 @@ The `auto` mode (default) **detects the profile automatically** from the scanned
 
 ```bash
 # Let InfraScan auto-detect the profile (recommended)
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner regex
+infrascan --scanner regex
 
 # Force a profile when auto-detection doesn't match your actual traffic
-docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner regex --traffic-profile medium
+infrascan --scanner regex --traffic-profile medium
 ```
 
 ### Customising defaults
