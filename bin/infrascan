@@ -1,4 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-docker run --rm -v "$(pwd)":/scan soldevelo/infrascan:1.0.10 cli "$@"
+if [ -n "${INFRASCAN_VERSION:-}" ]; then
+  IMAGE="soldevelo/infrascan:${INFRASCAN_VERSION}"
+  PULL=false
+else
+  IMAGE="soldevelo/infrascan:latest"
+  PULL=true
+fi
+ARGS=()
+
+for arg in "$@"; do
+  if [ "$arg" = "--no-update" ]; then
+    PULL=false
+  else
+    ARGS+=("$arg")
+  fi
+done
+
+if [ "$PULL" = true ]; then
+  docker pull "$IMAGE"
+fi
+
+docker run --rm -v "$(pwd)":/scan "$IMAGE" cli "${ARGS[@]+"${ARGS[@]}"}"
