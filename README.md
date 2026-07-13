@@ -51,34 +51,15 @@ jobs:
 
 ## 📦 Installation
 
-Requires Python 3.8+
+In order to use InfraScan from the CLI, Docker is required. InfraScan runs as a Docker container that hosts all the necessary scanners it orchestrates.
+
+You can follow these instructions to install Docker: [Installing the Docker engine](https://docs.docker.com/engineinstall/)
+
+Next install InfraScan:
 
 ```bash
-git clone <repo-url>
-cd InfraScan
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate 
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install security scanners (optional but recommended)
-chmod +x install_scanners.sh
-./install_scanners.sh
+curl -fsSL https://raw.githubusercontent.com/SolDevelo/InfraScan/main/bin/install.sh | bash
 ```
-
-**Configuration**: Copy and edit the `.env` file (see `.env.example`) to choose container scanner:
-```bash
-# Copy the example file
-cp .env.example .env
-
-# Edit to select container scanner: docker-scout (default) or grype
-CONTAINER_SCANNER=docker-scout
-```
-
-**Note**: The app works without container scanning - it will be skipped if not installed. Docker must be installed for Docker Scout to work.
 
 ## 🛠️ Usage
 
@@ -96,13 +77,6 @@ InfraScan offers several scanning modes:
 - **Risk Assessment**: Low to Critical risk levels
 - **Severity Breakdown**: High/Medium/Low issue counts
 - **Smart Recommendations**: Actionable next steps based on your findings
-
-### Web Application
-
-```bash
-python3 app.py
-```
-Open browser at `http://localhost:5000`
 
 ### CLI / CI/CD Usage
 
