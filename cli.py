@@ -19,7 +19,7 @@ from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
 
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
