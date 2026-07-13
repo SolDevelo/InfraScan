@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-docker run --rm -v "$(pwd)":/scan soldevelo/infrascan cli "$@"
+docker run --rm -v "$(pwd)":/scan soldevelo/infrascan:1.0.10 cli "$@"
