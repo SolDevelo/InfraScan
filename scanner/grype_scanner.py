@@ -8,90 +8,94 @@ Note: Docker Scout is the default scanner. To use Grype, set CONTAINER_SCANNER=g
 import json
 import os
 import subprocess
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
+from scanner.base import Scanner, ScanResult
 from scanner.image_utils import (
-    find_compose_files, 
-    extract_images_from_compose, 
+    find_compose_files,
+    extract_images_from_compose,
     find_kubernetes_files,
     extract_images_from_kubernetes,
     perform_all_logins,
     filter_container_files
 )
 
-# Check if Grype is available
-def is_grype_available() -> bool:
-    """Check if Grype is installed and available."""
-    try:
-        result = subprocess.run(
-            ["grype", "version"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError, OSError):
-        return False
 
+class GrypeScanner(Scanner):
+    """Grype container vulnerability scanner."""
 
-def run_grype_scan(directory_path: str, files: List[str] = None) -> List[Dict[str, Any]]:
-    """
-    Run Grype scan on Docker Compose files and images in a directory or specific files.
-    
-    Args:
-        directory_path: Path to directory containing Docker files
-        files: Optional list of specific files to scan
-    
-    Returns:
-        List of findings in a normalized format
-    """
-    if not is_grype_available():
-        raise ImportError(
-            "Grype is not installed. Install it with: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin"
-        )
-    
-    findings = []
-    
-    if files:
-        compose_files, k8s_files = filter_container_files(files)
-    else:
-        # Find Docker Compose files
-        compose_files = find_compose_files(directory_path)
-        # Find Kubernetes files
-        k8s_files = find_kubernetes_files(directory_path)
-    
-    if not compose_files and not k8s_files:
-        return findings
-    
-    # Collect ALL images from ALL files first
-    all_images_map = {} # image -> source_file
-    for compose_file in compose_files:
-        images = extract_images_from_compose(compose_file)
-        for image in images:
-            if image not in all_images_map:
-                all_images_map[image] = compose_file
-                
-    for k8s_file in k8s_files:
-        images = extract_images_from_kubernetes(k8s_file)
-        for image in images:
-            if image not in all_images_map:
-                all_images_map[image] = k8s_file
-                
-    # Perform logins for ECR/Docker Hub if needed
-    if all_images_map:
-        perform_all_logins(list(all_images_map.keys()))
-        
-    # Extract images from compose files and scan them
-    for image, compose_file in all_images_map.items():
-        print(f"Scanning image with Grype: {image}")
+    name = "grype"
+
+    def is_available(self) -> bool:
         try:
-            image_findings = scan_image(image, compose_file, directory_path)
-            findings.extend(image_findings)
-        except Exception as e:
-            print(f"Warning: Failed to scan image {image}: {e}")
-            continue
-    
-    return findings
+            result = subprocess.run(
+                ["grype", "version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError, OSError):
+            return False
+
+    def scan(self, directory_path: str, files: Optional[List[str]] = None, **options) -> ScanResult:
+        """
+        Run Grype scan on Docker Compose files and images in a directory or specific files.
+
+        Args:
+            directory_path: Path to directory containing Docker files
+            files: Optional list of specific files to scan
+
+        Returns:
+            ScanResult with normalized findings
+        """
+        if not self.is_available():
+            raise ImportError(
+                "Grype is not installed. Install it with: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin"
+            )
+
+        findings = []
+
+        if files:
+            compose_files, k8s_files = filter_container_files(files)
+        else:
+            # Find Docker Compose files
+            compose_files = find_compose_files(directory_path)
+            # Find Kubernetes files
+            k8s_files = find_kubernetes_files(directory_path)
+
+        if not compose_files and not k8s_files:
+            return ScanResult()
+
+        # Collect ALL images from ALL files first
+        all_images_map = {} # image -> source_file
+        for compose_file in compose_files:
+            images = extract_images_from_compose(compose_file)
+            for image in images:
+                if image not in all_images_map:
+                    all_images_map[image] = compose_file
+
+        for k8s_file in k8s_files:
+            images = extract_images_from_kubernetes(k8s_file)
+            for image in images:
+                if image not in all_images_map:
+                    all_images_map[image] = k8s_file
+
+        # Perform logins for ECR/Docker Hub if needed
+        if all_images_map:
+            perform_all_logins(list(all_images_map.keys()))
+
+        # Extract images from compose files and scan them
+        for image, compose_file in all_images_map.items():
+            print(f"Scanning image with Grype: {image}")
+            try:
+                image_findings = scan_image(image, compose_file, directory_path)
+                findings.extend(image_findings)
+            except Exception as e:
+                print(f"Warning: Failed to scan image {image}: {e}")
+                continue
+
+        return ScanResult(findings=findings)
 
 
 def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:

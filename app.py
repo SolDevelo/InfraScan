@@ -11,9 +11,9 @@ import requests
 from dotenv import load_dotenv
 from git import Repo, cmd
 from scanner.parser import scan_directory, get_container_scanner, is_container_scanner_available
-from scanner.checkov_scanner import is_checkov_available
-from scanner.docker_scout_scanner import is_docker_scout_available
-from scanner.grype_scanner import is_grype_available
+from scanner.checkov_scanner import CheckovScanner
+from scanner.docker_scout_scanner import DockerScoutScanner
+from scanner.grype_scanner import GrypeScanner
 from reporter.grading import ReportGenerator
 import traceback
 
@@ -252,13 +252,13 @@ def report_view(scan_id):
 @app.route('/api/scanner/status')
 def scanner_status():
     """Return information about available scanners."""
-    checkov_available = is_checkov_available()
+    checkov_available = CheckovScanner().is_available()
     container_scanner = get_container_scanner()
     container_scanner_available = is_container_scanner_available()
-    
+
     # For backwards compatibility, also expose individual scanner status
-    docker_scout_available = is_docker_scout_available()
-    grype_available = is_grype_available()
+    docker_scout_available = DockerScoutScanner().is_available()
+    grype_available = GrypeScanner().is_available()
     
     return jsonify({
         'regex': True,  # Always available
@@ -377,7 +377,7 @@ def scan_github():
         scanner_type = 'comprehensive'
     
     # Check if Checkov is requested but not available
-    if scanner_type in ['checkov', 'comprehensive'] and not is_checkov_available():
+    if scanner_type in ['checkov', 'comprehensive'] and not CheckovScanner().is_available():
         return jsonify({
             'error': 'Checkov scanner is not installed. Install with: pip install checkov',
             'hint': 'You can still use the regex scanner by setting scanner=regex'

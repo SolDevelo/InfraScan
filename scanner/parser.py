@@ -1,9 +1,13 @@
 import os
 import re
 from rules.definitions import check_rules
-from scanner.checkov_scanner import is_checkov_available, run_checkov_scan
-from scanner.docker_scout_scanner import is_docker_scout_available, run_docker_scout_scan
-from scanner.grype_scanner import is_grype_available, run_grype_scan
+from scanner.checkov_scanner import CheckovScanner
+from scanner.docker_scout_scanner import DockerScoutScanner
+from scanner.grype_scanner import GrypeScanner
+
+CHECKOV_SCANNER = CheckovScanner()
+DOCKER_SCOUT_SCANNER = DockerScoutScanner()
+GRYPE_SCANNER = GrypeScanner()
 
 # Get container scanner preference from environment
 def get_container_scanner():
@@ -14,9 +18,9 @@ def is_container_scanner_available():
     """Check if the configured container scanner is available."""
     scanner = get_container_scanner()
     if scanner == 'grype':
-        return is_grype_available()
+        return GRYPE_SCANNER.is_available()
     else:  # docker-scout (default)
-        return is_docker_scout_available()
+        return DOCKER_SCOUT_SCANNER.is_available()
 
 def detect_all_frameworks(path: str = None, files: list = None) -> list:
     """
@@ -408,79 +412,62 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     
     # Run IaC security scanner (Checkov)
     if 'checkov' in active_scanners:
-        if is_checkov_available():
+        if CHECKOV_SCANNER.is_available():
             try:
                 if resolved_files:
                     print("[INFO] Files passed to Checkov:")
                     for file in resolved_files:
                         print(f"  - {os.path.relpath(file, path)}")
-                checkov_results = run_checkov_scan(
-                    path, 
-                    framework, 
+                checkov_result = CHECKOV_SCANNER.scan(
+                    path,
+                    files=resolved_files,
+                    framework=framework,
                     download_external_modules=download_external_modules,
-                    files=resolved_files
                 )
-                # Add scanner tag to distinguish sources
-                for result in checkov_results:
-                    result['scanner'] = 'checkov'
-                results.extend(checkov_results)
+                results.extend(checkov_result.findings)
             except Exception as e:
                 print(f"Warning: Checkov scan failed: {e}")
         else:
             print("Warning: Checkov is not installed. Install with: pip install checkov")
-    
+
     # Run container security scanner (Docker Scout or Grype based on config)
     extra_recommendations = []  # Track extra recommendations from container scanner
     if 'containers' in active_scanners:
         container_scanner = get_container_scanner()
-        
+
         if container_scanner == 'grype':
-            if is_grype_available():
+            if GRYPE_SCANNER.is_available():
                 try:
-                    from scanner.grype_scanner import run_grype_scan
-                    grype_results = run_grype_scan(path, files=resolved_files)
-                    # Add scanner tag
-                    for result in grype_results:
-                        result['scanner'] = 'grype'
-                    results.extend(grype_results)
+                    grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
+                    results.extend(grype_result.findings)
                 except Exception as e:
                     print(f"Warning: Grype scan failed: {e}")
             else:
                 print("Warning: Grype is not installed. See https://github.com/anchore/grype for installation")
         else:  # docker-scout (default)
-            if is_docker_scout_available():
+            if DOCKER_SCOUT_SCANNER.is_available():
                 try:
-                    scout_results, scout_recommendations, auth_failed = run_docker_scout_scan(path, files=resolved_files)
-                    
-                    if auth_failed and is_grype_available() and not scout_results:
+                    scout_result = DOCKER_SCOUT_SCANNER.scan(path, files=resolved_files)
+
+                    if scout_result.auth_failed and GRYPE_SCANNER.is_available() and not scout_result.findings:
                         print("\n[i] Falling back to Grype scanner (no Docker Hub login detected)...")
                         try:
-                            from scanner.grype_scanner import run_grype_scan
-                            grype_results = run_grype_scan(path, files=resolved_files)
-                            # Add scanner tag
-                            for result in grype_results:
-                                result['scanner'] = 'grype'
-                            results.extend(grype_results)
-                            print(f"    Grype scan completed with {len(grype_results)} findings.")
+                            grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
+                            results.extend(grype_result.findings)
+                            print(f"    Grype scan completed with {len(grype_result.findings)} findings.")
                         except Exception as grype_e:
                             print(f"    Grype fallback failed: {grype_e}")
                     else:
-                        # Add scanner tag
-                        for result in scout_results:
-                            result['scanner'] = 'docker-scout'
-                        results.extend(scout_results)
-                        extra_recommendations.extend(scout_recommendations)
+                        results.extend(scout_result.findings)
+                        extra_recommendations.extend(scout_result.extra_recommendations)
                 except Exception as e:
                     print(f"Warning: Docker Scout scan failed: {e}")
-            elif is_grype_available():
+            elif GRYPE_SCANNER.is_available():
                 print("\n[i] Docker Scout is not installed, falling back to Grype scanner...")
                 try:
-                    from scanner.grype_scanner import run_grype_scan
-                    grype_results = run_grype_scan(path, files=resolved_files)
-                    for result in grype_results:
-                        result['scanner'] = 'grype'
-                    results.extend(grype_results)
-                    print(f"    Grype scan completed with {len(grype_results)} findings.")
+                    grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
+                    results.extend(grype_result.findings)
+                    print(f"    Grype scan completed with {len(grype_result.findings)} findings.")
                 except Exception as grype_e:
                     print(f"    Grype fallback failed: {grype_e}")
             else:

@@ -7,7 +7,9 @@ import json
 import os
 import subprocess
 import sys
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+from scanner.base import Scanner, ScanResult
 
 try:
     from checkov.main import Checkov
@@ -16,90 +18,95 @@ except ImportError:
     CHECKOV_AVAILABLE = False
 
 
-def is_checkov_available() -> bool:
-    """Check if Checkov is installed and available."""
-    return CHECKOV_AVAILABLE
+class CheckovScanner(Scanner):
+    """Checkov IaC security and compliance scanner."""
 
+    name = "checkov"
 
-def run_checkov_scan(
-    directory_path: str, 
-    framework: str = "terraform",
-    download_external_modules: bool = False,
-    files: List[str] = None
-) -> List[Dict[str, Any]]:
-    """
-    Run Checkov scan on a directory or specific files using subprocess.
-    
-    Args:
-        directory_path: Path to directory containing IaC files
-        framework: IaC framework to scan (terraform, cloudformation, kubernetes, etc.)
-        download_external_modules: Whether to download external modules
-        files: Optional list of specific files to scan
-    
-    Returns:
-        List of findings in a normalized format
-    """
-    if not CHECKOV_AVAILABLE:
-        raise ImportError(
-            "Checkov is not installed. Install it with: pip install checkov"
-        )
-    
-    findings = []
-    
-    try:
-        # Use subprocess to call checkov CLI directly
-        cmd = ["checkov"]
-        
-        if files:
-            for f in files:
-                cmd.extend(["-f", f])
-        else:
-            cmd.extend(["-d", directory_path])
-            
-        cmd.extend([
-            "--framework", framework,
-            "-o", "json",
-            "--quiet"
-        ])
-        
-        if download_external_modules:
-            cmd.append("--download-external-modules")
-        
-        # Run the command and capture output
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=directory_path if os.path.isdir(directory_path) else os.path.dirname(directory_path) or "."
-        )
-        
-        # Parse the JSON output
-        if result.stdout.strip():
-            try:
-                # Try to parse the entire output as JSON
-                report_data = json.loads(result.stdout)
-                findings = parse_checkov_json_output(report_data, directory_path)
-            except json.JSONDecodeError:
-                # If that fails, try line by line
-                for line in result.stdout.strip().split('\n'):
-                    if line.strip().startswith('{'):
-                        try:
-                            report_data = json.loads(line)
-                            findings.extend(parse_checkov_json_output(report_data, directory_path))
-                            break
-                        except json.JSONDecodeError:
-                            continue
-                
-        if result.stderr and "error" in result.stderr.lower():
-            print(f"Checkov stderr: {result.stderr}")
-                
-    except Exception as e:
-        print(f"Error running Checkov: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-    
-    return findings
+    def is_available(self) -> bool:
+        return CHECKOV_AVAILABLE
+
+    def scan(
+        self,
+        directory_path: str,
+        files: Optional[List[str]] = None,
+        framework: str = "terraform",
+        download_external_modules: bool = False,
+        **options,
+    ) -> ScanResult:
+        """
+        Run Checkov scan on a directory or specific files using subprocess.
+
+        Args:
+            directory_path: Path to directory containing IaC files
+            files: Optional list of specific files to scan
+            framework: IaC framework to scan (terraform, cloudformation, kubernetes, etc.)
+            download_external_modules: Whether to download external modules
+
+        Returns:
+            ScanResult with normalized findings
+        """
+        if not self.is_available():
+            raise ImportError(
+                "Checkov is not installed. Install it with: pip install checkov"
+            )
+
+        findings = []
+
+        try:
+            # Use subprocess to call checkov CLI directly
+            cmd = ["checkov"]
+
+            if files:
+                for f in files:
+                    cmd.extend(["-f", f])
+            else:
+                cmd.extend(["-d", directory_path])
+
+            cmd.extend([
+                "--framework", framework,
+                "-o", "json",
+                "--quiet"
+            ])
+
+            if download_external_modules:
+                cmd.append("--download-external-modules")
+
+            # Run the command and capture output
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=directory_path if os.path.isdir(directory_path) else os.path.dirname(directory_path) or "."
+            )
+
+            # Parse the JSON output
+            if result.stdout.strip():
+                try:
+                    # Try to parse the entire output as JSON
+                    report_data = json.loads(result.stdout)
+                    findings = parse_checkov_json_output(report_data, directory_path)
+                except json.JSONDecodeError:
+                    # If that fails, try line by line
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip().startswith('{'):
+                            try:
+                                report_data = json.loads(line)
+                                findings.extend(parse_checkov_json_output(report_data, directory_path))
+                                break
+                            except json.JSONDecodeError:
+                                continue
+
+            if result.stderr and "error" in result.stderr.lower():
+                print(f"Checkov stderr: {result.stderr}")
+
+        except Exception as e:
+            print(f"Error running Checkov: {e}")
+            import traceback
+            traceback.print_exc()
+            return ScanResult()
+
+        return ScanResult(findings=findings)
 
 
 def parse_checkov_json_output(report_data: Dict[str, Any], base_path: str) -> List[Dict[str, Any]]:

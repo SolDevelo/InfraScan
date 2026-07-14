@@ -17,7 +17,7 @@ import re
 import subprocess
 from typing import List, Dict, Any, Tuple, Optional
 
-
+from scanner.base import Scanner, ScanResult
 from scanner.image_utils import (
     find_compose_files, 
     extract_images_from_compose, 
@@ -250,14 +250,6 @@ def create_finding_dict(
 # Docker CLI Helpers
 # ============================================================================
 
-def is_docker_scout_available() -> bool:
-    """Check if Docker Scout is installed and available."""
-    try:
-        return run_command(["docker-scout", "version"], timeout=5).returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError, OSError):
-        return False
-
-
 def check_image_exists(image: str) -> bool:
     """Check if a Docker image exists locally."""
     try:
@@ -283,120 +275,128 @@ def cleanup_image(image: str) -> None:
 # Main Scanning Functions
 # ============================================================================
 
-def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple[List[Dict[str, Any]], List[str], bool]:
-    """
-    Run Docker Scout scan on Docker Compose files and images in a directory or specific files.
-    
-    Args:
-        directory_path: Path to directory containing Docker files
-        files: Optional list of specific files to scan
-    
-    Returns:
-        Tuple of (findings, extra_recommendations, auth_failed):
-        - findings: List of vulnerability findings in normalized format
-        - extra_recommendations: List of additional recommendations
-        - auth_failed: True if the scan failed due to missing Docker Hub credentials
-    """
-    if not is_docker_scout_available():
-        raise ImportError(
-            "Docker Scout is not installed. Install it with: curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | sh -s --"
-        )
-    
-    findings = []
-    extra_recommendations = []
-    auth_failed = False
-    scanned_images = set()  # Cache to avoid scanning same image multiple times
-    images_to_cleanup = set()  # Track images pulled during scan for cleanup
-    
-    # Check if cleanup is enabled (default: yes)
-    cleanup_enabled = os.getenv('CLEANUP_SCANNED_IMAGES', 'true').lower() == 'true'
-    
-    if files:
-        compose_files, k8s_files = filter_container_files(files)
-    else:
-        # Find Docker Compose files
-        compose_files = find_compose_files(directory_path)
-        # Find Kubernetes files
-        k8s_files = find_kubernetes_files(directory_path)
-    if not compose_files and not k8s_files:
-        return findings, extra_recommendations, False
-    
-    if compose_files:
-        print("[INFO] Found Docker Compose files:")
-        for file in compose_files:
-            print(f"  - {os.path.relpath(file, directory_path)}")
-    
-    if k8s_files:
-        print("[INFO] Found Kubernetes files:")
-        for file in k8s_files:
-            print(f"  - {os.path.relpath(file, directory_path)}")
-    
-    # Collect ALL images from ALL files first
-    all_images_map = {} # image -> source_file
-    for compose_file in compose_files:
-        images = extract_images_from_compose(compose_file)
-        for image in images:
-            if image not in all_images_map:
-                all_images_map[image] = compose_file
-                
-    for k8s_file in k8s_files:
-        images = extract_images_from_kubernetes(k8s_file)
-        for image in images:
-            if image not in all_images_map:
-                all_images_map[image] = k8s_file
-    
-    # Authenticate with registries (collecting all unique images first)
-    if all_images_map:
-        perform_all_logins(list(all_images_map.keys()))
-    
-    # Scan collected images
-    for image, compose_file in all_images_map.items():
-        # Check if image exists locally before scanning
-        image_existed_before = check_image_exists(image)
-        
-        relative_file = os.path.relpath(compose_file, directory_path)
+class DockerScoutScanner(Scanner):
+    """Docker Scout container vulnerability scanner."""
 
-        print(
-            f"[INFO] Scanning image '{image}' "
-            f"from file: {os.path.relpath(compose_file, directory_path)}"
-        )
-        print(f"  Source file: {relative_file}")
+    name = "docker-scout"
 
+    def is_available(self) -> bool:
         try:
-            image_findings, image_auth_failed = scan_image(image, compose_file, directory_path)
-            findings.extend(image_findings)
-            
-            if image_auth_failed:
-                auth_failed = True
-            
-            if image_findings:
-                print(f"  Found {len(image_findings)} vulnerabilities in {image}")
-            elif not image_auth_failed:
-                print(f"  No vulnerabilities found or image unavailable: {image}")
+            return run_command(["docker-scout", "version"], timeout=5).returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError, OSError):
+            return False
 
-            recommendation = get_image_recommendation(image)
-            if recommendation and recommendation not in extra_recommendations:
-                extra_recommendations.append(recommendation)
-                print(f"  Added recommendation for Bitnami image: {image}")
-            
-            # Track for cleanup if image was pulled during scan and cleanup is enabled
-            if cleanup_enabled and not image_existed_before and check_image_exists(image):
-                images_to_cleanup.add(image)
-                
-        except Exception as e:
-            print(f"Warning: Failed to scan image {image}: {e}")
-            continue
-    
-    # Cleanup images that were pulled during scan
-    if cleanup_enabled and images_to_cleanup:
-        print(f"\nCleaning up {len(images_to_cleanup)} image(s) pulled during scan...")
-        for image in images_to_cleanup:
+    def scan(self, directory_path: str, files: Optional[List[str]] = None, **options) -> ScanResult:
+        """
+        Run Docker Scout scan on Docker Compose files and images in a directory or specific files.
+
+        Args:
+            directory_path: Path to directory containing Docker files
+            files: Optional list of specific files to scan
+
+        Returns:
+            ScanResult with normalized findings. `auth_failed` is True if the scan
+            failed due to missing Docker Hub credentials.
+        """
+        if not self.is_available():
+            raise ImportError(
+                "Docker Scout is not installed. Install it with: curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | sh -s --"
+            )
+
+        findings = []
+        extra_recommendations = []
+        auth_failed = False
+        images_to_cleanup = set()  # Track images pulled during scan for cleanup
+
+        # Check if cleanup is enabled (default: yes)
+        cleanup_enabled = os.getenv('CLEANUP_SCANNED_IMAGES', 'true').lower() == 'true'
+
+        if files:
+            compose_files, k8s_files = filter_container_files(files)
+        else:
+            # Find Docker Compose files
+            compose_files = find_compose_files(directory_path)
+            # Find Kubernetes files
+            k8s_files = find_kubernetes_files(directory_path)
+        if not compose_files and not k8s_files:
+            return ScanResult()
+
+        if compose_files:
+            print("[INFO] Found Docker Compose files:")
+            for file in compose_files:
+                print(f"  - {os.path.relpath(file, directory_path)}")
+
+        if k8s_files:
+            print("[INFO] Found Kubernetes files:")
+            for file in k8s_files:
+                print(f"  - {os.path.relpath(file, directory_path)}")
+
+        # Collect ALL images from ALL files first
+        all_images_map = {} # image -> source_file
+        for compose_file in compose_files:
+            images = extract_images_from_compose(compose_file)
+            for image in images:
+                if image not in all_images_map:
+                    all_images_map[image] = compose_file
+
+        for k8s_file in k8s_files:
+            images = extract_images_from_kubernetes(k8s_file)
+            for image in images:
+                if image not in all_images_map:
+                    all_images_map[image] = k8s_file
+
+        # Authenticate with registries (collecting all unique images first)
+        if all_images_map:
+            perform_all_logins(list(all_images_map.keys()))
+
+        # Scan collected images
+        for image, compose_file in all_images_map.items():
+            # Check if image exists locally before scanning
+            image_existed_before = check_image_exists(image)
+
+            relative_file = os.path.relpath(compose_file, directory_path)
+
+            print(
+                f"[INFO] Scanning image '{image}' "
+                f"from file: {os.path.relpath(compose_file, directory_path)}"
+            )
+            print(f"  Source file: {relative_file}")
+
             try:
-                cleanup_image(image)
+                image_findings, image_auth_failed = scan_image(image, compose_file, directory_path)
+                findings.extend(image_findings)
+
+                if image_auth_failed:
+                    auth_failed = True
+
+                if image_findings:
+                    print(f"  Found {len(image_findings)} vulnerabilities in {image}")
+                elif not image_auth_failed:
+                    print(f"  No vulnerabilities found or image unavailable: {image}")
+
+                recommendation = get_image_recommendation(image)
+                if recommendation and recommendation not in extra_recommendations:
+                    extra_recommendations.append(recommendation)
+                    print(f"  Added recommendation for Bitnami image: {image}")
+
+                # Track for cleanup if image was pulled during scan and cleanup is enabled
+                if cleanup_enabled and not image_existed_before and check_image_exists(image):
+                    images_to_cleanup.add(image)
+
             except Exception as e:
-                print(f"Warning: Failed to cleanup image {image}: {e}")
-    
-    return findings, extra_recommendations, auth_failed
+                print(f"Warning: Failed to scan image {image}: {e}")
+                continue
+
+        # Cleanup images that were pulled during scan
+        if cleanup_enabled and images_to_cleanup:
+            print(f"\nCleaning up {len(images_to_cleanup)} image(s) pulled during scan...")
+            for image in images_to_cleanup:
+                try:
+                    cleanup_image(image)
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup image {image}: {e}")
+
+        return ScanResult(findings=findings, extra_recommendations=extra_recommendations, auth_failed=auth_failed)
 
 
 def scan_image(image: str, compose_file: str, base_path: str) -> Tuple[List[Dict[str, Any]], bool]:
