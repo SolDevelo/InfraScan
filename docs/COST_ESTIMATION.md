@@ -142,7 +142,7 @@ counted as covered but contribute $0 to the total.
 
 ## Variable resolution
 
-InfraScan resolves variable references through three sources, checked in order:
+InfraScan resolves variable references through four sources, checked in order:
 
 1. **Sibling `.tf` files** — scans every `.tf` file in the same directory for
    explicit assignments (`instance_type = "t3.medium"`) and variable `default`
@@ -154,6 +154,10 @@ InfraScan resolves variable references through three sources, checked in order:
    For nested structures like `accounts[env].ec2_instance_type`, InfraScan tries the
    account key `production` (or `prod`, `preproduction`) as the environment fallback,
    which matches the pattern used by repos such as modernisation-platform-environments.
+4. **`locals {}` blocks** — resolves all `locals { }` assignments in the directory,
+   including transitive references (`local.x → local.y → "t3.medium"`) up to depth 5.
+   For ternary expressions (`condition ? a : b`), the else branch is used as the
+   conservative fallback.
 
 When a value is found, confidence is reported as `medium` (inferred rather than literal).
 When nothing resolves, a floor of **$50/mo** per EC2 instance and **$100/mo** per RDS
@@ -161,17 +165,30 @@ instance is used and confidence is `low`.
 
 ---
 
+## count multiplier
+
+When a resource block contains a `count = N` argument, InfraScan multiplies the estimated
+monthly cost by `N`:
+
+- **Literal integer** (`count = 3`) — count is applied at full confidence.
+- **Variable reference** (`count = var.replica_count`) — InfraScan attempts to resolve
+  the variable via tfvars and locals; if resolved, confidence is downgraded to `medium`.
+- **Absent** — count defaults to 1.
+
+The assumption `count=N` is appended to the resource's assumption list whenever `N > 1`.
+
+---
+
 ## Limitations
 
 - **Terraform variable expressions** — only literal strings and simple key→value
   assignments are resolved (see *Variable resolution* above). Complex expressions
-  such as `local.application_data.accounts[local.environment].ec2_instance_type`
-  remain unresolved unless the referenced JSON file is present alongside the `.tf`
-  files.
+  that chain multiple locals or module outputs remain unresolved.
 - **Root module detection** — cost scanning is restricted to *root modules*: directories
   that contain a `provider "..." { }` block or a `terraform { backend "..." { } }` block.
   Shared module libraries (which only have `terraform { required_providers {} }`) are
-  excluded from cost estimation. Security scanning still runs on all `.tf` files.
+  excluded from cost estimation. COST-* security rules are similarly suppressed for
+  non-root-module directories to avoid phantom findings.
 - **Excluded directories** — the following directories are never scanned for cost:
   `.git`, `.terraform`, `.terragrunt-cache`, `docs`, `doc`, `documentation`,
   `test`, `tests`, `testing`, `examples`, `example`, `fixtures`, `fixture`,

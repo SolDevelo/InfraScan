@@ -713,6 +713,19 @@ def _resolve_number_from_files(var_expr: str, filepath: str) -> Optional[int]:
         except Exception:
             pass
 
+    # also check locals {} definitions in the same directory
+    if not values:
+        try:
+            locals_map = _build_locals_map(dir_path)
+            v = locals_map.get(key)
+            if v is not None:
+                try:
+                    values = [int(v)]
+                except (ValueError, TypeError):
+                    pass
+        except Exception:
+            pass
+
     if not values:
         return None
 
@@ -1029,13 +1042,98 @@ SAVINGS_MODELS: Dict[str, Callable] = {
 }
 
 
-# ── Phase 1 — estimate_savings ────────────────────────────────────────────────
+# ── count multiplier ──────────────────────────────────────────────────────────
+
+def extract_count(block_content: str, filepath: str = "") -> tuple:
+    """Return ``(count, confidence)`` for a resource block.
+
+    Checks for a literal ``count = N`` (returns count, "high"), a variable
+    reference resolved via tfvars / locals (returns resolved int, "medium"),
+    or ``(1, "high")`` when absent.
+    """
+    m = re.search(r'^\s{0,4}count\s*=\s*(\d+)', block_content, re.MULTILINE)
+    if m:
+        return int(m.group(1)), "high"
+    var_m = re.search(r'^\s{0,4}count\s*=\s*((?:var|local)\.\S+)', block_content, re.MULTILINE)
+    if var_m and filepath:
+        resolved = _resolve_number_from_files(var_m.group(1), filepath)
+        if resolved is not None and resolved > 0:
+            return resolved, "medium"
+    return 1, "high"
+
+
+# ── locals resolution ─────────────────────────────────────────────────────────
+
+def _build_locals_map(directory: str) -> dict:
+    """Resolve all ``locals { }`` assignments in *directory* into a flat dict.
+
+    1. Collects raw ``key = value`` pairs from every ``locals {}`` block across
+       all ``.tf`` files in the directory.
+    2. Resolves transitive ``local.*`` references up to depth 5.
+    3. Handles simple ternary ``cond ? a : b`` by returning the else branch
+       (conservative default).
+
+    Returns a dict of local_name -> resolved string/number value.
+    """
+    raw: dict = {}
+    try:
+        for fname in sorted(os.listdir(directory)):
+            if not fname.endswith(".tf"):
+                continue
+            try:
+                with open(os.path.join(directory, fname), encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+            except Exception:
+                continue
+            for lm in re.finditer(r'^\s*locals\s*\{', content, re.MULTILINE):
+                depth, i = 0, lm.start()
+                while i < len(content):
+                    if content[i] == "{":
+                        depth += 1
+                    elif content[i] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    i += 1
+                block = content[lm.start(): i + 1]
+                for am in re.finditer(
+                    r'^\s{2,4}(\w+)\s*=\s*(.+?)(?:\s*#.*)?$',
+                    block, re.MULTILINE,
+                ):
+                    raw[am.group(1)] = am.group(2).strip()
+    except Exception:
+        pass
+
+    def _resolve(val: str, depth: int = 0) -> Optional[str]:
+        if depth > 5:
+            return None
+        # Quoted string literal
+        qm = re.fullmatch(r'"([^"]*)"', val) or re.fullmatch(r"'([^']*)'", val)
+        if qm:
+            return qm.group(1)
+        # Numeric literal
+        if re.fullmatch(r'\d+', val):
+            return val
+        # local.foo reference
+        lm = re.fullmatch(r'local\.(\w+)', val)
+        if lm and lm.group(1) in raw:
+            return _resolve(raw[lm.group(1)], depth + 1)
+        # Simple ternary — conservative else branch
+        tm = re.match(r'.+?\s*\?\s*.+?\s*:\s*(.+)$', val)
+        if tm:
+            return _resolve(tm.group(1).strip(), depth + 1)
+        return None
+
+    return {k: v for k, val in raw.items() if (v := _resolve(val)) is not None}
+
+
+# ── estimate_savings helpers ──────────────────────────────────────────────────
 
 def _build_var_hints(blocks: Dict[str, List[dict]], pricing: dict) -> dict:
     """
-    Scan non-resource blocks, tfvars files, and JSON data files for literal
-    instance_type / instance_class values and variable ``default`` values that
-    look like EC2/RDS types.
+    Scan non-resource blocks, tfvars files, JSON data files, and locals for
+    literal instance_type / instance_class values and variable ``default``
+    values that look like EC2/RDS types.
 
     Returns a hints dict with optional keys:
       ``instance_type``       — EC2 type whose price is closest to the inferred average
@@ -1087,13 +1185,19 @@ def _build_var_hints(blocks: Dict[str, List[dict]], pricing: dict) -> dict:
                     ec2_types.append(v)
                 if v in rds_prices and k in ("instance_class", "db_instance_class"):
                     rds_types.append(v)
-        # JSON data files (1.4)
+        # JSON data files
         for k, v in _load_json_data_files(d).items():
             if isinstance(v, str):
                 if v in ec2_prices and "instance_type" in k:
                     ec2_types.append(v)
                 if v in rds_prices and "instance_class" in k:
                     rds_types.append(v)
+        # locals {}
+        for k, v in _build_locals_map(d).items():
+            if v in ec2_prices and "instance_type" in k:
+                ec2_types.append(v)
+            if v in rds_prices and "instance_class" in k:
+                rds_types.append(v)
 
     hints: dict = {}
     if ec2_types:
@@ -2035,6 +2139,21 @@ def estimate_total_cost(
         for block in blocks.get(resource_type, []):
             try:
                 rc = cost_fn(block, pricing, usage_with_hints)
+                count, count_conf = extract_count(block.get("content", ""), block.get("file", ""))
+                if count > 1:
+                    multiplied_conf = rc.confidence if count_conf == "high" else "medium"
+                    rc = ResourceCost(
+                        resource_type=rc.resource_type,
+                        resource_name=rc.resource_name,
+                        file=rc.file,
+                        line=rc.line,
+                        fixed_usd_month=round(rc.fixed_usd_month * count, 2),
+                        usage_usd_month=round(rc.usage_usd_month * count, 2),
+                        min_usd_month=round(rc.min_usd_month * count, 2),
+                        total_usd_month=round(rc.total_usd_month * count, 2),
+                        assumptions=rc.assumptions + [f"count={count}"],
+                        confidence=multiplied_conf,
+                    )
                 results.append(rc)
             except Exception as exc:
                 logger.warning(

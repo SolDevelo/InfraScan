@@ -434,11 +434,19 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         full_path = os.path.join(root, file)
                         all_files.append(full_path)
         
-        # Scan all files and collect results
+        # Scan all files and collect results.
+        # COST-* rules are only meaningful in root module directories; filter
+        # them out for shared module directories to avoid phantom findings.
+        _root_cache: dict = {}
         for file_path in all_files:
             print(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
             file_results = scan_file(file_path)
             if file_results:
+                dir_path = os.path.dirname(file_path)
+                if dir_path not in _root_cache:
+                    _root_cache[dir_path] = is_root_module(dir_path)
+                if not _root_cache[dir_path]:
+                    file_results = [r for r in file_results if not str(r.get('rule_id', '')).startswith('COST-')]
                 results.extend(file_results)
         
         # Run directory-level checks (for InverseRegexRules)
