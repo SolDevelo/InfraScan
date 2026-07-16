@@ -42,7 +42,7 @@ jobs:
 
       # ── Main scan ───────────────────────────────────────────────────────────
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1
+        uses: ./
         with:
           scanner: comprehensive
           format: html
