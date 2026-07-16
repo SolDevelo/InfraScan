@@ -1,6 +1,41 @@
 import os
 import re
 from rules.definitions import check_rules
+
+DEFAULT_EXCLUDED_DIRS = {
+    ".git", ".terraform", ".terragrunt-cache",
+    "docs", "doc", "documentation",
+    "test", "tests", "testing",
+    "examples", "example", "fixtures", "fixture",
+    "scripts", "node_modules", "__pycache__",
+}
+
+
+def is_root_module(directory_path: str) -> bool:
+    """Return True if *directory_path* looks like a deployable Terraform root module.
+
+    A root module has at least one of:
+    - A ``provider "..." { }`` block declaration (not a resource-level provider attribute)
+    - A ``terraform { backend "..." { } }`` block (state backend = deployed environment)
+
+    Sub-module libraries typically have only ``terraform { required_providers {} }``
+    which is intentionally *not* matched here.
+    """
+    import glob as _glob_mod
+    for tf_file in _glob_mod.glob(os.path.join(directory_path, "*.tf")):
+        try:
+            with open(tf_file, encoding='utf-8', errors='replace') as fh:
+                content = fh.read()
+            # provider "aws" { — top-level provider declaration
+            if re.search(r'^\s*provider\s+"[^"]+"\s*\{', content, re.MULTILINE):
+                return True
+            # terraform { ... backend "..." { — contains a backend config
+            if re.search(r'^\s*terraform\s*\{', content, re.MULTILINE):
+                if re.search(r'^\s*backend\s+"', content, re.MULTILINE):
+                    return True
+        except Exception:
+            pass
+    return False
 from scanner.checkov_scanner import CheckovScanner
 from scanner.docker_scout_scanner import DockerScoutScanner
 from scanner.grype_scanner import GrypeScanner

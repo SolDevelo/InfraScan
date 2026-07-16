@@ -74,15 +74,26 @@ def extract_all_blocks(scan_path: str) -> Dict[str, List[dict]]:
     """
     Walk all .tf files under *scan_path* and extract resource blocks.
 
+    Only directories that pass ``is_root_module()`` are cost-scanned —
+    this prevents phantom costs from shared sub-module libraries.
+    Excluded dirs (docs, tests, examples, etc.) are pruned from the walk.
+
     Returns a dict keyed by resource_type, each value being a list of block
     dicts with keys: name, file, start_line, content, first_line,
     resource_type.
     """
+    from scanner.parser import DEFAULT_EXCLUDED_DIRS, is_root_module
+
     blocks: Dict[str, List[dict]] = {}
-    for root, _dirs, files in os.walk(scan_path):
-        for fname in files:
-            if not fname.endswith(".tf"):
-                continue
+    for root, dirs, files in os.walk(scan_path):
+        dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS and not d.startswith('.')]
+        tf_files = [f for f in files if f.endswith(".tf")]
+        if not tf_files:
+            continue
+        if not is_root_module(root):
+            logger.debug("Skipping non-root-module directory for cost: %s", root)
+            continue
+        for fname in tf_files:
             fpath = os.path.join(root, fname)
             try:
                 with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
@@ -504,11 +515,128 @@ def _savings_cost007(block_content: str, pricing: dict, usage: dict) -> SavingsR
     )
 
 
+# ── tfvars loading ─────────────────────────────────────────────────
+
+def _parse_tfvars_file(path: str) -> dict:
+    """Parse a ``.tfvars`` or ``.tfvars.json`` file into a flat key→value dict."""
+    result: dict = {}
+    try:
+        if path.endswith(".json"):
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                result.update(
+                    {k: v for k, v in data.items()
+                     if isinstance(v, (str, int, float, bool))}
+                )
+        else:
+            with open(path, encoding="utf-8") as fh:
+                content = fh.read()
+            for m in re.finditer(
+                r'^(\w+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([\d.]+))',
+                content, re.MULTILINE,
+            ):
+                k = m.group(1)
+                v = m.group(2) if m.group(2) is not None else (
+                    m.group(3) if m.group(3) is not None else m.group(4)
+                )
+                if v is not None:
+                    result[k] = v
+    except Exception:
+        pass
+    return result
+
+
+def load_tfvars(directory: str) -> dict:
+    """Return a flat dict of var_name→value from Terraform auto-loaded var files.
+
+    Reads in Terraform's precedence order (lowest first so later files win):
+    1. ``*.auto.tfvars`` (lexicographic)
+    2. ``*.auto.tfvars.json`` (lexicographic)
+    3. ``terraform.tfvars``
+    4. ``terraform.tfvars.json``
+    """
+    from glob import glob as _glob
+    vars_dict: dict = {}
+    candidates = (
+        sorted(_glob(os.path.join(directory, "*.auto.tfvars")))
+        + sorted(_glob(os.path.join(directory, "*.auto.tfvars.json")))
+        + [
+            os.path.join(directory, "terraform.tfvars"),
+            os.path.join(directory, "terraform.tfvars.json"),
+        ]
+    )
+    for cand in candidates:
+        if os.path.exists(cand):
+            vars_dict.update(_parse_tfvars_file(cand))
+    return vars_dict
+
+
+# ── JSON data-file helpers ────────────────────────────────────────
+
+def _load_json_data_files(directory: str) -> dict:
+    """Load all ``*.json`` files in *directory* and merge them into a flat dict.
+
+    For nested structures like ``accounts[env].key``, the following heuristic
+    is used to pick the environment tier:
+    1. Directory basename (e.g. ``ccms-pui`` — works when dirs are env names)
+    2. Standard production-tier names: ``production``, ``prod``, ``preproduction``
+    3. First available key as a last resort
+
+    Values from the resolved environment tier float to the top level so that
+    callers see a flat ``{key: value}`` mapping.
+    """
+    from glob import glob as _glob
+    flat: dict = {}
+    dir_basename = os.path.basename(directory).rstrip("/")
+    _ENV_PREFERENCE = (
+        dir_basename,
+        "production", "prod",
+        "preproduction", "preprod",
+        "staging", "sandbox",
+    )
+
+    for json_path in _glob(os.path.join(directory, "*.json")):
+        try:
+            with open(json_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except Exception:
+            continue
+
+        if not isinstance(data, dict):
+            continue
+
+        # Flatten top-level scalar values
+        for k, v in data.items():
+            if isinstance(v, (str, int, float, bool)):
+                flat[k] = v
+
+        # Drill into accounts/environments nested dicts
+        for accounts_key in ("accounts", "environments"):
+            accounts = data.get(accounts_key)
+            if not isinstance(accounts, dict):
+                continue
+            # Try each name in preference order
+            env_data = None
+            for candidate in _ENV_PREFERENCE:
+                if candidate in accounts:
+                    env_data = accounts[candidate]
+                    break
+            # Fall back to first key
+            if env_data is None and accounts:
+                env_data = next(iter(accounts.values()))
+            if isinstance(env_data, dict):
+                for k, v in env_data.items():
+                    if isinstance(v, (str, int, float, bool)):
+                        flat[k] = v
+    return flat
+
+
 def _resolve_number_from_files(var_expr: str, filepath: str) -> Optional[int]:
     """
     Resolve a Terraform variable reference (e.g. ``var.grq["root_dev_size"]``,
     ``var.root_dev_size``, ``local.size``) to a concrete integer by scanning all
-    sibling ``.tf`` files in the same directory for matching assignments.
+    sibling ``.tf`` files, tfvars files, and JSON data files in the same directory.
 
     Returns the most-common numeric value found, or ``None`` if unresolvable.
     """
@@ -551,9 +679,6 @@ def _resolve_number_from_files(var_expr: str, filepath: str) -> Optional[int]:
     except Exception:
         return None
 
-    if not combined:
-        return None
-
     # Find all assignments: key = <integer> (quoted or unquoted key)
     values = [
         int(m)
@@ -561,6 +686,32 @@ def _resolve_number_from_files(var_expr: str, filepath: str) -> Optional[int]:
             rf'["\']?{re.escape(key)}["\']?\s*=\s*(\d+)', combined
         )
     ]
+
+    # also check tfvars files in the same directory
+    if not values:
+        try:
+            tfvars = load_tfvars(dir_path)
+            v = tfvars.get(key)
+            if v is not None:
+                try:
+                    values = [int(v)]
+                except (ValueError, TypeError):
+                    pass
+        except Exception:
+            pass
+
+    # also check JSON data files in the same directory
+    if not values:
+        try:
+            json_data = _load_json_data_files(dir_path)
+            v = json_data.get(key)
+            if v is not None:
+                try:
+                    values = [int(v)]
+                except (ValueError, TypeError):
+                    pass
+        except Exception:
+            pass
 
     if not values:
         return None
@@ -882,8 +1033,9 @@ SAVINGS_MODELS: Dict[str, Callable] = {
 
 def _build_var_hints(blocks: Dict[str, List[dict]], pricing: dict) -> dict:
     """
-    Scan non-resource blocks for literal instance_type / instance_class values and
-    variable ``default`` values that look like EC2/RDS types.
+    Scan non-resource blocks, tfvars files, and JSON data files for literal
+    instance_type / instance_class values and variable ``default`` values that
+    look like EC2/RDS types.
 
     Returns a hints dict with optional keys:
       ``instance_type``       — EC2 type whose price is closest to the inferred average
@@ -917,6 +1069,31 @@ def _build_var_hints(blocks: Dict[str, List[dict]], pricing: dict) -> dict:
         t for t in re.findall(r'\bdefault\s*=\s*["\']([\w.]+)["\']', support)
         if t in rds_prices
     ]
+
+    # also search tfvars and JSON data files in all block directories
+    unique_dirs: set = {
+        os.path.dirname(b.get("file", ""))
+        for blist in blocks.values()
+        for b in blist
+        if b.get("file")
+    }
+    for d in unique_dirs:
+        if not d:
+            continue
+        # tfvars (1.3)
+        for k, v in load_tfvars(d).items():
+            if isinstance(v, str):
+                if v in ec2_prices and k in ("instance_type", "ec2_instance_type"):
+                    ec2_types.append(v)
+                if v in rds_prices and k in ("instance_class", "db_instance_class"):
+                    rds_types.append(v)
+        # JSON data files (1.4)
+        for k, v in _load_json_data_files(d).items():
+            if isinstance(v, str):
+                if v in ec2_prices and "instance_type" in k:
+                    ec2_types.append(v)
+                if v in rds_prices and "instance_class" in k:
+                    rds_types.append(v)
 
     hints: dict = {}
     if ec2_types:

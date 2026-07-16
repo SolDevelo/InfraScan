@@ -140,21 +140,46 @@ counted as covered but contribute $0 to the total.
 
 ---
 
+## Variable resolution
+
+InfraScan resolves variable references through three sources, checked in order:
+
+1. **Sibling `.tf` files** — scans every `.tf` file in the same directory for
+   explicit assignments (`instance_type = "t3.medium"`) and variable `default`
+   values that match a known EC2/RDS type.
+2. **`terraform.tfvars` and `*.auto.tfvars`** — reads the directory's auto-loaded
+   var files in Terraform's own precedence order:
+   `*.auto.tfvars` → `*.auto.tfvars.json` → `terraform.tfvars` → `terraform.tfvars.json`.
+3. **Adjacent JSON data files** — reads any `*.json` file in the same directory.
+   For nested structures like `accounts[env].ec2_instance_type`, InfraScan tries the
+   account key `production` (or `prod`, `preproduction`) as the environment fallback,
+   which matches the pattern used by repos such as modernisation-platform-environments.
+
+When a value is found, confidence is reported as `medium` (inferred rather than literal).
+When nothing resolves, a floor of **$50/mo** per EC2 instance and **$100/mo** per RDS
+instance is used and confidence is `low`.
+
+---
+
 ## Limitations
 
-- **Terraform variable references** (`var.*`, `each.value.*`, `jsondecode(...)`) are not
-  evaluated. When an `instance_type` or `instance_class` attribute uses a variable reference
-  instead of a literal string, InfraScan attempts to infer the value by scanning other blocks
-  in the same repo (locals, variable declarations) for:
-    - Explicit assignments: `instance_type = "t3.medium"`
-    - Variable `default` values that look like EC2/RDS types: `default = "t3.medium"`
-  If types are found, the **average price** across all candidates is used and confidence is
-  lowered to `Low`. If no types can be inferred (e.g. when sizing is passed in as a JSON blob
-  via `var.*` from the caller), a conservative floor of **$50/mo** per EC2 instance and
-  **$100/mo** per RDS instance is used.
-- All `.tf` files are scanned recursively, including local module directories. Remote modules
-  (sourced from a registry or a URL) are only included if they have already been downloaded
-  into `.terraform/`.
-- Prices are for `us-east-1` on-demand. Other regions and purchasing options are not modelled.
-- Inter-AZ and internet egress costs are not included except where they're part of a specific
-  resource's charge (NAT gateway data processing, TGW attachment data, CloudFront transfer out).
+- **Terraform variable expressions** — only literal strings and simple key→value
+  assignments are resolved (see *Variable resolution* above). Complex expressions
+  such as `local.application_data.accounts[local.environment].ec2_instance_type`
+  remain unresolved unless the referenced JSON file is present alongside the `.tf`
+  files.
+- **Root module detection** — cost scanning is restricted to *root modules*: directories
+  that contain a `provider "..." { }` block or a `terraform { backend "..." { } }` block.
+  Shared module libraries (which only have `terraform { required_providers {} }`) are
+  excluded from cost estimation. Security scanning still runs on all `.tf` files.
+- **Excluded directories** — the following directories are never scanned for cost:
+  `.git`, `.terraform`, `.terragrunt-cache`, `docs`, `doc`, `documentation`,
+  `test`, `tests`, `testing`, `examples`, `example`, `fixtures`, `fixture`,
+  `scripts`, `node_modules`. Security scanning is unaffected.
+- Prices are for `us-east-1` on-demand Linux. Other regions and purchasing options
+  are not modelled.
+- Inter-AZ and internet egress costs are not included except where they are part of
+  a specific resource's charge (NAT gateway data processing, TGW attachment data,
+  CloudFront transfer out).
+- Remote modules (sourced from a registry or URL) are only included if already
+  downloaded into `.terraform/`.
