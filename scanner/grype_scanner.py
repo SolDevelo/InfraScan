@@ -26,10 +26,11 @@ class GrypeScanner(Scanner):
 
     name = "grype"
 
+    # Extended-regex patterns (used by the CI skip-if-no-match check via grep -E).
     TRIGGER_PATTERNS = [
-        "**/Dockerfile", "**/Dockerfile.*",
-        "**/docker-compose*.yml", "**/docker-compose*.yaml",
-        "**/compose.yml", "**/compose.yaml",
+        r"(^|/)Dockerfile(\.[^/]+)?$",
+        r"(^|/)docker-compose[^/]*\.ya?ml$",
+        r"(^|/)compose\.ya?ml$",
     ]
     CI_SEVERITY_LIMITS = {
         "critical": None,

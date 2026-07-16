@@ -535,7 +535,7 @@ def main():
                 patterns.extend(cls.TRIGGER_PATTERNS)
         # regex / cost rules patterns (not a Scanner subclass)
         if args.scanner in ('comprehensive', 'regex'):
-            patterns.extend(['**/*.tf', '**/*.tfvars', '**/*.hcl'])
+            patterns.extend([r'\.tf$', r'\.tfvars$', r'\.hcl$'])
         print(json.dumps({'scanner': args.scanner, 'patterns': sorted(set(patterns))}))
         sys.exit(0)
 

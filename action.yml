@@ -82,10 +82,10 @@ runs:
         PATTERNS=$(docker run --rm "soldevelo/infrascan:latest" cli --list-patterns \
           --scanner "${{ inputs.scanner }}" 2>/dev/null \
           | python3 -c "import json,sys; [print(p) for p in json.load(sys.stdin).get('patterns',[])]" \
-          2>/dev/null || echo "*.tf\n*.tfvars\n*.hcl\n*.yaml\n*.yml\nDockerfile")
+          2>/dev/null || printf '\.tf$\n\.tfvars$\n\.hcl$\n\.ya?ml$\nDockerfile')
         MATCH=false
         while IFS= read -r pat; do
-          if echo "$CHANGED" | grep -qE "${pat//\*\*/.*}"; then
+          if echo "$CHANGED" | grep -qE "$pat"; then
             MATCH=true
             break
           fi
