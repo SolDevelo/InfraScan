@@ -27,6 +27,9 @@ The fastest way to integrate InfraScan into your repository is using our officia
 name: InfraScan Security Audit
 on: [push, pull_request]
 
+permissions:
+  pull-requests: write   # enables automatic PR comments
+
 jobs:
   infrascan:
     runs-on: ubuntu-latest
@@ -48,6 +51,14 @@ jobs:
           name: infrascan-report
           path: infrascan-report.html
 ```
+
+With `permissions: pull-requests: write`, the action automatically:
+- Posts a **PR comment** on every PR with the grade table, cost estimate, and new CRITICAL findings
+- Writes a **step summary** visible in the workflow run's Summary tab
+- Emits **inline annotations** on the changed files in the PR diff
+- **Skips the scan** on PRs where no IaC or container files were changed
+
+No extra inputs are required — all new behaviour is on by default. See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, the baseline/delta workflow, and upgrade notes for existing workflows.
 
 ## 📦 Installation
 
@@ -309,31 +320,11 @@ Edit `reporter/usage_defaults.json` or `reporter/traffic_profiles.json` directly
 - 🟡 **medium** — requires one usage assumption (invocation count, transfer volume)
 - ⚪ **low** — governance rules with no direct cost delta, or highly variable resources
 
-### PR comments
+### PR comments and step summary
 
-When running in GitHub Actions with `GITHUB_TOKEN` set, InfraScan posts a comment on the PR **only when there are actual cost savings to act on** (i.e., `low_usd_month > 0`). The comment also includes the top 3 critical/high security findings so reviewers get a full health check in one place:
+When running via the GitHub Action, InfraScan automatically posts a PR comment and writes a step summary. See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for the full reference including alert thresholds, baseline/delta comparison, and upgrade notes.
 
-> **🔍 InfraScan Report**
->
-> | Metric | Value |
-> |---|---|
-> | Estimated monthly infrastructure cost | **$6,941** |
-> | Potential savings (low) | **$4,999/mo** (72.0%) |
-> | Potential savings (high) | **$5,469/mo** (78.8%) |
-> | Overall grade | **C (71.7%)** |
->
-> **💰 Top cost savings opportunities**
-> | Rule | File | Saving/month |
-> |---|---|---|
-> | COST-005 | main.tf:46 | $1,415.25 |
-> | COST-027 | main.tf:46 | $270.00 |
-> | COST-012 | main.tf:11 | $587.65–$1,057.77 |
->
-> **🔒 Top security issues (critical/high)**
-> | Severity | Rule | Location |
-> |---|---|---|
-> | 🔴 CRITICAL | CKV_AWS_8 | ec2.tf:21 |
-> | 🟠 HIGH | CKV_AWS_3 | s3.tf:14 |
+A PR comment is **always posted** on pull requests. It contains the grade overview table, infrastructure cost (with baseline delta when available), and the new CRITICAL findings table. Full details (savings, MEDIUM findings) are in the step summary only.
 
 ## �📊 Grading System
 

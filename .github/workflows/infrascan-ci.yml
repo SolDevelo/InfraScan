@@ -2,32 +2,42 @@ name: InfraScan Audit
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  pull-requests: write
+  contents: read
 
 jobs:
   infrascan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Reports Directory
-        run: |
-          mkdir -p infrascan-reports
-          chmod 777 infrascan-reports
+      # TODO: remove this step once the action is published to the marketplace and the image is available on Docker Hub
+      - name: Build InfraScan image from current branch
+        run: docker build -t soldevelo/infrascan:latest .
 
+      # ── Scan ─────────────────────────────────────────────────────────────────
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.10
+        # TODO: replace with `uses: soldevelo/infrascan-action@v1` once the action is published to the marketplace
+        uses: ./
         with:
           scanner: comprehensive
           format: html
-          out: infrascan-reports/report.html
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-            
-      - name: Upload InfraScan Report
+          out: infrascan-report.html
+          pr-comment: 'true'
+          step-summary: 'true'
+          alert-on: 'critical'
+
+      # ── Upload full HTML report ─────────────────────────────────────────────
+      - name: Upload HTML report
         uses: actions/upload-artifact@v4
-        if: always() # Upload report even if the scan step fails
+        if: always()
         with:
           name: infrascan-report
-          path: infrascan-reports/report.html
+          path: infrascan-report.html
           retention-days: 14
+

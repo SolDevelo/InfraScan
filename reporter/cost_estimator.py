@@ -335,8 +335,6 @@ def _savings_cost001(block_content: str, pricing: dict, usage: dict) -> SavingsR
     inst = m.group(1).strip()
     before = ec2.get(inst, 0.0)
     if before == 0.0:
-        # Instance type not in pricing table — use a conservative floor so the
-        # calculated saving is shown instead of falling back to static text.
         before = 100.0
         conf = "low"
     else:
@@ -345,12 +343,78 @@ def _savings_cost001(block_content: str, pricing: dict, usage: dict) -> SavingsR
     if new_inst:
         after = ec2.get(new_inst, before * 0.85)
     else:
-        after = before * 0.85  # fallback: ~15% saving for unmapped old-gen
+        after = before * 0.85
     saving = max(0.0, before - after)
     return SavingsResult(
         saving, saving, before, after,
         [f"{inst} → {new_inst or 'new-gen'} on-demand us-east-1"],
         conf,
+    )
+
+
+def _savings_cost002(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
+    """COST-002 Expensive instance type — rightsizing opportunity."""
+    ec2_prices = pricing.get("ec2_instances", {})
+    m = re.search(r'instance_type\s*=\s*["\']([^"\']+)["\']', block_content)
+    inst_cost = ec2_prices.get(m.group(1).strip(), 0.0) if m else 0.0
+    if inst_cost == 0.0:
+        inst_cost = usage.get("_var_hints", {}).get("_ec2_fallback_cost", 500.0)
+    saving_high = round(inst_cost * 0.50, 2)
+    inst_name = m.group(1).strip() if m else "unknown"
+    return SavingsResult(
+        0.0, saving_high, inst_cost, round(inst_cost * 0.50, 2),
+        [
+            f"{inst_name} on-demand ${inst_cost:.2f}/mo",
+            "low=$0: workload may genuinely need this capacity",
+            "high=50% saving from rightsizing to a smaller type",
+        ],
+        "low",
+    )
+
+
+def _savings_cost016(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
+    """COST-016 Oversized root volume."""
+    gp3_rate = pricing.get("ebs_per_gb_month", {}).get("gp3", 0.08)
+    size_m = re.search(r'volume_size\s*=\s*(\d+)', block_content)
+    size = int(size_m.group(1)) if size_m else None
+    if size is None:
+        # try variable resolution via sibling .tf files
+        var_m = re.search(r'volume_size\s*=\s*(var\.\S+|local\.\S+)', block_content)
+        if var_m:
+            filepath = usage.get("_var_hints", {}).get("_filepath", "")
+            size = _resolve_number_from_files(var_m.group(1), filepath)
+    baseline_gb = 30
+    if size is None or size <= baseline_gb:
+        return SavingsResult(0.0, 0.0, 0.0, 0.0,
+                             [f"volume_size not resolved or ≤{baseline_gb} GB"], "low")
+    excess = size - baseline_gb
+    before = round(size * gp3_rate, 2)
+    after = round(baseline_gb * gp3_rate, 2)
+    saving_high = round(excess * gp3_rate, 2)
+    conf = "high" if size_m else "medium"
+    return SavingsResult(
+        0.0, saving_high, before, after,
+        [
+            f"{size}GB root volume; {excess}GB above {baseline_gb}GB baseline × ${gp3_rate}/GB/mo",
+            "low=$0: workload may require this space",
+        ],
+        conf,
+    )
+
+
+def _savings_cost019(block_content: str, pricing: dict, usage: dict) -> SavingsResult:
+    """COST-019 Load balancer for single instance."""
+    hourly = pricing.get("alb_per_hour", 0.02646)
+    lcu_hourly = pricing.get("alb_per_lcu_hour", 0.0093)
+    lcus = usage.get("alb_lcus_per_hour", 1.0)
+    before = round((hourly + lcu_hourly * lcus) * 730, 2)
+    return SavingsResult(
+        0.0, before, before, 0.0,
+        [
+            f"ALB ${hourly}/hr base + {lcus} LCU × ${lcu_hourly}/hr × 730h/mo",
+            "low=$0: ALB may be required for SSL termination or path routing",
+        ],
+        "medium",
     )
 
 
@@ -808,6 +872,9 @@ SAVINGS_MODELS: Dict[str, Callable] = {
     "COST-025": _savings_cost025,
     "COST-026": _savings_cost026,
     "COST-027": _savings_cost027,
+    # COST-002 (expensive instance type), COST-016 (large root volume),
+    # COST-019 (load balancer for single instance) are intentionally omitted:
+    # their savings estimates are too speculative to surface in totals or per-finding.
 }
 
 
@@ -1802,6 +1869,421 @@ def estimate_total_cost(
 
 # ── Phase 3 — Markdown / summary formatters ──────────────────────────────────
 
+def _fmt_usd(n: float) -> str:
+    """Format a dollar amount; show '<$1' for positive sub-dollar values."""
+    if 0 < n < 1:
+        return "<$1"
+    return f"${n:,.0f}"
+
+
+def _findings_section_md(
+    title: str,
+    findings: List[dict],
+    limit: Optional[int],
+    always_expanded: bool = False,
+    total: Optional[int] = None,
+) -> List[str]:
+    """
+    Render a list of findings as a Markdown section.
+
+    When *always_expanded* is True the section has no <details> wrapper.
+    Otherwise it is wrapped in a collapsible <details> block.
+    *limit* controls how many rows appear; None = all.  0 = omit entirely.
+    *total* is the untruncated count (shown in the header as "X of Y").
+    Rows beyond the limit are replaced with "… and N more — see full report".
+    """
+    if limit == 0 or not findings:
+        return []
+
+    shown = findings if limit is None else findings[:limit]
+    overflow = len(findings) - len(shown)
+
+    rows: List[str] = []
+    for f in shown:
+        sev  = f.get("severity", "").upper()
+        rid  = f.get("rule_id") or f.get("check_id", "")
+        fname = os.path.basename(f.get("file", "") or f.get("image", ""))
+        line_n = f.get("line", "")
+        loc = f"{fname}:{line_n}" if line_n else fname
+        raw_desc = f.get("description", f.get("name", ""))
+        # Normalise: collapse whitespace/newlines, escape pipe (table breaker)
+        desc = " ".join(raw_desc.replace("\r", "").replace("\n", " ").split())
+        desc = desc.replace("|", "\u2502")[:90]
+        rows.append(f"| {sev} | {rid} | {loc} | {desc} |")
+
+    table = [
+        f"| Severity | Rule | Location | Description |",
+        "|---|---|---|---|",
+    ] + rows
+
+    if overflow > 0:
+        table.append(f"| | | | _\u2026 and {overflow} more \u2014 see full report_ |")
+
+    displayed = len(shown)
+    real_total = total if total is not None else len(findings)
+    count_str = f"{displayed} of {real_total}" if real_total > displayed else str(real_total)
+
+    if always_expanded:
+        header = f"### {title} ({count_str})"
+        return [header, ""] + table + [""]
+
+    return [
+        f"<details>",
+        f"<summary><b>{title} ({count_str})</b></summary>",
+        "",
+    ] + table + [
+        "",
+        "</details>",
+        "",
+    ]
+
+
+def format_ci_summary_md(
+    report_dict: dict,
+    ci_limits: Optional[Dict[str, Dict[str, Optional[int]]]] = None,
+    baseline: Optional[dict] = None,
+    run_url: str = "",
+) -> str:
+    """
+    Return GitHub-flavoured Markdown for the GitHub Actions step summary.
+
+    Security-first layout:
+      1. Grade overview (always visible)
+      2. CRITICAL findings — all scanners — always expanded
+      3. HIGH findings — <details> collapsed, scanner limit applied
+      4. MEDIUM findings (IaC) — <details> collapsed, scanner limit applied
+      5. MEDIUM findings (containers) — omitted by default (limit=0)
+      6. Cost line (always visible)
+      7. Cost savings opportunities — <details> always collapsed
+
+    *ci_limits* is a dict keyed by category ("cost", "security", "container")
+    mapping to the scanner's CI_SEVERITY_LIMITS dict.  Falls back to base
+    defaults when not supplied.
+
+    *baseline* is a previously saved report_dict used to compute deltas.
+    """
+    _DEFAULT_LIMITS: Dict[str, Optional[int]] = {
+        "critical": None, "high": None, "medium": 10, "low": 0, "info": 0,
+    }
+    limits_by_cat = ci_limits or {}
+
+    def _limits(cat: str) -> Dict[str, Optional[int]]:
+        return {**_DEFAULT_LIMITS, **(limits_by_cat.get(cat) or {})}
+
+    overall = report_dict.get("overall", {})
+    cost_g  = report_dict.get("cost", {})
+    sec_g   = report_dict.get("security", {})
+    cont_g  = report_dict.get("container", {})
+    findings = report_dict.get("findings", {})
+    metrics  = report_dict.get("metrics", {})
+    savings  = metrics.get("savings_estimate", {})
+
+    lines: List[str] = ["## 🔍 InfraScan", ""]
+
+    # ── 1. Grade overview ─────────────────────────────────────────────────────
+    grade_rows: List[str] = []
+    def _grade_row(name: str, g: dict) -> None:
+        if not g or g.get("max_score", 0) == 0:
+            return
+        letter = g.get("letter", "?")
+        pct    = g.get("percentage", 0)
+        bd     = g.get("severity_breakdown", {})
+        parts = []
+        if bd.get("critical"): parts.append(f"🔴 {bd['critical']} critical")
+        if bd.get("high"):     parts.append(f"{bd['high']} high")
+        if bd.get("medium"):   parts.append(f"{bd['medium']} medium")
+        detail = ", ".join(parts) if parts else "clean"
+        grade_rows.append(f"| {name} | **{letter}** ({pct}%) | {detail} |")
+
+    _grade_row("Overall",   overall)
+    _grade_row("Security",  sec_g)
+    _grade_row("Cost",      cost_g)
+    _grade_row("Containers", cont_g)
+
+    if grade_rows:
+        lines += ["| Category | Grade | Findings |", "|---|---|---|"] + grade_rows + [""]
+
+    # ── 2. Infrastructure cost / baseline delta ──────────────────────────────
+    total_cost_early = savings.get("total_infra_cost_usd_month")
+    if total_cost_early:
+        base_cost_early = None
+        if baseline:
+            base_cost_early = (baseline.get("metrics", {})
+                               .get("savings_estimate", {})
+                               .get("total_infra_cost_usd_month"))
+        if base_cost_early:
+            delta_e = round(total_cost_early - base_cost_early, 2)
+            delta_str_e = (f"**+{_fmt_usd(delta_e)}/mo \u26a0\ufe0f**" if delta_e > 0
+                           else f"**{_fmt_usd(delta_e)}/mo \u2705**" if delta_e < 0
+                           else "no change")
+            lines += [
+                "| | Baseline | This PR | Delta |",
+                "|---|---|---|---|",
+                f"| Infra cost | {_fmt_usd(base_cost_early)}/mo"
+                f" | {_fmt_usd(total_cost_early)}/mo | {delta_str_e} |",
+                "",
+            ]
+        else:
+            lines += [f"**Infrastructure cost:** {_fmt_usd(total_cost_early)}/mo", ""]
+
+    # ── 3 & 4. Security + container findings by severity ─────────────────────
+    all_sec  = list(findings.get("security", []))
+    all_cont = list(findings.get("container", []))
+    all_cost = list(findings.get("cost", []))
+
+    def _by_sev(lst: List[dict], sev: str) -> List[dict]:
+        return [f for f in lst if f.get("severity", "").lower() == sev]
+
+    sec_lim  = _limits("security")
+    cont_lim = _limits("container")
+    cost_lim = _limits("cost")
+
+    # CRITICAL — always expanded, all sources
+    crit_all = (
+        _by_sev(all_sec, "critical") +
+        _by_sev(all_cont, "critical") +
+        _by_sev(all_cost, "critical")
+    )
+    if crit_all:
+        lines += _findings_section_md("CRITICAL findings", crit_all,
+                                       limit=None, always_expanded=True)
+    else:
+        lines += ["✅ No critical findings", ""]
+
+    # HIGH — collapsed; track total before per-category caps
+    high_sec_all  = _by_sev(all_sec, "high")
+    high_cont_all = _by_sev(all_cont, "high")
+    high_cost_all = _by_sev(all_cost, "high")
+    total_high = len(high_sec_all) + len(high_cont_all) + len(high_cost_all)
+    high_sec_lim  = sec_lim.get("high")
+    high_cont_lim = cont_lim.get("high")
+    high_cost_lim = cost_lim.get("high")
+    high_all = (
+        (high_sec_all  if high_sec_lim  is None else high_sec_all[:high_sec_lim]) +
+        (high_cont_all if high_cont_lim is None else high_cont_all[:high_cont_lim]) +
+        (high_cost_all if high_cost_lim is None else high_cost_all[:high_cost_lim])
+    )
+    if high_all:
+        lines += _findings_section_md("HIGH findings", high_all,
+                                       limit=len(high_all),
+                                       always_expanded=False,
+                                       total=total_high)
+
+    # MEDIUM — collapsed; containers omitted when limit=0
+    med_sec_all  = _by_sev(all_sec, "medium")
+    med_cont_all = _by_sev(all_cont, "medium")
+    med_cost_all = _by_sev(all_cost, "medium")
+    med_cont_limit = cont_lim.get("medium", 0)
+    med_sec  = med_sec_all[:sec_lim.get("medium") or 0]
+    med_cont = med_cont_all[:(med_cont_limit or 0)]
+    med_cost = med_cost_all[:cost_lim.get("medium") or 0]
+    total_med = len(med_sec_all) + len(med_cont_all) + len(med_cost_all)
+
+    shown_med = med_sec + med_cont + med_cost
+    if shown_med:
+        lines += _findings_section_md("MEDIUM findings",
+                                       shown_med,
+                                       limit=len(shown_med),
+                                       always_expanded=False,
+                                       total=total_med)
+    if med_cont_limit == 0 and med_cont_all:
+        lines += [f"_ℹ️ {len(med_cont_all)} container MEDIUM CVEs omitted "
+                  f"\u2014 see full HTML report._", ""]
+
+    # ── 5. Cost savings separator ────────────────────────────────────────────
+    lines.append("---")
+    lines.append("")
+
+    # ── 5. Cost savings — always collapsed ────────────────────────────────────
+    per_finding = sorted(
+        [f for f in savings.get("per_finding", []) if f.get("saving_high", 0) > 0],
+        key=lambda f: f.get("saving_high", 0),
+        reverse=True,
+    )
+    if per_finding:
+        lo = savings.get("low_usd_month", 0)
+        hi = savings.get("high_usd_month", 0)
+        saving_str = _fmt_usd(lo) if lo == hi else f"{_fmt_usd(lo)}–{_fmt_usd(hi)}"
+        # Build rule_id → human-readable name from the cost findings list
+        rule_names: Dict[str, str] = {
+            f.get("rule_id", ""): f.get("rule_name", "")
+            for f in all_cost if f.get("rule_id") and f.get("rule_name")
+        }
+        rows_md = ["| Rule | Description | File | Saving/month |", "|---|---|---|---|"]
+        for pf in per_finding[:10]:
+            s_lo   = pf.get("saving_low", 0)
+            s_hi   = pf.get("saving_high", 0)
+            rid    = pf.get("rule_id", "")
+            rname  = rule_names.get(rid, "")
+            fname  = os.path.basename(pf.get("file", ""))
+            line_n = pf.get("line", "")
+            s_str  = _fmt_usd(s_lo) if s_lo == s_hi else f"{_fmt_usd(s_lo)}–{_fmt_usd(s_hi)}"
+            rows_md.append(f"| {rid} | {rname} | {fname}:{line_n} | {s_str} |")
+        lines += [
+            "<details>",
+            f"<summary>Cost savings opportunities: {saving_str}/mo</summary>",
+            "",
+        ] + rows_md + ["", "</details>", ""]
+
+    # no run_url link in step summary — you're already on the run page
+
+    return "\n".join(lines)
+
+
+def format_pr_comment_md(
+    report_dict: dict,
+    baseline: Optional[dict] = None,
+    alert_on: str = "critical",
+    run_url: str = "",
+) -> str:
+    """
+    Return a compact PR comment.  Always posts at least a brief summary so the
+    team knows InfraScan ran; detailed sections are added when actionable:
+    - new CRITICAL findings (always shown),
+    - new HIGH findings when alert_on='critical_high',
+    - cost delta > $5/mo or > 10%.
+    """
+    findings = report_dict.get("findings", {})
+    metrics  = report_dict.get("metrics", {})
+    savings  = metrics.get("savings_estimate", {})
+    overall  = report_dict.get("overall", {})
+
+    all_findings = (
+        list(findings.get("security", [])) +
+        list(findings.get("container", [])) +
+        list(findings.get("cost", []))
+    )
+
+    def _by_sev(sev: str) -> List[dict]:
+        return [f for f in all_findings if f.get("severity", "").lower() == sev]
+
+    crits = _by_sev("critical")
+    highs = _by_sev("high")
+
+    # Compute cost delta
+    total_cost = savings.get("total_infra_cost_usd_month", 0)
+    base_cost  = 0.0
+    if baseline:
+        base_cost = (baseline.get("metrics", {})
+                     .get("savings_estimate", {})
+                     .get("total_infra_cost_usd_month", 0))
+    cost_delta = round(total_cost - base_cost, 2) if base_cost else 0.0
+    cost_delta_pct = round(cost_delta / base_cost * 100, 1) if base_cost else 0.0
+
+    # Delta-aware new finding detection
+    baseline_findings: List[dict] = []
+    if baseline:
+        bf = baseline.get("findings", {})
+        baseline_findings = (
+            list(bf.get("security", [])) +
+            list(bf.get("container", [])) +
+            list(bf.get("cost", []))
+        )
+    base_keys = {
+        (f.get("rule_id") or f.get("check_id", ""), f.get("file", ""))
+        for f in baseline_findings
+    }
+    new_crits = [f for f in crits if
+                 (f.get("rule_id") or f.get("check_id",""), f.get("file","")) not in base_keys]
+    new_highs = [f for f in highs if
+                 (f.get("rule_id") or f.get("check_id",""), f.get("file","")) not in base_keys]
+
+    # When there's no baseline, treat all critical/high as "new"
+    if not baseline:
+        new_crits = crits
+        new_highs = highs
+
+    has_actionable = bool(new_crits)
+    if alert_on == "critical_high":
+        has_actionable = has_actionable or bool(new_highs)
+    has_actionable = has_actionable or (cost_delta > 5 or cost_delta_pct > 10)
+
+    letter = overall.get("letter", "?")
+    pct    = overall.get("percentage", 0)
+    lines  = [f"## 🔍 InfraScan: {letter} ({pct}%)", ""]
+
+    # ── Grade overview table (always) ─────────────────────────────────────────
+    cost_g = report_dict.get("cost", {})
+    sec_g  = report_dict.get("security", {})
+    cont_g = report_dict.get("container", {})
+
+    def _grade_row(name: str, g: dict) -> Optional[str]:
+        if not g or g.get("max_score", 0) == 0:
+            return None
+        gl  = g.get("letter", "?")
+        gp  = g.get("percentage", 0)
+        bd  = g.get("severity_breakdown", {})
+        parts = []
+        if bd.get("critical"): parts.append(f"🔴 {bd['critical']} critical")
+        if bd.get("high"):     parts.append(f"{bd['high']} high")
+        if bd.get("medium"):   parts.append(f"{bd['medium']} medium")
+        detail = ", ".join(parts) if parts else "✅ clean"
+        return f"| {name} | **{gl}** ({gp}%) | {detail} |"
+
+    grade_rows = [r for r in [
+        _grade_row("Overall",    overall),
+        _grade_row("Security",   sec_g),
+        _grade_row("Cost",       cost_g),
+        _grade_row("Containers", cont_g),
+    ] if r]
+    if grade_rows:
+        lines += ["| Category | Grade | Findings |", "|---|---|---|"] + grade_rows + [""]
+
+    # ── Infrastructure cost line ───────────────────────────────────────────────
+    if base_cost and cost_delta != 0:
+        delta_str = f"**+{_fmt_usd(cost_delta)}/mo ⚠️**" if cost_delta > 0 else f"**{_fmt_usd(cost_delta)}/mo ✅**"
+        lines += [
+            "| | Baseline | This PR | Delta |",
+            "|---|---|---|---|",
+            f"| Infra cost | {_fmt_usd(base_cost)}/mo | {_fmt_usd(total_cost)}/mo | {delta_str} |",
+            "",
+        ]
+    elif total_cost:
+        lines += [f"**Infrastructure cost:** {_fmt_usd(total_cost)}/mo", ""]
+
+    if not has_actionable:
+        # Clean summary — confirms the scan ran without noise
+        lines.append("✅ No new critical findings.")
+        if run_url:
+            lines += ["", f"→ [Full report in Actions summary]({run_url}) (HTML artifact also attached)"]
+        return "\n".join(lines)
+
+    # New CRITICAL findings
+    if new_crits:
+        lines += [f"### 🔴 New CRITICAL findings ({len(new_crits)})",
+                  "| Rule | File | Description |", "|---|---|---|"]
+        for f in new_crits[:10]:
+            rid   = f.get("rule_id") or f.get("check_id", "")
+            fname = os.path.basename(f.get("file", "") or f.get("image", ""))
+            line_n = f.get("line", "")
+            loc   = f"{fname}:{line_n}" if line_n else fname
+            desc  = (f.get("description", f.get("name", "")))[:70]
+            lines.append(f"| {rid} | {loc} | {desc} |")
+        if len(new_crits) > 10:
+            lines.append(f"| | | _… and {len(new_crits)-10} more_ |")
+        lines.append("")
+
+    # New HIGH findings (only when alert_on=critical_high)
+    if alert_on == "critical_high" and new_highs:
+        lines += [f"### 🟠 New HIGH findings ({len(new_highs)})",
+                  "| Rule | File | Description |", "|---|---|---|"]
+        for f in new_highs[:5]:
+            rid   = f.get("rule_id") or f.get("check_id", "")
+            fname = os.path.basename(f.get("file", "") or f.get("image", ""))
+            line_n = f.get("line", "")
+            loc   = f"{fname}:{line_n}" if line_n else fname
+            desc  = (f.get("description", f.get("name", "")))[:70]
+            lines.append(f"| {rid} | {loc} | {desc} |")
+        if len(new_highs) > 5:
+            lines.append(f"| | | _… and {len(new_highs)-5} more_ |")
+        lines.append("")
+
+    if run_url:
+        lines.append(f"→ [Full report in Actions summary]({run_url}) (HTML artifact also attached)")
+
+    return "\n".join(lines)
+
+
 def format_savings_summary_md(
     savings_estimate: dict,
     overall_grade: Optional[str] = None,
@@ -1809,105 +2291,13 @@ def format_savings_summary_md(
     security_findings: Optional[List[dict]] = None,
     container_findings: Optional[List[dict]] = None,
 ) -> str:
-    """
-    Return GitHub-flavoured Markdown for the GitHub Actions step summary and
-    PR comment.
-
-    *savings_estimate* must have ``low_usd_month > 0``; callers are responsible
-    for that guard.  *security_findings* and *container_findings* are the raw
-    finding lists from ScanReport — only critical/high entries are surfaced.
-    """
-    if not savings_estimate:
-        return ""
-
-    low  = savings_estimate.get("low_usd_month", 0)
-    high = savings_estimate.get("high_usd_month", 0)
-    total = savings_estimate.get("total_infra_cost_usd_month")
-    pct_low  = savings_estimate.get("savings_pct_of_total_low")
-    pct_high = savings_estimate.get("savings_pct_of_total_high")
-
-    lines = ["## 🔍 InfraScan Report", ""]
-
-    # ── Savings headline banner ───────────────────────────────────────────────
-    def _fmt_usd(n: float) -> str:
-        """Format a dollar amount; show '<$1' for positive sub-dollar values."""
-        if 0 < n < 1:
-            return "<$1"
-        return f"${n:,.0f}"
-
-    if high > 0:
-        range_str = _fmt_usd(low) if low == high else f"{_fmt_usd(low)} – {_fmt_usd(high)}"
-        lines.append(f"### 💰 Cost Savings Estimate: **{range_str}/mo**")
-        if pct_low is not None and total:
-            lines.append(f"> {pct_low}%–{pct_high}% of **{_fmt_usd(total)}/mo** total infrastructure cost")
-        elif total:
-            lines.append(f"> vs. **{_fmt_usd(total)}/mo** measured infrastructure cost")
-        lines.append("")
-
-    lines += ["| Metric | Value |", "|---|---|"]
-
-    if total:
-        lines.append(f"| Estimated monthly infrastructure cost | **{_fmt_usd(total)}** |")
-    if pct_low is not None:
-        lines.append(
-            f"| Potential savings (low)  | **{_fmt_usd(low)}/mo** ({pct_low}%) |"
-        )
-        lines.append(
-            f"| Potential savings (high) | **{_fmt_usd(high)}/mo** ({pct_high}%) |"
-        )
-    else:
-        lines.append(f"| Potential savings (low)  | **{_fmt_usd(low)}/mo** |")
-        lines.append(f"| Potential savings (high) | **{_fmt_usd(high)}/mo** |")
-
-    if overall_grade:
-        lines.append(f"| Overall grade | **{overall_grade} ({overall_pct}%)** |")
-
-    # Top 3 cost savings opportunities (only findings with actual saving > 0)
-    per_finding = sorted(
-        [f for f in savings_estimate.get("per_finding", []) if f.get("saving_high", 0) > 0],
-        key=lambda f: f.get("saving_high", 0),
-        reverse=True,
-    )[:3]
-    if per_finding:
-        lines += [
-            "",
-            "### 💰 Top cost savings opportunities",
-            "| Rule | File | Saving/month |",
-            "|---|---|---|",
-        ]
-        for pf in per_finding:
-            s_low  = pf.get("saving_low", 0)
-            s_high = pf.get("saving_high", 0)
-            fname  = os.path.basename(pf.get("file", ""))
-            line_n = pf.get("line", "")
-            saving_str = _fmt_usd(s_low) if s_low == s_high else f"{_fmt_usd(s_low)}–{_fmt_usd(s_high)}"
-            lines.append(
-                f"| {pf.get('rule_id', '')} | {fname}:{line_n} | {saving_str} |"
-            )
-
-    # Top security issues — critical and high only, max 3, across IaC + containers
-    _sev_order = {"critical": 0, "high": 1}
-    top_sec: List[dict] = []
-    for f in (security_findings or []) + (container_findings or []):
-        if f.get("severity", "").lower() in _sev_order:
-            top_sec.append(f)
-    top_sec.sort(key=lambda f: (_sev_order.get(f.get("severity", "").lower(), 9),))
-    top_sec = top_sec[:3]
-
-    if top_sec:
-        lines += [
-            "",
-            "### 🔒 Top security issues (critical/high)",
-            "| Severity | Rule | Location |",
-            "|---|---|---|",
-        ]
-        for sf in top_sec:
-            sev   = sf.get("severity", "").upper()
-            icon  = "🔴" if sev == "CRITICAL" else "🟠"
-            rid   = sf.get("rule_id") or sf.get("check_id", "")
-            fname = os.path.basename(sf.get("file", "") or sf.get("image", ""))
-            line_n = sf.get("line", "")
-            loc   = f"{fname}:{line_n}" if line_n else fname
-            lines.append(f"| {icon} {sev} | {rid} | {loc} |")
-
-    return "\n".join(lines)
+    """Deprecated — use format_ci_summary_md() instead."""
+    fake_report = {
+        "overall": {"letter": overall_grade, "percentage": overall_pct},
+        "findings": {
+            "security": security_findings or [],
+            "container": container_findings or [],
+        },
+        "metrics": {"savings_estimate": savings_estimate or {}},
+    }
+    return format_ci_summary_md(fake_report)

@@ -280,6 +280,20 @@ class DockerScoutScanner(Scanner):
 
     name = "docker-scout"
 
+    # Extended-regex patterns (used by the CI skip-if-no-match check via grep -E).
+    TRIGGER_PATTERNS = [
+        r"(^|/)Dockerfile(\.[^/]+)?$",
+        r"(^|/)docker-compose[^/]*\.ya?ml$",
+        r"(^|/)compose\.ya?ml$",
+    ]
+    CI_SEVERITY_LIMITS = {
+        "critical": None,
+        "high":     10,
+        "medium":   0,   # container MEDIUM CVEs are base-image noise
+        "low":      0,
+        "info":     0,
+    }
+
     def is_available(self) -> bool:
         try:
             return run_command(["docker-scout", "version"], timeout=5).returncode == 0

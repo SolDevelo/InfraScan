@@ -23,6 +23,15 @@ class CheckovScanner(Scanner):
 
     name = "checkov"
 
+    # Extended-regex patterns (used by the CI skip-if-no-match check via grep -E).
+    TRIGGER_PATTERNS = [
+        r"\.tf$", r"\.tfvars$", r"\.hcl$",
+        r"\.ya?ml$",
+        r"\.json$", r"\.template$",
+    ]
+    # IaC MEDIUM findings (missing tags, logging disabled, etc.) are actionable
+    # in a PR — keep the base defaults (medium: 10).
+
     def is_available(self) -> bool:
         return CHECKOV_AVAILABLE
 

@@ -366,15 +366,16 @@ class ReportGenerator:
         )
         
         # Container security grading (aggregated by image)
-        # Use scoring_findings for severity breakdown to show container counts, not total vulnerabilities
+        # Use scoring_findings for the grade/score, but all container_findings
+        # for the severity breakdown so the summary counts match the findings table.
         container_resource_count = max(base_resource_count, len(container_scoring_findings), 1)
         container_max_score = container_resource_count * max_severity_weight
         container_grade = (
             self.calculator.calculate_grade_with_max(
                 container_scoring_findings,
                 container_max_score,
-                violations=len(container_scoring_findings),
-                all_findings=container_scoring_findings
+                violations=len(container_findings),
+                all_findings=container_findings
             )
             if 'container' in enabled_scanners
             else None

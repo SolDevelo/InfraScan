@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 
 @dataclass
@@ -17,6 +17,25 @@ class Scanner(ABC):
     """Common interface for all scanners (Checkov, Grype, Docker Scout, ...)."""
 
     name: str
+
+    TRIGGER_PATTERNS: ClassVar[List[str]] = []
+    """Glob patterns (repo-relative) whose presence in a PR diff triggers this scanner."""
+
+    CI_SEVERITY_LIMITS: ClassVar[Dict[str, Optional[int]]] = {
+        # Maximum findings to surface per severity in step summary / PR comment.
+        # None = show all.  0 = omit the severity entirely from CI output.
+        "critical": None,
+        "high":     None,
+        "medium":   10,
+        "low":      0,
+        "info":     0,
+    }
+    """Per-severity display limits for CI output channels.
+
+    Subclasses override only the keys that differ from these defaults.
+    The formatter (format_ci_summary_md) reads these values — nothing is
+    hardcoded in the formatter itself.
+    """
 
     @abstractmethod
     def is_available(self) -> bool:

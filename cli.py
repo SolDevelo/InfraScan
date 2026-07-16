@@ -24,6 +24,91 @@ __version__ = "1.0.10"
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
 
+def load_baseline(path: str) -> dict:
+    """Load a baseline report JSON; return empty dict if path is blank or missing."""
+    if not path:
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[warn] Could not load baseline {path}: {e}", file=sys.stderr)
+        return {}
+
+
+def collect_ci_limits(scanner_type: str) -> dict:
+    """Return CI_SEVERITY_LIMITS per category, read from scanner class attributes."""
+    from scanner.checkov_scanner import CheckovScanner
+    from scanner.docker_scout_scanner import DockerScoutScanner
+    from scanner.grype_scanner import GrypeScanner
+    container_cls = DockerScoutScanner
+    try:
+        from scanner.parser import get_container_scanner
+        if get_container_scanner() == 'grype':
+            container_cls = GrypeScanner
+    except Exception:
+        pass
+    return {
+        'security':  dict(CheckovScanner.CI_SEVERITY_LIMITS),
+        'container': dict(container_cls.CI_SEVERITY_LIMITS),
+        'cost':      {},  # cost rules use base Scanner defaults
+    }
+
+
+def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
+    """Emit GitHub Actions workflow commands for inline PR annotations.
+
+    Security findings at or above alert_on threshold -> ::error/::warning.
+    Resources that became more expensive vs baseline -> ::warning.
+    """
+    if not os.getenv('GITHUB_ACTIONS'):
+        return
+
+    findings = report_dict.get('findings', {})
+    all_findings = (
+        list(findings.get('security', [])) +
+        list(findings.get('container', [])) +
+        list(findings.get('cost', []))
+    )
+
+    alert_sevs = {'critical'}
+    if alert_on == 'critical_high':
+        alert_sevs.add('high')
+
+    for f in all_findings:
+        sev = f.get('severity', '').lower()
+        if sev not in alert_sevs:
+            continue
+        rid   = f.get('rule_id') or f.get('check_id', 'FINDING')
+        fpath = f.get('file', '')
+        line  = f.get('line', '')
+        desc  = f.get('description', f.get('name', rid))
+        level = 'error' if sev == 'critical' else 'warning'
+        loc   = f"file={fpath}" + (f",line={line}" if line else "")
+        print(f"::{level} {loc},title={rid}::{desc}")
+
+    # Cost-increase annotations only when a baseline is present
+    if not baseline:
+        return
+    base_costs = {
+        rc['resource_name']: rc['total_usd_month']
+        for rc in baseline.get('metrics', {}).get('resource_costs', [])
+    }
+    for rc in report_dict.get('metrics', {}).get('resource_costs', []):
+        base = base_costs.get(rc['resource_name'])
+        if base is None:
+            continue
+        delta = round(rc['total_usd_month'] - base, 2)
+        if delta > 1.0:
+            fpath = rc.get('file', '')
+            line  = rc.get('line', '')
+            loc   = f"file={fpath}" + (f",line={line}" if line else "")
+            print(f"::warning {loc},title=COST-DELTA::"
+                  f"{rc['resource_name']} cost increased: "
+                  f"${base:.2f}/mo \u2192 ${rc['total_usd_month']:.2f}/mo "
+                  f"(+${delta:.2f}/mo)")
+
+
 def send_slack_notification(message: str) -> None:
     """Send a Slack notification via webhook URL from environment variable."""
     webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
@@ -173,6 +258,57 @@ def setup_args():
         dest="traffic_profile",
         help="Usage-based cost scaling profile (default: auto — detected from infra size). "
              "small=10GB/d NAT, medium=100GB/d, large=1TB/d."
+    )
+
+    parser.add_argument(
+        "--alert-on",
+        choices=["critical", "critical_high", "none"],
+        default="critical",
+        dest="alert_on",
+        help="Severity threshold for PR comments and annotations "
+             "(critical | critical_high | none). Default: critical."
+    )
+
+    parser.add_argument(
+        "--baseline",
+        default="",
+        help="Path to a baseline InfraScan JSON for cost/finding delta comparison."
+    )
+
+    parser.add_argument(
+        "--baseline-out",
+        default="",
+        dest="baseline_out",
+        help="Path to write the current scan result as JSON for use as a future baseline "
+             "(written regardless of --format)."
+    )
+
+    parser.add_argument(
+        "--pr-comment",
+        default="true",
+        dest="pr_comment",
+        help="Post/update a PR comment when actionable (true|false)."
+    )
+
+    parser.add_argument(
+        "--step-summary",
+        default="true",
+        dest="step_summary",
+        help="Write results to the GitHub Actions step summary (true|false)."
+    )
+
+    parser.add_argument(
+        "--force-comment",
+        action="store_true",
+        dest="force_comment",
+        help="Force a PR comment even when posting rules would normally skip it."
+    )
+
+    parser.add_argument(
+        "--list-patterns",
+        action="store_true",
+        dest="list_patterns",
+        help="Print trigger patterns for the requested scanner as JSON and exit."
     )
 
     return parser.parse_args()
@@ -390,7 +526,27 @@ def should_fail(args, report_dict, results):
 def main():
     load_dotenv()
     args = setup_args()
-    
+
+    # --list-patterns: print trigger patterns as JSON and exit
+    if args.list_patterns:
+        from scanner.checkov_scanner import CheckovScanner
+        from scanner.docker_scout_scanner import DockerScoutScanner
+        from scanner.grype_scanner import GrypeScanner
+        scanner_map = {
+            'checkov': CheckovScanner,
+            'containers': DockerScoutScanner,
+            'grype': GrypeScanner,
+        }
+        patterns: list = []
+        for name, cls in scanner_map.items():
+            if args.scanner in ('comprehensive', name):
+                patterns.extend(cls.TRIGGER_PATTERNS)
+        # regex / cost rules patterns (not a Scanner subclass)
+        if args.scanner in ('comprehensive', 'regex'):
+            patterns.extend([r'\.tf$', r'\.tfvars$', r'\.hcl$'])
+        print(json.dumps({'scanner': args.scanner, 'patterns': sorted(set(patterns))}))
+        sys.exit(0)
+
     target_path = os.path.abspath(args.path)
     
     if not os.path.exists(target_path):
@@ -451,6 +607,11 @@ def main():
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
 
+        # Write a JSON copy for use as a future baseline (independent of --format)
+        if getattr(args, 'baseline_out', ''):
+            with open(args.baseline_out, 'w') as f:
+                json.dump(report_dict, f, indent=2)
+
         # Handle console output
         if args.format == 'json' and not args.out:
             print(json.dumps(report_dict, indent=2))
@@ -464,39 +625,41 @@ def main():
             if args.out:
                  print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
 
-        # Phase 3 — GitHub Actions step summary
-        savings_est = (report_dict.get('metrics') or {}).get('savings_estimate')
-        overall_g   = report_dict.get('overall', {})
-        if savings_est and os.getenv('GITHUB_STEP_SUMMARY'):
-            from reporter.cost_estimator import format_savings_summary_md
-            summary_md = format_savings_summary_md(
-                savings_est,
-                overall_grade=overall_g.get('letter'),
-                overall_pct=overall_g.get('percentage'),
-                security_findings=report_dict.get('findings', {}).get('security', []),
-                container_findings=report_dict.get('findings', {}).get('container', []),
+        # ── CI output (step summary + PR comment + annotations) ──────────────
+        baseline_dict = load_baseline(getattr(args, 'baseline', ''))
+        alert_on      = getattr(args, 'alert_on', 'critical')
+        do_summary    = getattr(args, 'step_summary', 'true').lower() != 'false'
+        do_pr_comment = getattr(args, 'pr_comment', 'true').lower() != 'false'
+        force_comment = getattr(args, 'force_comment', False)
+
+        gh_ctx  = build_gh_actions_context()
+        run_url = gh_ctx.get('run_url', '')
+
+        if do_summary and os.getenv('GITHUB_STEP_SUMMARY'):
+            from reporter.cost_estimator import format_ci_summary_md
+            ci_limits = collect_ci_limits(args.scanner)
+            summary_md = format_ci_summary_md(
+                report_dict,
+                ci_limits=ci_limits,
+                baseline=baseline_dict or None,
+                run_url=run_url,
             )
             write_gh_step_summary(summary_md)
 
-        # Phase 3 — PR comment: only when there are actual savings to act on
-        has_savings = savings_est and savings_est.get('low_usd_month', 0) > 0
-        has_security = bool(
-            report_dict.get('findings', {}).get('security') or
-            report_dict.get('findings', {}).get('container')
-        )
-        if (has_savings or has_security) and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
-            from reporter.cost_estimator import format_savings_summary_md
-            comment_md = format_savings_summary_md(
-                savings_est if has_savings else {},
-                overall_grade=overall_g.get('letter'),
-                overall_pct=overall_g.get('percentage'),
-                security_findings=report_dict.get('findings', {}).get('security', []),
-                container_findings=report_dict.get('findings', {}).get('container', []),
+        if do_pr_comment and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
+            from reporter.cost_estimator import format_pr_comment_md
+            comment_md = format_pr_comment_md(
+                report_dict,
+                baseline=baseline_dict or None,
+                alert_on=alert_on,
+                run_url=run_url,
             )
-            if comment_md:
-                post_pr_comment(comment_md)
-            
-        # Send Slack notification if configured
+            if comment_md or force_comment:
+                post_pr_comment(comment_md or f"## 🔍 InfraScan\nNo actionable findings.")
+
+        emit_annotations(report_dict, baseline_dict, alert_on)
+
+        # ── Slack notification ────────────────────────────────────────────────
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
         if webhook_url:
             overall = report_dict.get('overall', {})

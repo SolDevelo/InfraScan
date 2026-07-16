@@ -37,39 +37,166 @@ inputs:
     description: 'Slack Incoming Webhook URL for scan notifications (optional)'
     required: false
     default: ''
+  github-token:
+    description: 'GitHub token for PR comments and annotations (defaults to the built-in token)'
+    required: false
+    default: ${{ github.token }}
+  pr-comment:
+    description: 'Post/update a PR comment when actionable findings exist (true|false)'
+    required: false
+    default: 'true'
+  step-summary:
+    description: 'Write scan results to the GitHub Actions step summary (true|false)'
+    required: false
+    default: 'true'
+  alert-on:
+    description: 'Severity threshold for PR comments and annotations (critical|critical_high|none)'
+    required: false
+    default: 'critical'
+  baseline:
+    description: 'Path to an explicit baseline JSON (overrides auto-baseline; leave blank to let the action manage it)'
+    required: false
+    default: ''
+  auto-baseline:
+    description: 'Automatically cache and compare against the base-branch baseline (true|false)'
+    required: false
+    default: 'true'
+  skip-if-no-match:
+    description: 'Skip scan if no files matching scanner patterns were changed (PRs only)'
+    required: false
+    default: 'true'
+outputs:
+  triggered-by-paths:
+    description: 'Newline-separated list of changed files that triggered this scan'
+    value: ${{ steps.run-infrascan.outputs.triggered-by-paths }}
 runs:
   using: 'composite'
   steps:
-    - name: Run InfraScan
+    - name: Check changed files
+      id: check-files
+      if: inputs.skip-if-no-match == 'true' && github.event_name == 'pull_request'
       shell: bash
       run: |
+        CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
+        if [ -z "$CHANGED" ]; then
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        # Query patterns from the scanner image; fall back to a safe hard-coded set
+        PATTERNS=$(docker run --rm "soldevelo/infrascan:latest" cli --list-patterns \
+          --scanner "${{ inputs.scanner }}" 2>/dev/null \
+          | python3 -c "import json,sys; [print(p) for p in json.load(sys.stdin).get('patterns',[])]" \
+          2>/dev/null || printf '\.tf$\n\.tfvars$\n\.hcl$\n\.ya?ml$\nDockerfile')
+        MATCH=false
+        while IFS= read -r pat; do
+          if echo "$CHANGED" | grep -qE "$pat"; then
+            MATCH=true
+            break
+          fi
+        done <<< "$PATTERNS"
+        echo "skip=$( [ $MATCH = true ] && echo false || echo true )" >> "$GITHUB_OUTPUT"
+        echo "triggered-by-paths<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$CHANGED" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    # ── Baseline cache restore ────────────────────────────────────────────────
+    # Key on the BASE branch commit SHA so the cache is invalidated when the
+    # target branch advances, not when the PR branch changes files.
+    - name: Restore baseline cache
+      id: baseline-cache
+      if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.check-files.outputs.skip != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/infrascan-baseline.json
+        key: infrascan-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+        restore-keys: |
+          infrascan-${{ github.base_ref }}-
+
+    # ── Baseline fallback: scan base branch when cache is cold ────────────────
+    - name: Scan base branch (baseline fallback)
+      if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.baseline-cache.outputs.cache-hit != 'true' && steps.check-files.outputs.skip != 'true'
+      shell: bash
+      run: |
+        git fetch --depth=1 origin ${{ github.base_ref }} 2>/dev/null || true
+        git worktree add "$RUNNER_TEMP/base-worktree" origin/${{ github.base_ref }}
+        mkdir -p "$RUNNER_TEMP/baseline-out"
+        chmod 777 "$RUNNER_TEMP/baseline-out"
+        docker run --rm \
+          -v "$RUNNER_TEMP/base-worktree:/scan:ro" \
+          -v "$RUNNER_TEMP/baseline-out:/output" \
+          "soldevelo/infrascan:latest" \
+          cli /scan --format json --out /output/infrascan-baseline.json
+        cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
+
+    - name: Run InfraScan
+      id: run-infrascan
+      if: steps.check-files.outputs.skip != 'true'
+      shell: bash
+      run: |
+        if [ "${{ steps.check-files.outputs.skip }}" = "true" ]; then
+          echo "::notice::InfraScan skipped — no supported files changed."
+          exit 0
+        fi
+
         SLACK_ENV=()
         if [ -n "${{ inputs.slack-webhook-url }}" ]; then
           SLACK_ENV=(
             -e SLACK_WEBHOOK_URL="${{ inputs.slack-webhook-url }}"
-            -e GITHUB_REPOSITORY="${{ github.repository }}"
-            -e GITHUB_WORKFLOW="${{ github.workflow }}"
-            -e GITHUB_REF_NAME="${{ github.ref_name }}"
-            -e GITHUB_ACTOR="${{ github.actor }}"
-            -e GITHUB_RUN_ID="${{ github.run_id }}"
-            -e GITHUB_SERVER_URL="${{ github.server_url }}"
           )
         fi
 
-        CMD=(docker run --rm --user root "${SLACK_ENV[@]}" -v "${{ github.workspace }}:/scan" "soldevelo/infrascan:latest" cli "/scan/${{ inputs.directory }}")
+        # Mount event file and a writable step-summary file into the container
+        SUMMARY_TMP="$(mktemp)"
+        GH_ENV=(
+          -e GITHUB_TOKEN="${{ inputs.github-token }}"
+          -e GITHUB_EVENT_PATH="/github/workflow/event.json"
+          -e GITHUB_STEP_SUMMARY="/github/workflow/step_summary.md"
+          -e GITHUB_REPOSITORY="${{ github.repository }}"
+          -e GITHUB_WORKFLOW="${{ github.workflow }}"
+          -e GITHUB_REF_NAME="${{ github.ref_name }}"
+          -e GITHUB_ACTOR="${{ github.actor }}"
+          -e GITHUB_RUN_ID="${{ github.run_id }}"
+          -e GITHUB_SERVER_URL="${{ github.server_url }}"
+          -e GITHUB_ACTIONS="true"
+          -v "${GITHUB_EVENT_PATH}:/github/workflow/event.json:ro"
+          -v "${SUMMARY_TMP}:/github/workflow/step_summary.md"
+        )
+
+        BASELINE_MOUNT=()
+        BASELINE_ARG=()
+        # Explicit baseline takes priority; otherwise use the auto-managed base-branch scan
+        BASELINE_FILE="${{ inputs.baseline }}"
+        if [ -z "$BASELINE_FILE" ] && [ -f "$RUNNER_TEMP/infrascan-baseline.json" ]; then
+          BASELINE_FILE="$RUNNER_TEMP/infrascan-baseline.json"
+        fi
+        if [ -n "$BASELINE_FILE" ] && [ -f "$BASELINE_FILE" ]; then
+          BASELINE_MOUNT=(-v "$BASELINE_FILE:/infrascan-baseline.json:ro")
+          BASELINE_ARG=(--baseline "/infrascan-baseline.json")
+        fi
+
+        CMD=(docker run --rm --user root
+          "${SLACK_ENV[@]}"
+          "${GH_ENV[@]}"
+          "${BASELINE_MOUNT[@]}"
+          -v "${{ github.workspace }}:/scan"
+          "soldevelo/infrascan:latest"
+          cli "/scan/${{ inputs.directory }}"
+        )
 
         CMD+=(--scanner "${{ inputs.scanner }}")
         CMD+=(--format "${{ inputs.format }}")
         CMD+=(--framework "${{ inputs.framework }}")
+        CMD+=(--alert-on "${{ inputs.alert-on }}")
+        CMD+=(--pr-comment "${{ inputs.pr-comment }}")
+        CMD+=(--step-summary "${{ inputs.step-summary }}")
+        CMD+=("${BASELINE_ARG[@]}")
 
         if [ -n "${{ inputs.out }}" ]; then
           CMD+=(--out "/scan/${{ inputs.out }}")
         elif [ "${{ inputs.format }}" = "html" ]; then
           CMD+=(--out "/scan/infrascan-report.html")
-          echo "Notice: Format is HTML but no 'out' file specified. Defaulting to infrascan-report.html"
         elif [ "${{ inputs.format }}" = "json" ]; then
           CMD+=(--out "/scan/infrascan-report.json")
-          echo "Notice: Format is JSON but no 'out' file specified. Defaulting to infrascan-report.json"
         fi
 
         if [ "${{ inputs.download-external-modules }}" = "true" ]; then
@@ -83,3 +210,22 @@ runs:
         echo "Running InfraScan:"
         echo "${CMD[*]}"
         "${CMD[@]}"
+        EXIT_CODE=$?
+
+        # Append container-written step summary to GitHub's GITHUB_STEP_SUMMARY
+        if [ -n "${SUMMARY_TMP:-}" ] && [ -s "${SUMMARY_TMP}" ]; then
+          cat "${SUMMARY_TMP}" >> "$GITHUB_STEP_SUMMARY"
+          rm -f "${SUMMARY_TMP}"
+        fi
+
+        exit $EXIT_CODE
+
+    # ── Save baseline to cache (only when freshly scanned from base branch) ────
+    # The file at this point is always a scan of the base branch — never the PR
+    # branch — so future PRs against the same base commit get a correct baseline.
+    - name: Save baseline cache
+      if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.check-files.outputs.skip != 'true' && steps.baseline-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/infrascan-baseline.json
+        key: infrascan-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
