@@ -36,9 +36,9 @@ jobs:
           git worktree add /tmp/base-worktree origin/${{ github.base_ref }}
           docker run --rm \
             -v /tmp/base-worktree:/scan \
+            -v /tmp:/output \
             soldevelo/infrascan:latest \
-            cli /scan --format json --out /scan/infrascan-baseline.json
-          cp /tmp/base-worktree/infrascan-baseline.json /tmp/infrascan-baseline.json || true
+            cli /scan --format json --out /output/infrascan-baseline.json
 
       # ── Main scan ───────────────────────────────────────────────────────────
       - name: Run InfraScan
