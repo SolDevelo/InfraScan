@@ -26,6 +26,19 @@ class GrypeScanner(Scanner):
 
     name = "grype"
 
+    TRIGGER_PATTERNS = [
+        "**/Dockerfile", "**/Dockerfile.*",
+        "**/docker-compose*.yml", "**/docker-compose*.yaml",
+        "**/compose.yml", "**/compose.yaml",
+    ]
+    CI_SEVERITY_LIMITS = {
+        "critical": None,
+        "high":     10,
+        "medium":   0,   # container MEDIUM CVEs are base-image noise
+        "low":      0,
+        "info":     0,
+    }
+
     def is_available(self) -> bool:
         try:
             result = subprocess.run(

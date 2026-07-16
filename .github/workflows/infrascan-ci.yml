@@ -2,32 +2,70 @@ name: InfraScan Audit
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  pull-requests: write
+  contents: read
 
 jobs:
   infrascan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git diff on PRs
 
-      - name: Create Reports Directory
+      # ── Baseline cache (fast path) ──────────────────────────────────────────
+      - name: Restore baseline cache
+        id: baseline-cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/infrascan-baseline.json
+          key: infrascan-${{ github.base_ref }}-${{ hashFiles('**/*.tf', '**/Chart.yaml', '**/Dockerfile') }}
+          restore-keys: |
+            infrascan-${{ github.base_ref }}-
+
+      # ── Fallback: scan base branch when cache is cold ───────────────────────
+      - name: Scan base branch (cache miss)
+        if: github.event_name == 'pull_request' && steps.baseline-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p infrascan-reports
-          chmod 777 infrascan-reports
+          git worktree add /tmp/base-worktree origin/${{ github.base_ref }}
+          docker run --rm \
+            -v /tmp/base-worktree:/scan \
+            soldevelo/infrascan:latest \
+            cli /scan --format json --out /scan/infrascan-baseline.json
+          cp /tmp/base-worktree/infrascan-baseline.json /tmp/infrascan-baseline.json || true
 
+      # ── Main scan ───────────────────────────────────────────────────────────
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.10
+        uses: soldevelo/infrascan@v1
         with:
           scanner: comprehensive
           format: html
-          out: infrascan-reports/report.html
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-            
-      - name: Upload InfraScan Report
+          out: infrascan-report.html
+          pr-comment: 'true'
+          step-summary: 'true'
+          alert-on: 'critical'
+          baseline: ${{ github.event_name == 'pull_request' && '/tmp/infrascan-baseline.json' || '' }}
+
+      # ── Save baseline after successful scan ─────────────────────────────────
+      - name: Save baseline cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/infrascan-baseline.json
+          key: infrascan-${{ github.base_ref }}-${{ hashFiles('**/*.tf', '**/Chart.yaml', '**/Dockerfile') }}
+
+      # ── Upload full HTML report ─────────────────────────────────────────────
+      - name: Upload HTML report
         uses: actions/upload-artifact@v4
-        if: always() # Upload report even if the scan step fails
+        if: always()
         with:
           name: infrascan-report
-          path: infrascan-reports/report.html
+          path: infrascan-report.html
           retention-days: 14
+

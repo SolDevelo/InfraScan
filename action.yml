@@ -37,39 +37,128 @@ inputs:
     description: 'Slack Incoming Webhook URL for scan notifications (optional)'
     required: false
     default: ''
+  github-token:
+    description: 'GitHub token for PR comments and annotations (defaults to the built-in token)'
+    required: false
+    default: ${{ github.token }}
+  pr-comment:
+    description: 'Post/update a PR comment when actionable findings exist (true|false)'
+    required: false
+    default: 'true'
+  step-summary:
+    description: 'Write scan results to the GitHub Actions step summary (true|false)'
+    required: false
+    default: 'true'
+  alert-on:
+    description: 'Severity threshold for PR comments and annotations (critical|critical_high|none)'
+    required: false
+    default: 'critical'
+  baseline:
+    description: 'Path to a baseline InfraScan JSON for cost/finding delta (leave blank on first run)'
+    required: false
+    default: ''
+  skip-if-no-match:
+    description: 'Skip scan if no files matching scanner patterns were changed (PRs only)'
+    required: false
+    default: 'true'
+outputs:
+  triggered-by-paths:
+    description: 'Newline-separated list of changed files that triggered this scan'
+    value: ${{ steps.run-infrascan.outputs.triggered-by-paths }}
 runs:
   using: 'composite'
   steps:
-    - name: Run InfraScan
+    - name: Check changed files
+      id: check-files
+      if: inputs.skip-if-no-match == 'true' && github.event_name == 'pull_request'
       shell: bash
       run: |
+        CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
+        if [ -z "$CHANGED" ]; then
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        # Query patterns from the scanner image; fall back to a safe hard-coded set
+        PATTERNS=$(docker run --rm "soldevelo/infrascan:latest" cli --list-patterns \
+          --scanner "${{ inputs.scanner }}" 2>/dev/null \
+          | python3 -c "import json,sys; [print(p) for p in json.load(sys.stdin).get('patterns',[])]" \
+          2>/dev/null || echo "*.tf\n*.tfvars\n*.hcl\n*.yaml\n*.yml\nDockerfile")
+        MATCH=false
+        while IFS= read -r pat; do
+          if echo "$CHANGED" | grep -qE "${pat//\*\*/.*}"; then
+            MATCH=true
+            break
+          fi
+        done <<< "$PATTERNS"
+        echo "skip=$( [ $MATCH = true ] && echo false || echo true )" >> "$GITHUB_OUTPUT"
+        echo "triggered-by-paths<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$CHANGED" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Run InfraScan
+      id: run-infrascan
+      if: steps.check-files.outputs.skip != 'true'
+      shell: bash
+      run: |
+        if [ "${{ steps.check-files.outputs.skip }}" = "true" ]; then
+          echo "::notice::InfraScan skipped — no supported files changed."
+          exit 0
+        fi
+
         SLACK_ENV=()
         if [ -n "${{ inputs.slack-webhook-url }}" ]; then
           SLACK_ENV=(
             -e SLACK_WEBHOOK_URL="${{ inputs.slack-webhook-url }}"
-            -e GITHUB_REPOSITORY="${{ github.repository }}"
-            -e GITHUB_WORKFLOW="${{ github.workflow }}"
-            -e GITHUB_REF_NAME="${{ github.ref_name }}"
-            -e GITHUB_ACTOR="${{ github.actor }}"
-            -e GITHUB_RUN_ID="${{ github.run_id }}"
-            -e GITHUB_SERVER_URL="${{ github.server_url }}"
           )
         fi
 
-        CMD=(docker run --rm --user root "${SLACK_ENV[@]}" -v "${{ github.workspace }}:/scan" "soldevelo/infrascan:latest" cli "/scan/${{ inputs.directory }}")
+        # Mount event file and a writable step-summary file into the container
+        SUMMARY_TMP="$(mktemp)"
+        GH_ENV=(
+          -e GITHUB_TOKEN="${{ inputs.github-token }}"
+          -e GITHUB_EVENT_PATH="/github/workflow/event.json"
+          -e GITHUB_STEP_SUMMARY="/github/workflow/step_summary.md"
+          -e GITHUB_REPOSITORY="${{ github.repository }}"
+          -e GITHUB_WORKFLOW="${{ github.workflow }}"
+          -e GITHUB_REF_NAME="${{ github.ref_name }}"
+          -e GITHUB_ACTOR="${{ github.actor }}"
+          -e GITHUB_RUN_ID="${{ github.run_id }}"
+          -e GITHUB_SERVER_URL="${{ github.server_url }}"
+          -e GITHUB_ACTIONS="true"
+          -v "${GITHUB_EVENT_PATH}:/github/workflow/event.json:ro"
+          -v "${SUMMARY_TMP}:/github/workflow/step_summary.md"
+        )
+
+        BASELINE_MOUNT=()
+        BASELINE_ARG=()
+        if [ -n "${{ inputs.baseline }}" ] && [ -f "${{ inputs.baseline }}" ]; then
+          BASELINE_MOUNT=(-v "${{ inputs.baseline }}:/infrascan-baseline.json:ro")
+          BASELINE_ARG=(--baseline "/infrascan-baseline.json")
+        fi
+
+        CMD=(docker run --rm --user root
+          "${SLACK_ENV[@]}"
+          "${GH_ENV[@]}"
+          "${BASELINE_MOUNT[@]}"
+          -v "${{ github.workspace }}:/scan"
+          "soldevelo/infrascan:latest"
+          cli "/scan/${{ inputs.directory }}"
+        )
 
         CMD+=(--scanner "${{ inputs.scanner }}")
         CMD+=(--format "${{ inputs.format }}")
         CMD+=(--framework "${{ inputs.framework }}")
+        CMD+=(--alert-on "${{ inputs.alert-on }}")
+        CMD+=(--pr-comment "${{ inputs.pr-comment }}")
+        CMD+=(--step-summary "${{ inputs.step-summary }}")
+        CMD+=("${BASELINE_ARG[@]}")
 
         if [ -n "${{ inputs.out }}" ]; then
           CMD+=(--out "/scan/${{ inputs.out }}")
         elif [ "${{ inputs.format }}" = "html" ]; then
           CMD+=(--out "/scan/infrascan-report.html")
-          echo "Notice: Format is HTML but no 'out' file specified. Defaulting to infrascan-report.html"
         elif [ "${{ inputs.format }}" = "json" ]; then
           CMD+=(--out "/scan/infrascan-report.json")
-          echo "Notice: Format is JSON but no 'out' file specified. Defaulting to infrascan-report.json"
         fi
 
         if [ "${{ inputs.download-external-modules }}" = "true" ]; then
@@ -83,3 +172,13 @@ runs:
         echo "Running InfraScan:"
         echo "${CMD[*]}"
         "${CMD[@]}"
+        EXIT_CODE=$?
+
+        # Append container-written step summary to GitHub's GITHUB_STEP_SUMMARY
+        if [ -n "${SUMMARY_TMP:-}" ] && [ -s "${SUMMARY_TMP}" ]; then
+          cat "${SUMMARY_TMP}" >> "$GITHUB_STEP_SUMMARY"
+          rm -f "${SUMMARY_TMP}"
+        fi
+
+        exit $EXIT_CODE
+

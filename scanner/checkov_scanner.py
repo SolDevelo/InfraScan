@@ -23,6 +23,14 @@ class CheckovScanner(Scanner):
 
     name = "checkov"
 
+    TRIGGER_PATTERNS = [
+        "**/*.tf", "**/*.tfvars", "**/*.hcl",
+        "**/*.yaml", "**/*.yml",
+        "**/*.json", "**/*.template",
+    ]
+    # IaC MEDIUM findings (missing tags, logging disabled, etc.) are actionable
+    # in a PR — keep the base defaults (medium: 10).
+
     def is_available(self) -> bool:
         return CHECKOV_AVAILABLE
 
