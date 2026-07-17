@@ -68,6 +68,195 @@ USAGE_DEFAULTS: Dict[str, float] = load_usage_defaults()
 TRAFFIC_PROFILES: Dict[str, Dict[str, float]] = load_traffic_profiles()
 
 
+# ── HCL expression resolver ──────────────────────────────────────────────────
+
+def _resolve_hcl_expr(expr: str, tfvars: dict, locals_map: dict) -> Optional[str]:
+    """Resolve a single HCL attribute value string to a concrete scalar.
+
+    Handles ``${var.foo}``, ``${local.foo}``, bare ``var.foo`` and ``local.foo``.
+    Returns ``None`` when the expression is unresolvable.
+    """
+    if not isinstance(expr, str):
+        return None
+    s = expr.strip()
+    # Already a plain literal (no interpolation markers)
+    if "${" not in s and not s.startswith("var.") and not s.startswith("local."):
+        return s
+
+    patterns = [
+        (re.fullmatch(r'\$\{var\.(\w+)\}', s),    tfvars),
+        (re.fullmatch(r'\$\{local\.(\w+)\}', s),  locals_map),
+        (re.fullmatch(r'var\.(\w+)', s),           tfvars),
+        (re.fullmatch(r'local\.(\w+)', s),         locals_map),
+    ]
+    for m, lookup in patterns:
+        if m:
+            v = lookup.get(m.group(1))
+            return str(v) if v is not None else None
+    return None
+
+
+def _load_variable_defaults(directory: str) -> dict:
+    """Extract ``default`` values from all ``variable {}`` blocks in *directory*.
+
+    Reads every ``.tf`` file with hcl2 (falls back to regex on parse errors).
+    Returns a dict of variable_name → default_value (strings only; complex
+    defaults such as objects and lists are skipped).
+    Callers merge this with tfvars; tfvars take precedence (higher Terraform
+    precedence order).
+    """
+    defaults: dict = {}
+    try:
+        import hcl2 as _hcl2  # noqa: PLC0415
+        for fname in sorted(os.listdir(directory)):
+            if not fname.endswith(".tf"):
+                continue
+            fpath = os.path.join(directory, fname)
+            try:
+                with open(fpath, encoding="utf-8", errors="replace") as fh:
+                    data = _hcl2.load(fh)
+            except Exception:
+                # Regex fallback for variable defaults
+                try:
+                    with open(fpath, encoding="utf-8", errors="replace") as fh:
+                        text = fh.read()
+                    for vm in re.finditer(
+                        r'variable\s+"(\w+)"\s*\{[^}]*default\s*=\s*"([^"]+)"',
+                        text, re.DOTALL
+                    ):
+                        defaults.setdefault(vm.group(1), vm.group(2))
+                except Exception:
+                    pass
+                continue
+            for var_entry in data.get("variable", []):
+                for var_name, var_attrs in var_entry.items():
+                    if var_name.startswith("__") or not isinstance(var_attrs, dict):
+                        continue
+                    raw_default = var_attrs.get("default")
+                    if raw_default is None:
+                        continue
+                    # Unwrap single-element list
+                    if isinstance(raw_default, list) and len(raw_default) == 1:
+                        raw_default = raw_default[0]
+                    if isinstance(raw_default, (str, int, float, bool)):
+                        defaults.setdefault(var_name, str(raw_default))
+    except Exception:
+        pass
+    return defaults
+
+
+def _estimate_foreach_cardinality(fe_val) -> Optional[int]:
+    """Estimate the number of instances created by a ``for_each`` argument.
+
+    Accepts the already-parsed value from python-hcl2:
+    - dict  → len(dict)
+    - list  → len(list)
+    - str   → try to parse ``toset(["a","b","c"])`` literals, else None
+    """
+    if isinstance(fe_val, dict):
+        return len(fe_val) if fe_val else None
+    if isinstance(fe_val, list):
+        return len(fe_val) if fe_val else None
+    if isinstance(fe_val, str):
+        m = re.search(r'to(?:set|list|map)\(\s*\[([^\]]*)\]', fe_val)
+        if m:
+            items = [x.strip() for x in m.group(1).split(",") if x.strip()]
+            return len(items) if items else None
+    return None
+
+
+def _attrs_to_content(resource_type: str, resource_name: str, attrs: dict) -> str:
+    """Rebuild a synthetic HCL block string from hcl2-parsed (resolved) attrs.
+
+    The resulting string is consumed by existing regex-based cost functions so
+    they continue to work without modification.
+    """
+    lines = [f'resource "{resource_type}" "{resource_name}" {{']
+    for k, v in attrs.items():
+        if k.startswith("__"):
+            continue
+        if isinstance(v, bool):
+            lines.append(f'  {k} = {str(v).lower()}')
+        elif isinstance(v, (int, float)):
+            lines.append(f'  {k} = {v}')
+        elif isinstance(v, str):
+            lines.append(f'  {k} = "{v}"')
+        elif isinstance(v, dict):
+            # Represent nested/dynamic blocks as a stub so pattern-matches still fire
+            inner = "  ".join(f'{dk} = "{dv}"\n' for dk, dv in v.items() if isinstance(dv, str))
+            lines.append(f'  {k} {{\n    {inner}  }}')
+        # lists and other complex types are omitted (not needed for scalar attribute matching)
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _extract_blocks_from_file_hcl2(
+    fpath: str, blocks: Dict[str, List[dict]], tfvars: dict, locals_map: dict
+) -> None:
+    """Parse *fpath* with python-hcl2 and append resource blocks to *blocks*.
+
+    Resolves ``var.*`` and ``local.*`` expression strings in scalar attributes
+    using *tfvars* and *locals_map* before rebuilding the content string.
+    Falls back to the regex extractor on any hcl2 parse error.
+    """
+    try:
+        import hcl2  # noqa: PLC0415
+        with open(fpath, encoding="utf-8", errors="replace") as fh:
+            data = hcl2.load(fh)
+    except Exception:
+        # Graceful fallback — some files use syntax hcl2 can't handle
+        try:
+            with open(fpath, encoding="utf-8", errors="replace") as fh:
+                _extract_blocks_from_content(fh.read(), fpath, blocks)
+        except Exception:
+            pass
+        return
+
+    for resource_entry in data.get("resource", []):
+        for resource_type, instances in resource_entry.items():
+            if not isinstance(instances, dict):
+                continue
+            for resource_name, raw_attrs in instances.items():
+                if resource_name.startswith("__") or not isinstance(raw_attrs, dict):
+                    continue
+
+                start_line = int(raw_attrs.get("__start_line__", 1))
+
+                # Flatten single-element lists (hcl2 wraps everything in lists)
+                flat: dict = {}
+                for k, v in raw_attrs.items():
+                    if k.startswith("__"):
+                        continue
+                    flat[k] = v[0] if isinstance(v, list) and len(v) == 1 else v
+
+                # Resolve var/local expression strings
+                resolved: dict = {}
+                for k, v in flat.items():
+                    if isinstance(v, str):
+                        r = _resolve_hcl_expr(v, tfvars, locals_map)
+                        resolved[k] = r if r is not None else v
+                    else:
+                        resolved[k] = v
+
+                # for_each cardinality
+                fe_cardinality: Optional[int] = None
+                if "for_each" in flat:
+                    fe_cardinality = _estimate_foreach_cardinality(flat["for_each"])
+
+                content = _attrs_to_content(resource_type, resource_name, resolved)
+
+                blocks.setdefault(resource_type, []).append({
+                    "name":                 resource_name,
+                    "file":                 fpath,
+                    "start_line":           start_line,
+                    "content":              content,
+                    "first_line":           content.splitlines()[0].strip(),
+                    "resource_type":        resource_type,
+                    "attrs":                resolved,
+                    "for_each_cardinality": fe_cardinality,
+                })
+
+
 # ── Block extraction ──────────────────────────────────────────────────────────
 
 def extract_all_blocks(scan_path: str) -> Dict[str, List[dict]]:
@@ -78,9 +267,13 @@ def extract_all_blocks(scan_path: str) -> Dict[str, List[dict]]:
     this prevents phantom costs from shared sub-module libraries.
     Excluded dirs (docs, tests, examples, etc.) are pruned from the walk.
 
-    Returns a dict keyed by resource_type, each value being a list of block
-    dicts with keys: name, file, start_line, content, first_line,
-    resource_type.
+    Each .tf file is parsed with python-hcl2 first; if hcl2 raises a parse
+    error the file falls back to the regex extractor.  Block dicts include:
+    ``name``, ``file``, ``start_line``, ``content``, ``first_line``,
+    ``resource_type``, ``attrs`` (hcl2-resolved key→value), and
+    ``for_each_cardinality`` (int or None).
+
+    Returns a dict keyed by resource_type, each value being a list of blocks.
     """
     from scanner.parser import DEFAULT_EXCLUDED_DIRS, is_root_module
 
@@ -93,15 +286,16 @@ def extract_all_blocks(scan_path: str) -> Dict[str, List[dict]]:
         if not is_root_module(root):
             logger.debug("Skipping non-root-module directory for cost: %s", root)
             continue
+
+        # Load variable resolution sources once per directory.
+        # Precedence: tfvars (highest) > variable defaults > locals.
+        dir_var_defaults = _load_variable_defaults(root)
+        dir_tfvars = {**dir_var_defaults, **load_tfvars(root)}  # tfvars win
+        dir_locals  = _build_locals_map(root)
+
         for fname in tf_files:
             fpath = os.path.join(root, fname)
-            try:
-                with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
-                    content = fh.read()
-            except OSError as exc:
-                logger.warning("Failed to read %s: %s", fpath, exc)
-                continue
-            _extract_blocks_from_content(content, fpath, blocks)
+            _extract_blocks_from_file_hcl2(fpath, blocks, dir_tfvars, dir_locals)
     return blocks
 
 
@@ -1044,13 +1238,32 @@ SAVINGS_MODELS: Dict[str, Callable] = {
 
 # ── count multiplier ──────────────────────────────────────────────────────────
 
-def extract_count(block_content: str, filepath: str = "") -> tuple:
+def extract_count(block_content: str, filepath: str = "", block: Optional[dict] = None) -> tuple:
     """Return ``(count, confidence)`` for a resource block.
 
-    Checks for a literal ``count = N`` (returns count, "high"), a variable
-    reference resolved via tfvars / locals (returns resolved int, "medium"),
-    or ``(1, "high")`` when absent.
+    Priority order:
+    1. ``for_each_cardinality`` from hcl2-parsed block (literal dict/set).
+    2. ``count`` from hcl2-parsed attrs (integer already resolved).
+    3. Literal ``count = N`` regex on content.
+    4. Variable reference resolved via tfvars / locals.
+    5. Default ``(1, "high")``.
     """
+    if block is not None:
+        # for_each takes precedence over count when both are present
+        fe_card = block.get("for_each_cardinality")
+        if fe_card is not None and fe_card > 0:
+            return fe_card, "high"
+
+        attrs = block.get("attrs") or {}
+        count_val = attrs.get("count")
+        if isinstance(count_val, int) and count_val > 0:
+            return count_val, "high"
+        if isinstance(count_val, str):
+            resolved = _resolve_number_from_files(count_val, filepath)
+            if resolved is not None and resolved > 0:
+                return resolved, "medium"
+
+    # Regex fallback (for blocks without hcl2 attrs)
     m = re.search(r'^\s{0,4}count\s*=\s*(\d+)', block_content, re.MULTILINE)
     if m:
         return int(m.group(1)), "high"
@@ -2139,7 +2352,7 @@ def estimate_total_cost(
         for block in blocks.get(resource_type, []):
             try:
                 rc = cost_fn(block, pricing, usage_with_hints)
-                count, count_conf = extract_count(block.get("content", ""), block.get("file", ""))
+                count, count_conf = extract_count(block.get("content", ""), block.get("file", ""), block=block)
                 if count > 1:
                     multiplied_conf = rc.confidence if count_conf == "high" else "medium"
                     rc = ResourceCost(

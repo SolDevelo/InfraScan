@@ -140,50 +140,73 @@ counted as covered but contribute $0 to the total.
 
 ---
 
+## Block parsing
+
+Terraform files are parsed with **python-hcl2** — the same HCL library used by Checkov.
+This replaces the previous regex-based block extractor and gives:
+
+- Correct block boundary detection (no false positives from comments or multi-line strings)
+- Structured attribute values (integers, booleans, dicts) rather than raw text
+- Reliable `count` and `for_each` extraction
+
+If hcl2 raises a parse error on a file (e.g. unsupported syntax), the file falls back
+to the regex extractor so no resources are silently dropped.
+
+---
+
 ## Variable resolution
 
-InfraScan resolves variable references through four sources, checked in order:
+Attribute values that contain `${var.foo}` or `${local.foo}` expressions are resolved
+at parse time, before any cost function sees them.  Resolution sources (highest to lowest
+precedence):
 
-1. **Sibling `.tf` files** — scans every `.tf` file in the same directory for
-   explicit assignments (`instance_type = "t3.medium"`) and variable `default`
-   values that match a known EC2/RDS type.
-2. **`terraform.tfvars` and `*.auto.tfvars`** — reads the directory's auto-loaded
-   var files in Terraform's own precedence order:
-   `*.auto.tfvars` → `*.auto.tfvars.json` → `terraform.tfvars` → `terraform.tfvars.json`.
-3. **Adjacent JSON data files** — reads any `*.json` file in the same directory.
-   For nested structures like `accounts[env].ec2_instance_type`, InfraScan tries the
-   account key `production` (or `prod`, `preproduction`) as the environment fallback,
-   which matches the pattern used by repos such as modernisation-platform-environments.
-4. **`locals {}` blocks** — resolves all `locals { }` assignments in the directory,
-   including transitive references (`local.x → local.y → "t3.medium"`) up to depth 5.
+1. **`terraform.tfvars` and `*.auto.tfvars`** — auto-loaded var files in Terraform's own
+   precedence order: `*.auto.tfvars` → `*.auto.tfvars.json` → `terraform.tfvars` →
+   `terraform.tfvars.json`.
+2. **`variable {}` defaults** — `default` values from every `variable` block in the
+   directory's `.tf` files.  tfvars override these (matching real Terraform behaviour).
+3. **`locals {}` blocks** — assignments resolved transitively up to depth 5.
    For ternary expressions (`condition ? a : b`), the else branch is used as the
    conservative fallback.
+4. **Adjacent JSON data files** — any `*.json` file in the directory.
+   For nested structures like `accounts[env].ec2_instance_type`, InfraScan tries the
+   account key `production` (or `prod`, `preproduction`) as the environment fallback.
 
-When a value is found, confidence is reported as `medium` (inferred rather than literal).
+Once an expression is resolved to a concrete string or number, the content seen by the cost
+function contains the literal value so existing attribute regex patterns still match.
+
+When a value is found by resolution (not a literal in the source), confidence is `medium`.
 When nothing resolves, a floor of **$50/mo** per EC2 instance and **$100/mo** per RDS
 instance is used and confidence is `low`.
 
 ---
 
-## count multiplier
+## count and for_each multipliers
 
-When a resource block contains a `count = N` argument, InfraScan multiplies the estimated
-monthly cost by `N`:
+Resource cardinality is derived in priority order:
 
-- **Literal integer** (`count = 3`) — count is applied at full confidence.
-- **Variable reference** (`count = var.replica_count`) — InfraScan attempts to resolve
-  the variable via tfvars and locals; if resolved, confidence is downgraded to `medium`.
-- **Absent** — count defaults to 1.
+1. **`for_each` literal dict/set** — `for_each = {"a" = …, "b" = …}` → 2 instances.
+   `for_each = toset(["dev", "staging", "prod"])` → 3 instances.
+   Both are detected from the hcl2-parsed structure with `confidence = "high"`.
+2. **`count` integer** — literal `count = 3` from hcl2 attrs → 3 instances, `"high"`.
+3. **`count` variable reference** — `count = var.replica_count` → InfraScan resolves
+   via tfvars / variable defaults; if resolved, `confidence = "medium"`.
+4. **Default** — 1 instance.
 
 The assumption `count=N` is appended to the resource's assumption list whenever `N > 1`.
+`for_each` with a variable reference (`for_each = var.environments`) cannot be statically
+counted and falls back to 1.
 
 ---
 
 ## Limitations
 
-- **Terraform variable expressions** — only literal strings and simple key→value
-  assignments are resolved (see *Variable resolution* above). Complex expressions
-  that chain multiple locals or module outputs remain unresolved.
+- **Complex chained expressions** — attribute values like
+  `local.data.accounts[local.env].instance_type` are not resolved. InfraScan
+  handles simple `${var.foo}` and `${local.foo}` substitutions only. Resources
+  using such expressions fall back to the price floor.
+- **`for_each` with variable references** — `for_each = var.environments` cannot
+  be counted statically; the resource is costed as a single instance.
 - **Root module detection** — cost scanning is restricted to *root modules*: directories
   that contain a `provider "..." { }` block or a `terraform { backend "..." { } }` block.
   Shared module libraries (which only have `terraform { required_providers {} }`) are
@@ -193,6 +216,9 @@ The assumption `count=N` is appended to the resource's assumption list whenever 
   `.git`, `.terraform`, `.terragrunt-cache`, `docs`, `doc`, `documentation`,
   `test`, `tests`, `testing`, `examples`, `example`, `fixtures`, `fixture`,
   `scripts`, `node_modules`. Security scanning is unaffected.
+- **Variable defaults vs actual values** — `variable {}` defaults are used when no
+  tfvars override is present. Production deployments often override defaults with
+  larger instance types, so estimates based on defaults may under-count real costs.
 - Prices are for `us-east-1` on-demand Linux. Other regions and purchasing options
   are not modelled.
 - Inter-AZ and internet egress costs are not included except where they are part of

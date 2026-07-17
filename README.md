@@ -279,9 +279,11 @@ InfraScan calculates actual dollar savings for every finding — not just static
 ### How it works
 
 1. **Pricing table** (`reporter/pricing_table.json`) — static AWS `us-east-1` prices for EC2, RDS, EBS, NAT Gateway, Lambda, API Gateway, CloudWatch, S3, DynamoDB, SQS, Fargate, Kinesis, and more. Updated on each InfraScan release.
-2. **Per-rule savings models** — every COST-* rule has a `savings_fn` that reads the actual HCL config (instance type, volume size, RCU/WCU, etc.) and computes a precise before/after cost.
-3. **Per-resource total cost** — InfraScan also computes the monthly cost of every resource found, giving a total infrastructure cost estimate and a savings-as-%-of-total headline.
-4. **Traffic profile** — usage-based resources (NAT transfer, Lambda invocations, CW log ingestion) use configurable defaults from `reporter/usage_defaults.json`, scaled by the active traffic profile.
+2. **HCL parsing** — each `.tf` file is parsed with **python-hcl2** (regex fallback on parse errors). Only *root module* directories (those with a `provider {}` or `terraform { backend {} }` block) are cost-scanned; shared module libraries are skipped to avoid phantom findings.
+3. **Variable resolution** — `${var.x}` and `${local.x}` expressions in resource attributes are resolved at parse time from (highest to lowest precedence): `*.auto.tfvars` files, `variable {}` defaults, `locals {}` blocks, and adjacent JSON data files. Resolved values feed directly into cost functions so instance types, sizes, and counts reflect what is actually declared.
+4. **Per-rule savings models** — every COST-* rule has a `savings_fn` that reads the actual HCL config (instance type, volume size, RCU/WCU, etc.) and computes a precise before/after cost.
+5. **Per-resource total cost** — InfraScan also computes the monthly cost of every resource found, giving a total infrastructure cost estimate and a savings-as-%-of-total headline. `count = N` and literal `for_each` dicts/sets multiply the per-instance cost accordingly.
+6. **Traffic profile** — usage-based resources (NAT transfer, Lambda invocations, CW log ingestion) use configurable defaults from `reporter/usage_defaults.json`, scaled by the active traffic profile.
 
 ### Traffic profiles
 
