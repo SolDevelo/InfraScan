@@ -1032,6 +1032,9 @@ def _savings_cost020(block_content: str, pricing: dict, usage: dict) -> SavingsR
     if not m:
         return SavingsResult(0.0, 0.0, 0.0, 0.0, [], "low")
     inst     = m.group(1).strip()
+    # Check if the captured string is a variable reference
+    if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+        return SavingsResult(0.0, 0.0, 0.0, 0.0, [], "low")
     before   = rds.get(inst, 0.0)
     if before == 0.0:
         # Instance type not in pricing table — use a conservative floor so the
@@ -1113,6 +1116,9 @@ def _savings_cost024(block_content: str, pricing: dict, usage: dict) -> SavingsR
             return SavingsResult(0.0, 0.0, 0.0, 0.0, [], "low")
     else:
         inst = m.group(1).strip()
+        # Check if the captured string is a variable reference
+        if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+            return SavingsResult(0.0, 0.0, 0.0, 0.0, [], "low")
     instance_cost = rds.get(inst, 100.0)
     # Multi-AZ doubles instance cost; disabling it saves one replica.
     before = instance_cost * 2
@@ -1447,10 +1453,16 @@ def estimate_savings(
     for b in blocks.get("aws_instance", []):
         m = re.search(r'instance_type\s*=\s*["\']([^"\']+)["\']', b.get("content", ""))
         if m:
-            total_ec2_cost += ec2_prices.get(m.group(1).strip(), 50.0)
+            inst = m.group(1).strip()
+            # Check if the captured string is a variable reference
+            if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+                # Unresolved variable - skip (don't add to fleet cost for Spot savings)
+                cost012_inferred = True
+            else:
+                # Literal instance type
+                total_ec2_cost += ec2_prices.get(inst, 50.0)
         else:
-            # instance_type is a variable/local reference — use inferred average or floor
-            total_ec2_cost += ec2_fallback
+            # instance_type is a variable/local reference — skip
             cost012_inferred = True
 
     models = dict(SAVINGS_MODELS)
@@ -1563,7 +1575,16 @@ def estimate_savings(
             distributed = []
             for f, b in cost012_resolved:
                 m2 = re.search(r'instance_type\s*=\s*["\'](\S+)["\']', b.get("content", ""))
-                inst_cost = ec2_prices_local.get(m2.group(1).strip(), ec2_fallback) if m2 else ec2_fallback
+                if m2:
+                    inst = m2.group(1).strip()
+                    # Check if the captured string is a variable reference
+                    if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+                        # Unresolved variable - skip this instance from distribution
+                        continue
+                    inst_cost = ec2_prices_local.get(inst, ec2_fallback)
+                else:
+                    # No instance_type found - skip
+                    continue
                 # For blocks that were synthesised (no direct finding), fall back
                 # to the block's own coordinates so the UI can still render them.
                 f_file = f.get("file", b["file"]) if isinstance(f, dict) and f else b["file"]
@@ -1704,16 +1725,40 @@ def _rc(
 def _cost_aws_instance(block: dict, pricing: dict, usage: dict) -> ResourceCost:
     ec2 = pricing.get("ec2_instances", {})
     m   = re.search(r'instance_type\s*=\s*["\']([^"\']+)["\']', block["content"])
+    assumptions = []
     if m:
         inst = m.group(1).strip()
-        inst_cost = ec2.get(inst, 50.0)
-        conf = "high"
+        # Check if the captured string is a variable reference (e.g., ${var.foo}, var.foo, local.foo)
+        if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+            # Treat as unresolved variable
+            hints = usage.get("_var_hints", {})
+            inferred_cost = hints.get("_ec2_fallback_cost")
+            if inferred_cost is not None:
+                inst_cost = inferred_cost
+                conf = "low"
+                assumptions.append(f"{inst} inferred on-demand us-east-1")
+            else:
+                inst_cost = 0.0
+                conf = "low"
+                assumptions.append(f"instance_type={inst} unresolved; cost omitted")
+        else:
+            # Literal instance type
+            inst_cost = ec2.get(inst, 50.0)
+            conf = "high"
+            assumptions.append(f"{inst} on-demand us-east-1")
     else:
-        # instance_type is a variable/local reference — use the inferred average cost
+        # instance_type is a variable/local reference.
         hints = usage.get("_var_hints", {})
-        inst  = hints.get("instance_type", "~inferred")
-        inst_cost = hints.get("_ec2_fallback_cost", 50.0)
-        conf  = "low" if hints.get("_ec2_fallback_cost") else "medium"
+        inst  = hints.get("instance_type", "~unresolved")
+        inferred_cost = hints.get("_ec2_fallback_cost")
+        if inferred_cost is not None:
+            inst_cost = inferred_cost
+            conf = "low"
+            assumptions.append(f"{inst} inferred on-demand us-east-1")
+        else:
+            inst_cost = 0.0
+            conf = "low"
+            assumptions.append("instance_type unresolved; cost omitted")
 
     # Root block device EBS
     size_m = re.search(
@@ -1729,7 +1774,7 @@ def _cost_aws_instance(block: dict, pricing: dict, usage: dict) -> ResourceCost:
 
     return _rc(
         block, inst_cost + ebs_cost, 0.0,
-        [f"{inst} on-demand us-east-1", f"{vol_type} {size}GB root volume"],
+        assumptions + [f"{vol_type} {size}GB root volume"],
         conf,
     )
 
@@ -1737,21 +1782,45 @@ def _cost_aws_instance(block: dict, pricing: dict, usage: dict) -> ResourceCost:
 def _cost_aws_db_instance(block: dict, pricing: dict, usage: dict) -> ResourceCost:
     rds  = pricing.get("rds_instances", {})
     m    = re.search(r'instance_class\s*=\s*["\']([^"\']+)["\']', block["content"])
+    assumptions = []
     if m:
         inst = m.group(1).strip()
-        cost = rds.get(inst, 100.0)
-        conf = "high"
+        # Check if the captured string is a variable reference
+        if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+            # Treat as unresolved variable
+            hints = usage.get("_var_hints", {})
+            inferred_cost = hints.get("_rds_fallback_cost")
+            if inferred_cost is not None:
+                cost = inferred_cost
+                conf = "low"
+                assumptions.append(f"{inst} inferred on-demand us-east-1")
+            else:
+                cost = 0.0
+                conf = "low"
+                assumptions.append(f"instance_class={inst} unresolved; cost omitted")
+        else:
+            # Literal instance class
+            cost = rds.get(inst, 100.0)
+            conf = "high"
+            assumptions.append(f"{inst} on-demand us-east-1")
     else:
         hints = usage.get("_var_hints", {})
-        inst  = hints.get("instance_class", "~inferred")
-        cost  = hints.get("_rds_fallback_cost", 100.0)
-        conf  = "low" if hints.get("_rds_fallback_cost") else "medium"
+        inst  = hints.get("instance_class", "~unresolved")
+        inferred_cost = hints.get("_rds_fallback_cost")
+        if inferred_cost is not None:
+            cost = inferred_cost
+            conf = "low"
+            assumptions.append(f"{inst} inferred on-demand us-east-1")
+        else:
+            cost = 0.0
+            conf = "low"
+            assumptions.append("instance_class unresolved; cost omitted")
     multi_az = bool(re.search(r'multi_az\s*=\s*true', block["content"]))
     if multi_az:
         cost *= 2
     return _rc(
         block, cost, 0.0,
-        [f"{inst} on-demand us-east-1" + (" multi-AZ" if multi_az else "")],
+        [f"{assumptions[0]}" + (" multi-AZ" if multi_az else "")],
         conf,
     )
 
@@ -1957,31 +2026,63 @@ def _cost_aws_rds_cluster_instance(block: dict, pricing: dict, usage: dict) -> R
     """Aurora cluster instance — shares the rds_instances price table."""
     rds = pricing.get("rds_instances", {})
     m   = re.search(r'instance_class\s*=\s*["\']([^"\']+)["\']', block["content"])
-    inst = m.group(1).strip() if m else "db.t3.medium"
-    cost = rds.get(inst, 0.0)
-    conf = "high" if m else "medium"
+    assumptions = []
+    if m:
+        inst = m.group(1).strip()
+        # Check if the captured string is a variable reference
+        if "${" in inst or inst.startswith("var.") or inst.startswith("local."):
+            assumptions.append(f"instance_class={inst} unresolved; cost omitted")
+            return _rc(block, 0.0, 0.0, assumptions, "low")
+        cost = rds.get(inst, 0.0)
+        conf = "high"
+    else:
+        inst = "db.t3.medium"
+        cost = rds.get(inst, 0.0)
+        conf = "medium"
     return _rc(block, cost, 0.0, [f"{inst} Aurora instance us-east-1"], conf)
 
 
 def _cost_aws_elasticache_replication_group(block: dict, pricing: dict, usage: dict) -> ResourceCost:
     elasticache = pricing.get("elasticache_instances", {})
     m          = re.search(r'node_type\s*=\s*["\']([^"\']+)["\']', block["content"])
-    node_type  = m.group(1).strip() if m else "cache.t3.micro"
-    per_node   = elasticache.get(node_type, 30.0)
+    assumptions = []
+    if m:
+        node_type = m.group(1).strip()
+        # Check if the captured string is a variable reference
+        if "${" in node_type or node_type.startswith("var.") or node_type.startswith("local."):
+            assumptions.append(f"node_type={node_type} unresolved; cost omitted")
+            return _rc(block, 0.0, 0.0, assumptions, "low")
+        per_node = elasticache.get(node_type, 0.0)
+        conf = "high"
+    else:
+        node_type = "cache.t3.micro"
+        per_node = elasticache.get(node_type, 30.0)
+        conf = "medium"
     rep_m      = re.search(r'(?:num_cache_clusters|replicas_per_node_group)\s*=\s*(\d+)', block["content"])
     nodes      = int(rep_m.group(1)) if rep_m else 1
-    conf       = "high" if (m and rep_m) else "medium" if m else "low"
+    conf       = "high" if (m and rep_m) else conf
     return _rc(block, per_node * nodes, 0.0, [f"{node_type} × {nodes} nodes (ElastiCache)"], conf)
 
 
 def _cost_aws_elasticache_cluster(block: dict, pricing: dict, usage: dict) -> ResourceCost:
     elasticache = pricing.get("elasticache_instances", {})
     m          = re.search(r'node_type\s*=\s*["\']([^"\']+)["\']', block["content"])
-    node_type  = m.group(1).strip() if m else "cache.t3.micro"
-    per_node   = elasticache.get(node_type, 30.0)
+    assumptions = []
+    if m:
+        node_type = m.group(1).strip()
+        # Check if the captured string is a variable reference
+        if "${" in node_type or node_type.startswith("var.") or node_type.startswith("local."):
+            assumptions.append(f"node_type={node_type} unresolved; cost omitted")
+            return _rc(block, 0.0, 0.0, assumptions, "low")
+        per_node = elasticache.get(node_type, 0.0)
+        conf = "high"
+    else:
+        node_type = "cache.t3.micro"
+        per_node = elasticache.get(node_type, 30.0)
+        conf = "medium"
     num_m      = re.search(r'num_cache_nodes\s*=\s*(\d+)', block["content"])
     nodes      = int(num_m.group(1)) if num_m else 1
-    conf       = "high" if (m and num_m) else "medium" if m else "low"
+    conf       = "high" if (m and num_m) else conf
     return _rc(block, per_node * nodes, 0.0, [f"{node_type} × {nodes} nodes (ElastiCache)"], conf)
 
 
@@ -2358,7 +2459,7 @@ def estimate_total_cost(
             try:
                 rc = cost_fn(block, pricing, usage_with_hints)
                 count, count_conf = extract_count(block.get("content", ""), block.get("file", ""), block=block)
-                if count > 1:
+                if count != 1:
                     multiplied_conf = rc.confidence if count_conf == "high" else "medium"
                     rc = ResourceCost(
                         resource_type=rc.resource_type,

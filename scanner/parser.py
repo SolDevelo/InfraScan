@@ -4,9 +4,6 @@ from rules.definitions import check_rules
 
 DEFAULT_EXCLUDED_DIRS = {
     ".git", ".terraform", ".terragrunt-cache",
-    "docs", "doc", "documentation",
-    "test", "tests", "testing",
-    "examples", "example", "fixtures", "fixture",
     "scripts", "node_modules", "__pycache__",
 }
 
@@ -14,9 +11,10 @@ DEFAULT_EXCLUDED_DIRS = {
 def is_root_module(directory_path: str) -> bool:
     """Return True if *directory_path* looks like a deployable Terraform root module.
 
-    A root module has at least one of:
+    A cost-eligible Terraform directory has at least one of:
     - A ``provider "..." { }`` block declaration (not a resource-level provider attribute)
     - A ``terraform { backend "..." { } }`` block (state backend = deployed environment)
+    - A ``resource "..." "..." { }`` block (module-style project)
 
     Sub-module libraries typically have only ``terraform { required_providers {} }``
     which is intentionally *not* matched here.
@@ -36,6 +34,9 @@ def is_root_module(directory_path: str) -> bool:
                 for tf_block in data.get("terraform", []):
                     if isinstance(tf_block, dict) and tf_block.get("backend"):
                         return True
+                # Module-style directories with resources are also cost-eligible.
+                if data.get("resource"):
+                    return True
             except Exception:
                 # Fall back to regex heuristics for files hcl2 cannot parse.
                 pass
@@ -49,6 +50,9 @@ def is_root_module(directory_path: str) -> bool:
             if re.search(r'^\s*terraform\s*\{', content, re.MULTILINE):
                 if re.search(r'^\s*backend\s+"', content, re.MULTILINE):
                     return True
+            # Module-style directories with resources are also cost-eligible.
+            if re.search(r'^\s*resource\s+"[^"]+"\s+"[^"]+"\s*\{', content, re.MULTILINE):
+                return True
         except Exception:
             pass
     return False
@@ -468,11 +472,11 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         _root_cache: dict = {}
         for file_path in all_files:
             print(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
+            dir_path = os.path.dirname(file_path)
+            if dir_path not in _root_cache:
+                _root_cache[dir_path] = _is_cost_eligible_dir(dir_path)
             file_results = scan_file(file_path)
             if file_results:
-                dir_path = os.path.dirname(file_path)
-                if dir_path not in _root_cache:
-                    _root_cache[dir_path] = _is_cost_eligible_dir(dir_path)
                 if not _root_cache[dir_path]:
                     file_results = [r for r in file_results if not str(r.get('rule_id', '')).startswith('COST-')]
                 results.extend(file_results)

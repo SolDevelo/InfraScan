@@ -9,8 +9,8 @@
   },
   "medium": {
     "nat_gb_per_day":            10.0,
-    "cw_log_gb_per_month":       20.0,
-    "s3_gb_standard":           500.0,
+    "cw_log_gb_per_month":        2.0,
+    "s3_gb_standard":           125.0,
     "lambda_invocations_per_mo": 10000000,
     "api_calls_per_mo":          10000000
   },
