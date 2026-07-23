@@ -24,6 +24,22 @@ def is_root_module(directory_path: str) -> bool:
     import glob as _glob_mod
     for tf_file in _glob_mod.glob(os.path.join(directory_path, "*.tf")):
         try:
+            # Prefer HCL parsing for robust top-level block detection.
+            try:
+                import hcl2  # noqa: PLC0415
+                with open(tf_file, encoding='utf-8', errors='replace') as fh:
+                    data = hcl2.load(fh)
+                # Top-level provider blocks make this a root module.
+                if data.get("provider"):
+                    return True
+                # Top-level terraform block with backend makes this a root module.
+                for tf_block in data.get("terraform", []):
+                    if isinstance(tf_block, dict) and tf_block.get("backend"):
+                        return True
+            except Exception:
+                # Fall back to regex heuristics for files hcl2 cannot parse.
+                pass
+
             with open(tf_file, encoding='utf-8', errors='replace') as fh:
                 content = fh.read()
             # provider "aws" { — top-level provider declaration
@@ -433,10 +449,22 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                     if file.endswith(".tf"):
                         full_path = os.path.join(root, file)
                         all_files.append(full_path)
+
+        def _is_cost_eligible_dir(dir_path: str) -> bool:
+            """True when a directory should participate in COST-* scanning.
+
+            Mirrors the estimator scope: skip excluded/hidden path segments,
+            then require a root Terraform module.
+            """
+            rel = os.path.relpath(dir_path, path)
+            parts = [p for p in rel.split(os.sep) if p and p != "."]
+            if any(p in DEFAULT_EXCLUDED_DIRS or p.startswith(".") for p in parts):
+                return False
+            return is_root_module(dir_path)
         
-        # Scan all files and collect results.
-        # COST-* rules are only meaningful in root module directories; filter
-        # them out for shared module directories to avoid phantom findings.
+        # Scan all files and collect file-level rule results.
+        # Security rules run everywhere; COST-* rules are restricted to
+        # cost-eligible directories only.
         _root_cache: dict = {}
         for file_path in all_files:
             print(f"[INFO] Scanning Terraform file: {os.path.relpath(file_path, path)}")
@@ -444,14 +472,26 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             if file_results:
                 dir_path = os.path.dirname(file_path)
                 if dir_path not in _root_cache:
-                    _root_cache[dir_path] = is_root_module(dir_path)
+                    _root_cache[dir_path] = _is_cost_eligible_dir(dir_path)
                 if not _root_cache[dir_path]:
                     file_results = [r for r in file_results if not str(r.get('rule_id', '')).startswith('COST-')]
                 results.extend(file_results)
         
-        # Run directory-level checks (for InverseRegexRules)
+        # Run directory-level checks (InverseRegex / CompoundInverse).
+        # Non-cost directory checks run across all files; COST-* directory checks
+        # run only within cost-eligible module directories.
         from rules.definitions import RULES
-        results.extend(scan_directory_level(path, all_files, RULES))
+        non_cost_rules = [r for r in RULES if not str(getattr(r, 'id', '')).startswith('COST-')]
+        cost_rules = [r for r in RULES if str(getattr(r, 'id', '')).startswith('COST-')]
+
+        if non_cost_rules:
+            results.extend(scan_directory_level(path, all_files, non_cost_rules))
+
+        eligible_dirs = sorted({os.path.dirname(f) for f in all_files if _root_cache.get(os.path.dirname(f), False)})
+        for dir_path in eligible_dirs:
+            dir_files = [f for f in all_files if os.path.dirname(f) == dir_path]
+            if dir_files and cost_rules:
+                results.extend(scan_directory_level(dir_path, dir_files, cost_rules))
     
     # Run IaC security scanner (Checkov)
     if 'checkov' in active_scanners:

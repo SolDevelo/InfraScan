@@ -1476,6 +1476,11 @@ def estimate_savings(
         fpath = finding.get("file", "")
         line  = finding.get("line", 0)
         block = _find_block(blocks, fpath, line)
+        # If a finding cannot be mapped to a parsed resource block, we cannot
+        # safely compute a per-resource saving. Skip it to keep savings aligned
+        # with the estimate scope and avoid phantom savings totals.
+        if block is None and rule_id not in _FLEET_LEVEL_RULES:
+            continue
         block_content = block["content"] if block else ""
         # Track which block this finding belongs to for per-block cap (see below).
         block_key = (block["file"], block["start_line"]) if block else None
