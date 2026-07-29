@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.10
+        uses: soldevelo/infrascan@v1.1.0
         with:
           scanner: comprehensive
           format: html
@@ -126,7 +126,7 @@ infrascan --scanner comprehensive
 infrascan --framework kubernetes --scanner comprehensive
 
 # Use a specific infrascan version
-INFRASCAN_VERSION=1.0.10 infrascan
+INFRASCAN_VERSION=1.1.0 infrascan
 
 # Do not pull for updates
 infrascan --no-update

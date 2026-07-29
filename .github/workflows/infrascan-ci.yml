@@ -16,14 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # TODO: remove this step once the action is published to the marketplace and the image is available on Docker Hub
-      - name: Build InfraScan image from current branch
-        run: docker build -t soldevelo/infrascan:latest .
-
       # ── Scan ─────────────────────────────────────────────────────────────────
       - name: Run InfraScan
-        # TODO: replace with `uses: soldevelo/infrascan-action@v1` once the action is published to the marketplace
-        uses: ./
+        uses: soldevelo/infrascan@v1.1.0
         with:
           scanner: comprehensive
           format: html

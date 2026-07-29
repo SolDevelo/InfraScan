@@ -3,13 +3,25 @@
 #
 # This workflow runs a comprehensive scan on every push and pull request.
 # It is set to 'Monitoring Mode' (won't fail the build).
-# To enable 'Enforcement Mode', add --fail-on high_critical to the infrascan command.
+# To enable 'Enforcement Mode', add fail-on: high_critical to the action inputs.
+#
+# Features:
+# - Step summary: full results in workflow run's Summary tab (automatic)
+# - PR comments: grade table + cost estimate + new CRITICAL/HIGH findings (requires pull-requests: write)
+# - Auto-baseline: cost delta tracking with automatic baseline management (automatic)
+# - Smart skipping: skips scan when no matching files changed in PRs (automatic)
+# - Inline annotations: ::error and ::warning markers in PR diff view (automatic)
+# - HTML report: interactive report uploaded as workflow artifact
 
 name: InfraScan Audit
 
 on:
   push:
   pull_request:
+
+permissions:
+  pull-requests: write  # Required for PR comments
+  contents: read        # Required for checkout
 
 jobs:
   infrascan:
@@ -18,22 +30,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create Reports Directory
-        run: |
-          mkdir -p infrascan-reports
-          chmod 777 infrascan-reports
-
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.0.10
+        uses: soldevelo/infrascan@v1
         with:
           scanner: comprehensive
           format: html
-          out: infrascan-reports/report.html
+          out: infrascan-report.html
+          # Uncomment to enable Enforcement Mode:
+          # fail-on: high_critical
             
       - name: Upload InfraScan Report
         uses: actions/upload-artifact@v4
         if: always() # Upload report even if the scan step fails
         with:
           name: infrascan-report
-          path: infrascan-reports/report.html
+          path: infrascan-report.html
           retention-days: 14

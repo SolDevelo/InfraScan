@@ -24,7 +24,7 @@ docker login
 ```
 
 ### Build and Push
-Replace `<version>` with the new version (e.g., `1.0.10`).
+Replace `<version>` with the new version (e.g., `1.1.0`).
 ```bash
 # Build
 docker build -t soldevelo/infrascan:latest -t soldevelo/infrascan:<version> .
@@ -43,8 +43,8 @@ InfraScan is published as a GitHub Action. Proper tagging is critical for users 
 ### Creating the Version Tag
 ```bash
 # Create a new version tag
-git tag -a v1.0.10 -m "Release v1.0.10"
-git push origin v1.0.10
+git tag -a v1.1.0 -m "Release v1.1.0"
+git push origin v1.1.0
 ```
 
 > [!CAUTION]
@@ -55,7 +55,7 @@ git push origin v1.0.10
 
 ```bash
 # Update the local major tag to the latest commit
-git tag -fa v1 -m "Update v1 to v1.0.10"
+git tag -fa v1 -m "Update v1 to v1.1.0"
 
 # Force push the major tag to the remote
 git push origin v1 --force
@@ -67,8 +67,8 @@ git push origin v1 --force
 
 1. Go to the [InfraScan Releases](https://github.com/soldevelo/infrascan/releases) page.
 2. Click **Draft a new release**.
-3. Select the tag you just pushed (e.g., `v1.0.10`).
-4. Set the Release Title (e.g., `InfraScan v1.0.10`).
+3. Select the tag you just pushed (e.g., `v1.1.0`).
+4. Set the Release Title (e.g., `InfraScan v1.1.0`).
 5. Describe the changes (you can use the "Generate release notes" button).
 6. **Marketplace Publication**: Ensure the checkbox **"Publish this Action to the GitHub Marketplace"** is checked.
 7. Verify the `action.yml` metadata is correct in the preview.

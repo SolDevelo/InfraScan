@@ -76,53 +76,47 @@ pipelines:
 ```
 
 ### GitHub Actions
-Use `if: always()` for the report upload step.
+
+Step summary, PR comments, auto-baseline, and smart PR skipping are all enabled by default.
 
 ```yaml
+name: InfraScan
+on: [push, pull_request]
+
+permissions:
+  pull-requests: write  # Required for PR comments
+  contents: read        # Required for checkout
+
 jobs:
   infrascan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run Scan
-        uses: soldevelo/infrascan@v1.0.10
+      
+      - uses: soldevelo/infrascan@v1
         with:
+          scanner: comprehensive
           format: html
-          out: report.html
-      - name: Upload Report
-        uses: actions/upload-artifact@v4
+          out: infrascan-report.html
+          # Optional: fail-on: high_critical
+      
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: infrascan-report
-          path: report.html
+          path: infrascan-report.html
 ```
 
-## Daily monitoring of GitHub Actions projects
-If you want InfraScan to collect grades from a known set of repositories every day, add those repository URLs to `data/monitored_projects.json` and trigger the new refresh endpoint once per day.
+**What you get automatically:**
+- 📊 **Step summary** — full scan results in the workflow run's Summary tab
+- 💬 **PR comment** — grade table, cost estimate, and new CRITICAL/HIGH findings on every PR
+- 📈 **Cost delta** — automatic baseline management shows infrastructure cost changes
+- ⏭️ **Smart skipping** — skips scan when no matching files changed in PRs
+- 🔔 **Inline annotations** — `::error` and `::warning` markers in PR diff view
 
-`data/monitored_projects.json` supports either a list of repository URLs or an array of objects with optional branch/scanner configuration:
+See [GITHUB_ACTION.md](GITHUB_ACTION.md) for full documentation of all inputs and features.
 
-```json
-[
-  "https://github.com/soldevelo/InfraScan",
-  {
-    "repo_url": "https://github.com/example/repo",
-    "branch": "main",
-    "scanner": "comprehensive",
-    "is_private": false
-  }
-]
-```
-
-Then call the refresh endpoint to fetch the latest scan results for those repos and store them in the web app:
-
-```bash
-curl -X POST https://your-infrascan.example.com/api/scans/monitored/refresh
-```
-
-This allows the web app to aggregate the latest grades and scan timestamps from configured repositories. The app still needs the list of repos because it cannot automatically discover every project using InfraScan from GitHub Actions alone.
-
-> Note: to let the InfraScan web app track GitHub Actions scans and their grades, the workflow can also emit JSON output with metadata and make it available to the app (for example by writing it into the app `scan_results` directory or posting it to `/api/results/save`).
+---
 
 ## 💡 Pro Tips
 *   **Console Visibility:** InfraScan v1.0.4+ prints a colored summary directly to the terminal. You don't always need to download the HTML report to see what's wrong.
@@ -164,22 +158,29 @@ pipelines:
 
 ### Example — GitHub Actions for Kubernetes project
 ```yaml
+name: InfraScan K8s Audit
+on: [push, pull_request]
+
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   infrascan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run K8s Scan
-        uses: soldevelo/infrascan@v1.0.10
+      
+      - uses: soldevelo/infrascan@v1
         with:
           framework: kubernetes
           scanner: comprehensive
           format: html
-          out: report.html
-      - name: Upload Report
-        uses: actions/upload-artifact@v4
+          out: infrascan-report.html
+      
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: infrascan-report
-          path: report.html
+          name: infrascan-k8s-report
+          path: infrascan-report.html
 ```
