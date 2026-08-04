@@ -18,7 +18,7 @@ jobs:
 
       # ── Scan ─────────────────────────────────────────────────────────────────
       - name: Run InfraScan
-        uses: soldevelo/infrascan@v1.1.0
+        uses: soldevelo/infrascan@v1
         with:
           scanner: comprehensive
           format: html
