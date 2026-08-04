@@ -4,10 +4,12 @@ from rules.definitions import check_rules
 from scanner.checkov_scanner import CheckovScanner
 from scanner.docker_scout_scanner import DockerScoutScanner
 from scanner.grype_scanner import GrypeScanner
+from scanner.openvas_scanner import OpenvasScanner
 
 CHECKOV_SCANNER = CheckovScanner()
 DOCKER_SCOUT_SCANNER = DockerScoutScanner()
 GRYPE_SCANNER = GrypeScanner()
+OPENVAS_SCANNER = OpenvasScanner()
 
 # Get container scanner preference from environment
 def get_container_scanner():
@@ -289,21 +291,34 @@ def resolve_included_paths(base_path, included_paths):
     
     return list(set(resolved_files))
 
-def scan_directory(path, scanner_type='regex', framework='terraform', download_external_modules=False, included_paths=None):
+def scan_directory(
+    path,
+    scanner_type='regex',
+    framework='terraform',
+    download_external_modules=False,
+    included_paths=None,
+    openvas_targets=None,
+    openvas_port_range=None,
+):
     """
     Scan a directory for IaC issues.
-    
+
     Args:
         path: Directory path to scan
         scanner_type: Scanner selection
             - 'fast' or 'regex': Cost-focused regex scanner only
             - 'containers': Container vulnerability scanning only (Docker Scout or Grype)
             - 'checkov': Checkov IaC security only
-            - 'comprehensive': All scanners (regex + Checkov + containers)
+            - 'openvas': Network vulnerability scanning only (opt-in, requires openvas_targets)
+            - 'comprehensive': All scanners (regex + Checkov + containers). OpenVAS is never
+              included implicitly since it needs explicit target IPs and can take a long time.
         framework: IaC framework type (terraform, kubernetes, cloudformation, auto)
         download_external_modules: Whether to download external modules
         included_paths: Optional list of specific files or directories to scan
-    
+        openvas_targets: Optional list of target IPs/hostnames for the OpenVAS scanner.
+            Required when 'openvas' is one of the active scanners.
+        openvas_port_range: Optional OpenVAS port range string (e.g. "T:1-65535,U:1-65535")
+
     Returns:
         Tuple of (findings_list, resource_count, extra_recommendations)
     """
@@ -472,7 +487,27 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                     print(f"    Grype fallback failed: {grype_e}")
             else:
                 print("Warning: Docker Scout is not installed. See https://docs.docker.com/scout/ for installation")
-    
+
+    # Run network vulnerability scanner (OpenVAS) - opt-in only, requires explicit target IPs
+    if 'openvas' in active_scanners:
+        if not openvas_targets:
+            print("Warning: OpenVAS scanner requires target IPs (--openvas-targets). Skipping.")
+        elif OPENVAS_SCANNER.is_available():
+            try:
+                openvas_result = OPENVAS_SCANNER.scan(
+                    path,
+                    targets=openvas_targets,
+                    port_range=openvas_port_range,
+                )
+                results.extend(openvas_result.findings)
+            except Exception as e:
+                print(f"Warning: OpenVAS scan failed: {e}")
+        else:
+            print(
+                "Warning: OpenVAS is not available. Requires Docker and the 'python-gvm' "
+                "package (pip install python-gvm)."
+            )
+
     # Add scanner tag to regex results and normalize paths
     for result in results:
         if 'scanner' not in result:

@@ -14,6 +14,7 @@ from scanner.parser import scan_directory, get_container_scanner, is_container_s
 from scanner.checkov_scanner import CheckovScanner
 from scanner.docker_scout_scanner import DockerScoutScanner
 from scanner.grype_scanner import GrypeScanner
+from scanner.openvas_scanner import OpenvasScanner
 from reporter.grading import ReportGenerator
 import traceback
 
@@ -259,7 +260,8 @@ def scanner_status():
     # For backwards compatibility, also expose individual scanner status
     docker_scout_available = DockerScoutScanner().is_available()
     grype_available = GrypeScanner().is_available()
-    
+    openvas_available = OpenvasScanner().is_available()
+
     return jsonify({
         'regex': True,  # Always available
         'checkov': checkov_available,
@@ -267,6 +269,7 @@ def scanner_status():
         'containers': container_scanner_available,  # Is the configured scanner available
         'docker_scout': docker_scout_available,
         'grype': grype_available,
+        'openvas': openvas_available,  # Opt-in only, requires explicit target IPs
         'comprehensive': checkov_available or container_scanner_available  # Can run comprehensive if any security scanner available
     })
 

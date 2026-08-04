@@ -52,6 +52,17 @@ else
     echo "✓ Grype installed successfully to ~/.local/bin/grype"
 fi
 
+# Install python-gvm (GMP client used by the OpenVAS network vulnerability scanner)
+echo "python-gvm will be installed via pip requirements.txt"
+
+# Pre-pull the OpenVAS Docker image so the first real scan doesn't have to wait for it
+echo "Pulling OpenVAS Docker image..."
+if docker pull immauss/openvas:latest &> /dev/null; then
+    echo "✓ OpenVAS image pulled successfully (immauss/openvas:latest)"
+else
+    echo "⚠️  Could not pull immauss/openvas:latest now; it will be pulled automatically on first OpenVAS scan."
+fi
+
 echo ""
 echo "Scanner installation complete!"
 echo ""
@@ -63,7 +74,11 @@ echo "  - Checkov: pip list | grep checkov"
 echo "  - Docker Scout: docker-scout version"
 echo "  - Grype: grype version"
 echo "  - Docker: docker --version"
+echo "  - OpenVAS: pip list | grep python-gvm && docker image inspect immauss/openvas:latest"
 echo ""
 echo "Configure container scanner in .env:"
 echo "  CONTAINER_SCANNER=docker-scout  (default)"
 echo "  CONTAINER_SCANNER=grype         (alternative)"
+echo ""
+echo "Run the OpenVAS network vulnerability scanner (opt-in, needs explicit targets):"
+echo "  infrascan --scanner openvas --openvas-targets 10.0.0.5,10.0.0.6"

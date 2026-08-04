@@ -3,6 +3,7 @@ colorama==0.4.6
 flask
 gitpython
 checkov>=3.0.0  # Optional: Advanced security and compliance scanning
+python-gvm  # Optional: GMP client for the OpenVAS network vulnerability scanner
 PyYAML  # Required for Docker Compose file parsing
 gunicorn
 requests

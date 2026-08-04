@@ -70,6 +70,7 @@ InfraScan offers several scanning modes:
 - **containers**: Container vulnerability scanning (Docker Scout or Grype)
 - **checkov**: IaC Security checks only
 - **comprehensive**: All scanners combined (Cost + Security + Containers)
+- **openvas**: Network vulnerability scanning against explicit target IPs/hosts (opt-in only, see [Network Vulnerability Scanning](#-network-vulnerability-scanning-openvas))
 
 **Report Features:**
 - **Professional PDF Export**: Generate beautiful, branded security reports with one click — perfect for compliance and auditing.
@@ -123,7 +124,9 @@ infrascan --no-update
 
 **CLI Arguments:**
 - (positional): Directory to scan — in Docker use `/scan` (the default); locally use `.` (if no path is given CLI also defaults to current directory).
-- `--scanner`: `regex`, `checkov`, `containers`, `comprehensive` (default: `comprehensive`). You can combine multiple scanners using comma (e.g. `--scanner regex,containers`).
+- `--scanner`: `regex`, `checkov`, `containers`, `openvas`, `comprehensive` (default: `comprehensive`). You can combine multiple scanners using comma (e.g. `--scanner regex,containers`). `openvas` is never included in `comprehensive` — it requires `--openvas-targets` and is always run explicitly.
+- `--openvas-targets`: Comma-separated list of target IPs/hostnames to scan with OpenVAS (required when `--scanner` includes `openvas`).
+- `--openvas-port-range`: Optional OpenVAS port range for the targets (e.g. `T:1-65535,U:1-65535`). Defaults to the scan config's own port list when omitted.
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
 - `--framework`: `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible`, `all` (default: `smart`). 
@@ -260,6 +263,45 @@ InfraScan supports advanced container scanning features:
   - **Intelligent Fallback**: If Docker Scout is not authenticated, InfraScan will automatically run a fallback scan using **Grype** so your pipeline never fails due to missing Docker Hub tokens.
   - **Other Registries**: Pre-authenticate manually using `docker login` before running InfraScan, and it will use your existing local Docker credentials.
 
+
+## 🎯 Network Vulnerability Scanning (OpenVAS)
+
+InfraScan can run authenticated-free network vulnerability scans against live hosts using **OpenVAS** (Greenbone Vulnerability Manager), in addition to its file-based IaC/container scanners.
+
+Unlike the other scanners, OpenVAS doesn't scan your repository — it scans **explicit target IPs/hostnames** you supply, over the network. Because of that, and because a scan can take a while, it is **always opt-in**: it never runs as part of `comprehensive`, and it requires `--openvas-targets` to do anything.
+
+**How it works:**
+1. InfraScan pulls and starts a disposable `immauss/openvas` Docker container (Docker is required — the same prerequisite as the rest of InfraScan).
+2. It waits for the OpenVAS vulnerability feed to be ready, then drives a scan over the Greenbone Management Protocol (GMP) against your target(s) using the "Full and fast" scan config.
+3. Results are parsed from the OpenVAS XML report into the same finding format used by every other scanner (severity, description, remediation, CVE if available), tagged `"scanner": "openvas"`.
+4. The container is removed automatically once the scan finishes.
+
+```bash
+# Scan one or more hosts
+infrascan --scanner openvas --openvas-targets 10.0.0.5,10.0.0.6
+
+# Restrict the scan to specific ports
+infrascan --scanner openvas --openvas-targets 10.0.0.5 --openvas-port-range "T:22,80,443,U:53"
+
+# Combine with other scanners in one run
+infrascan --scanner checkov,openvas --openvas-targets app.example.com
+```
+
+**Configuration (optional, via environment variables or `.env`):**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OPENVAS_IMAGE` | `immauss/openvas:latest` | Docker image to run |
+| `OPENVAS_GMP_PORT` | `9390` | Host port mapped to the container's GMP port |
+| `OPENVAS_USERNAME` / `OPENVAS_PASSWORD` | `admin` / `admin` | GMP credentials for the disposable instance |
+| `OPENVAS_READY_TIMEOUT` | `3600` (1 hour) | How long to wait for the vulnerability feed sync on first run |
+| `OPENVAS_SCAN_TIMEOUT` | `7200` (2 hours) | How long to wait for the scan itself to complete |
+| `OPENVAS_SCAN_CONFIG` | `Full and fast` | Which OpenVAS scan config to use |
+| `CLEANUP_OPENVAS_CONTAINER` | `true` | Remove the OpenVAS container after the scan |
+
+> ⚠️ **First run is slow**: on a fresh OpenVAS container, the vulnerability feed sync can take up to an hour before scanning can start. Subsequent runs are faster once the feed data is cached, but each run still starts a brand-new container by default.
+
+> ℹ️ OpenVAS findings appear in the raw/JSON results alongside everything else, but aren't yet folded into the Cost/IaC Security/Container letter grades — those are computed specifically from the regex, Checkov, and container-scanner findings.
 
 ## � Cost Estimation
 

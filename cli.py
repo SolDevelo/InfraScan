@@ -117,7 +117,19 @@ def setup_args():
     parser.add_argument(
         "--scanner",
         default="comprehensive",
-        help="Scanner type(s) to run (default: comprehensive). Support multiple scanners separated by comma (e.g., 'regex,containers'). Options: regex, checkov, containers, comprehensive"
+        help="Scanner type(s) to run (default: comprehensive). Support multiple scanners separated by comma (e.g., 'regex,containers'). Options: regex, checkov, containers, openvas, comprehensive. 'openvas' is never included in 'comprehensive' and requires --openvas-targets."
+    )
+
+    parser.add_argument(
+        "--openvas-targets",
+        dest="openvas_targets",
+        help="Comma-separated list of target IPs/hostnames for the OpenVAS network vulnerability scanner. Required when --scanner includes 'openvas'."
+    )
+
+    parser.add_argument(
+        "--openvas-port-range",
+        dest="openvas_port_range",
+        help="Optional OpenVAS port range for the targets (e.g. 'T:1-65535,U:1-65535'). Defaults to the scan config's own port list when omitted."
     )
     
     parser.add_argument(
@@ -400,14 +412,21 @@ def main():
     try:
         if args.format == 'text':
             print(f"Analyzing {target_path} with '{args.scanner}' scanner...")
-            
+
+        openvas_targets = (
+            [t.strip() for t in args.openvas_targets.split(',') if t.strip()]
+            if args.openvas_targets else None
+        )
+
         # Run Scanners
         results, resource_count, recommendations = scan_directory(
-            target_path, 
+            target_path,
             scanner_type=args.scanner,
             framework=args.framework,
             download_external_modules=args.download_external_modules,
-            included_paths=args.include
+            included_paths=args.include,
+            openvas_targets=openvas_targets,
+            openvas_port_range=args.openvas_port_range,
         )
         
         # Generate Report
