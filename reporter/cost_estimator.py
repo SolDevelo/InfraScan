@@ -2748,20 +2748,36 @@ def format_ci_summary_md(
 def format_pr_comment_md(
     report_dict: dict,
     baseline: Optional[dict] = None,
-    alert_on: str = "critical",
+    alert_on: str = "any_new",
     run_url: str = "",
+    min_cost_delta: float = 0.0,
+    max_findings: int = 10,
 ) -> str:
     """
-    Return a compact PR comment.  Always posts at least a brief summary so the
-    team knows InfraScan ran; detailed sections are added when actionable:
-    - new CRITICAL findings (always shown),
-    - new HIGH findings when alert_on='critical_high',
-    - cost delta > $5/mo or > 10%.
+    Return a compact PR comment optimized for actionable visibility.
+    
+    Always posts at least a brief summary so the team knows InfraScan ran.
+    Detailed sections are added when actionable:
+    - Top N most important new findings (sorted by severity, total limit)
+    - Container findings aggregated by severity
+    - Grade changes (drops)
+    - Cost delta above min_cost_delta threshold
+    
+    Args:
+        report_dict: Current scan report
+        baseline: Previous scan report for delta detection
+        alert_on: Severity threshold (critical|high|medium|low|any_new|none)
+        run_url: Link to workflow run
+        min_cost_delta: Minimum $ change to highlight (default: 0.0 = any change)
+        max_findings: Max total findings across all severities (default: 10)
     """
     findings = report_dict.get("findings", {})
     metrics  = report_dict.get("metrics", {})
     savings  = metrics.get("savings_estimate", {})
     overall  = report_dict.get("overall", {})
+    cost_g   = report_dict.get("cost", {})
+    sec_g    = report_dict.get("security", {})
+    cont_g   = report_dict.get("container", {})
 
     all_findings = (
         list(findings.get("security", [])) +
@@ -2769,11 +2785,30 @@ def format_pr_comment_md(
         list(findings.get("cost", []))
     )
 
+    # Map alert_on to severity set
+    severity_order = ['critical', 'high', 'medium', 'low', 'info']
+    if alert_on == 'critical':
+        alert_sevs = {'critical'}
+    elif alert_on in ('critical_high', 'high'):
+        alert_sevs = {'critical', 'high'}
+    elif alert_on == 'medium':
+        alert_sevs = {'critical', 'high', 'medium'}
+    elif alert_on == 'low':
+        alert_sevs = {'critical', 'high', 'medium', 'low'}
+    elif alert_on == 'any_new':
+        alert_sevs = {'critical', 'high', 'medium', 'low', 'info'}
+    else:  # 'none'
+        alert_sevs = set()
+
     def _by_sev(sev: str) -> List[dict]:
         return [f for f in all_findings if f.get("severity", "").lower() == sev]
 
-    crits = _by_sev("critical")
-    highs = _by_sev("high")
+    # Separate container vs non-container findings
+    def _is_container(f: dict) -> bool:
+        return 'image' in f or f.get('file', '').lower().startswith('dockerfile')
+
+    container_findings = [f for f in all_findings if _is_container(f)]
+    iac_findings = [f for f in all_findings if not _is_container(f)]
 
     # Compute cost delta
     total_cost = savings.get("total_infra_cost_usd_month", 0)
@@ -2798,30 +2833,71 @@ def format_pr_comment_md(
         (f.get("rule_id") or f.get("check_id", ""), f.get("file", ""))
         for f in baseline_findings
     }
-    new_crits = [f for f in crits if
-                 (f.get("rule_id") or f.get("check_id",""), f.get("file","")) not in base_keys]
-    new_highs = [f for f in highs if
-                 (f.get("rule_id") or f.get("check_id",""), f.get("file","")) not in base_keys]
 
-    # When there's no baseline, treat all critical/high as "new"
+    # Filter to new findings in alert severity range
+    new_findings = []
+    for f in iac_findings:  # Only IaC findings shown individually
+        sev = f.get("severity", "").lower()
+        if sev not in alert_sevs:
+            continue
+        fkey = (f.get("rule_id") or f.get("check_id",""), f.get("file",""))
+        if baseline and fkey in base_keys:
+            continue
+        new_findings.append(f)
+
+    # When no baseline exists, treat all as "new"
     if not baseline:
-        new_crits = crits
-        new_highs = highs
+        new_findings = [f for f in iac_findings if f.get("severity","").lower() in alert_sevs]
 
-    has_actionable = bool(new_crits)
-    if alert_on == "critical_high":
-        has_actionable = has_actionable or bool(new_highs)
-    has_actionable = has_actionable or (cost_delta > 5 or cost_delta_pct > 10)
+    # Sort new findings by severity (critical first)
+    def _sev_weight(f: dict) -> int:
+        sev = f.get("severity", "").lower()
+        try:
+            return severity_order.index(sev)
+        except ValueError:
+            return 999
+    new_findings.sort(key=_sev_weight)
 
+    # Grade change detection
+    grade_dropped = False
+    grade_change_msg = ""
+    if baseline:
+        base_overall = baseline.get("overall", {})
+        base_letter  = base_overall.get("letter", "A")
+        curr_letter  = overall.get("letter", "A")
+        grade_idx = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'F': 4}
+        if grade_idx.get(curr_letter, 4) > grade_idx.get(base_letter, 0):
+            grade_dropped = True
+            grade_change_msg = f" {base_letter}→{curr_letter} ⚠️"
+
+    # Container aggregation by severity
+    container_counts = {}
+    container_new_counts = {}
+    for sev in severity_order:
+        sev_cont = [f for f in container_findings if f.get("severity","").lower() == sev]
+        container_counts[sev] = len(sev_cont)
+        if baseline:
+            sev_new = [f for f in sev_cont if
+                       (f.get("rule_id") or f.get("check_id",""), f.get("file","")) not in base_keys]
+            container_new_counts[sev] = len(sev_new)
+        else:
+            container_new_counts[sev] = len(sev_cont)
+
+    # Determine if comment is actionable
+    has_actionable = bool(new_findings) or grade_dropped
+    has_actionable = has_actionable or (abs(cost_delta) >= min_cost_delta)
+    # Container changes count as actionable if any new CVEs in alert range
+    has_actionable = has_actionable or any(
+        container_new_counts.get(sev, 0) > 0 for sev in alert_sevs
+    )
+
+    # Build comment
     letter = overall.get("letter", "?")
     pct    = overall.get("percentage", 0)
-    lines  = [f"## 🔍 InfraScan: {letter} ({pct}%)", ""]
+    title = f"## 🔍 InfraScan: {letter} ({pct}%){grade_change_msg}"
+    lines  = [title, ""]
 
     # ── Grade overview table (always) ─────────────────────────────────────────
-    cost_g = report_dict.get("cost", {})
-    sec_g  = report_dict.get("security", {})
-    cont_g = report_dict.get("container", {})
-
     def _grade_row(name: str, g: dict) -> Optional[str]:
         if not g or g.get("max_score", 0) == 0:
             return None
@@ -2832,7 +2908,7 @@ def format_pr_comment_md(
         if bd.get("critical"): parts.append(f"🔴 {bd['critical']} critical")
         if bd.get("high"):     parts.append(f"{bd['high']} high")
         if bd.get("medium"):   parts.append(f"{bd['medium']} medium")
-        detail = ", ".join(parts) if parts else "✅ clean"
+        detail = ", ".join(parts) if parts else "clean"
         return f"| {name} | **{gl}** ({gp}%) | {detail} |"
 
     grade_rows = [r for r in [
@@ -2844,57 +2920,85 @@ def format_pr_comment_md(
     if grade_rows:
         lines += ["| Category | Grade | Findings |", "|---|---|---|"] + grade_rows + [""]
 
-    # ── Infrastructure cost line ───────────────────────────────────────────────
-    if base_cost and cost_delta != 0:
-        delta_str = f"**+{_fmt_usd(cost_delta)}/mo ⚠️**" if cost_delta > 0 else f"**{_fmt_usd(cost_delta)}/mo ✅**"
-        lines += [
-            "| | Baseline | This PR | Delta |",
-            "|---|---|---|---|",
-            f"| Infra cost | {_fmt_usd(base_cost)}/mo | {_fmt_usd(total_cost)}/mo | {delta_str} |",
-            "",
-        ]
-    elif total_cost:
-        lines += [f"**Infrastructure cost:** {_fmt_usd(total_cost)}/mo", ""]
+    # ── Infrastructure cost (show if exists OR changed above threshold) ───────
+    show_cost = total_cost > 0 or abs(cost_delta) >= min_cost_delta
+    if show_cost:
+        if base_cost and abs(cost_delta) >= min_cost_delta:
+            delta_str = (f"**+{_fmt_usd(cost_delta)}/mo ⚠️**" if cost_delta > 0
+                         else f"**{_fmt_usd(abs(cost_delta))}/mo ✅**")
+            pct_str = f" ({cost_delta_pct:+.1f}%)" if abs(cost_delta_pct) >= 1 else ""
+            lines += [
+                "| | Baseline | This PR | Delta |",
+                "|---|---|---|---|",
+                f"| Infra cost | {_fmt_usd(base_cost)}/mo"
+                f" | {_fmt_usd(total_cost)}/mo | {delta_str}{pct_str} |",
+                "",
+            ]
+        elif total_cost:
+            lines += [f"**Infrastructure cost:** {_fmt_usd(total_cost)}/mo", ""]
 
+    # No actionable changes → clean summary
     if not has_actionable:
-        # Clean summary — confirms the scan ran without noise
-        lines.append("✅ No new critical findings.")
+        lines.append("✅ No new findings above threshold.")
         if run_url:
-            lines += ["", f"→ [Full report in Actions summary]({run_url}) (HTML artifact also attached)"]
+            lines += ["", f"→ [Full report in Actions summary]({run_url})"]
         return "\n".join(lines)
 
-    # New CRITICAL findings
-    if new_crits:
-        lines += [f"### 🔴 New CRITICAL findings ({len(new_crits)})",
-                  "| Rule | File | Description |", "|---|---|---|"]
-        for f in new_crits[:10]:
+    # ── New IaC findings (top N most important, sorted by severity) ───────────
+    if new_findings:
+        # Take top N total findings (not per-severity)
+        shown_findings = new_findings[:max_findings]
+        total_new = len(new_findings)
+        overflow = total_new - len(shown_findings)
+        
+        emoji_map = {
+            'critical': '🔴',
+            'high': '🟠',
+            'medium': '🟡',
+            'low': '🔵',
+            'info': '⚪'
+        }
+        
+        lines += [f"### New IaC findings ({total_new})",
+                  "| Severity | Rule | File | Description |", "|---|---|---|---|"]
+        for f in shown_findings:
+            sev = f.get("severity", "").upper()
+            emoji = emoji_map.get(sev.lower(), '⚪')
             rid   = f.get("rule_id") or f.get("check_id", "")
-            fname = os.path.basename(f.get("file", "") or f.get("image", ""))
+            fname = os.path.basename(f.get("file", ""))
             line_n = f.get("line", "")
             loc   = f"{fname}:{line_n}" if line_n else fname
             desc  = (f.get("description", f.get("name", "")))[:70]
-            lines.append(f"| {rid} | {loc} | {desc} |")
-        if len(new_crits) > 10:
-            lines.append(f"| | | _… and {len(new_crits)-10} more_ |")
+            lines.append(f"| {emoji} {sev} | {rid} | {loc} | {desc} |")
+        
+        if overflow > 0:
+            lines += ["", f"_… and {overflow} more findings — see full report_"]
         lines.append("")
 
-    # New HIGH findings (only when alert_on=critical_high)
-    if alert_on == "critical_high" and new_highs:
-        lines += [f"### 🟠 New HIGH findings ({len(new_highs)})",
-                  "| Rule | File | Description |", "|---|---|---|"]
-        for f in new_highs[:5]:
-            rid   = f.get("rule_id") or f.get("check_id", "")
-            fname = os.path.basename(f.get("file", "") or f.get("image", ""))
-            line_n = f.get("line", "")
-            loc   = f"{fname}:{line_n}" if line_n else fname
-            desc  = (f.get("description", f.get("name", "")))[:70]
-            lines.append(f"| {rid} | {loc} | {desc} |")
-        if len(new_highs) > 5:
-            lines.append(f"| | | _… and {len(new_highs)-5} more_ |")
-        lines.append("")
+    # ── Container findings (aggregated by severity) ───────────────────────────
+    total_container = sum(container_counts.values())
+    if total_container > 0:
+        lines += ["### 🐳 Container Findings"]
+        has_new_containers = any(container_new_counts.get(sev, 0) > 0 for sev in severity_order)
+        if has_new_containers:
+            lines += ["| Severity | Total | New |", "|---|---|---|"]
+            for sev in severity_order:
+                if container_counts.get(sev, 0) == 0:
+                    continue
+                total_sev = container_counts[sev]
+                new_sev = container_new_counts.get(sev, 0)
+                change_str = f"+{new_sev} ⚠️" if new_sev > 0 else "-"
+                lines.append(f"| {sev.upper()} | {total_sev} | {change_str} |")
+        else:
+            lines += ["| Severity | Count |", "|---|---|"]
+            for sev in severity_order:
+                if container_counts.get(sev, 0) == 0:
+                    continue
+                lines.append(f"| {sev.upper()} | {container_counts[sev]} |")
+        lines += ["", "_→ View all CVEs in full HTML report_", ""]
 
     if run_url:
-        lines.append(f"→ [Full report in Actions summary]({run_url}) (HTML artifact also attached)")
+        lines.append(f"→ [Full report in Actions summary]({run_url})")
 
     return "\n".join(lines)
 

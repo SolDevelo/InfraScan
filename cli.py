@@ -71,9 +71,19 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
         list(findings.get('cost', []))
     )
 
-    alert_sevs = {'critical'}
-    if alert_on == 'critical_high':
-        alert_sevs.add('high')
+    # Map alert_on to severity levels
+    alert_sevs = set()
+    if alert_on == 'critical':
+        alert_sevs = {'critical'}
+    elif alert_on in ('critical_high', 'high'):  # critical_high is deprecated alias
+        alert_sevs = {'critical', 'high'}
+    elif alert_on == 'medium':
+        alert_sevs = {'critical', 'high', 'medium'}
+    elif alert_on == 'low':
+        alert_sevs = {'critical', 'high', 'medium', 'low'}
+    elif alert_on == 'any_new':
+        alert_sevs = {'critical', 'high', 'medium', 'low', 'info'}
+    # alert_on == 'none' -> alert_sevs stays empty
 
     for f in all_findings:
         sev = f.get('severity', '').lower()
@@ -83,7 +93,13 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
         fpath = f.get('file', '')
         line  = f.get('line', '')
         desc  = f.get('description', f.get('name', rid))
-        level = 'error' if sev == 'critical' else 'warning'
+        # Critical = error, High = warning, others = notice
+        if sev == 'critical':
+            level = 'error'
+        elif sev == 'high':
+            level = 'warning'
+        else:
+            level = 'notice'
         loc   = f"file={fpath}" + (f",line={line}" if line else "")
         print(f"::{level} {loc},title={rid}::{desc}")
 
@@ -262,11 +278,30 @@ def setup_args():
 
     parser.add_argument(
         "--alert-on",
-        choices=["critical", "critical_high", "none"],
-        default="critical",
+        choices=["critical", "high", "medium", "low", "any_new", "critical_high", "none"],
+        default="any_new",
         dest="alert_on",
         help="Severity threshold for PR comments and annotations "
-             "(critical | critical_high | none). Default: critical."
+             "(critical | high | medium | low | any_new | none). Default: any_new. "
+             "'critical_high' is deprecated, use 'high' instead."
+    )
+
+    parser.add_argument(
+        "--min-cost-delta",
+        type=float,
+        default=0.0,
+        dest="min_cost_delta",
+        help="Minimum cost delta ($/month) to show in PR comments (default: 0 = any change). "
+             "Cost changes below this threshold are not highlighted."
+    )
+
+    parser.add_argument(
+        "--max-pr-findings",
+        type=int,
+        default=10,
+        dest="max_pr_findings",
+        help="Maximum total findings to show in PR comments, sorted by severity (default: 10). "
+             "Shows the most important new findings across all severity levels."
     )
 
     parser.add_argument(
@@ -648,11 +683,15 @@ def main():
 
         if do_pr_comment and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
             from reporter.cost_estimator import format_pr_comment_md
+            min_cost_delta = getattr(args, 'min_cost_delta', 5.0)
+            max_findings = getattr(args, 'max_pr_findings', 5)
             comment_md = format_pr_comment_md(
                 report_dict,
                 baseline=baseline_dict or None,
                 alert_on=alert_on,
                 run_url=run_url,
+                min_cost_delta=min_cost_delta,
+                max_findings=max_findings,
             )
             if comment_md or force_comment:
                 post_pr_comment(comment_md or f"## 🔍 InfraScan\nNo actionable findings.")

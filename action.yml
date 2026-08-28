@@ -50,9 +50,17 @@ inputs:
     required: false
     default: 'true'
   alert-on:
-    description: 'Severity threshold for PR comments and annotations (critical|critical_high|none)'
+    description: 'Severity threshold for PR comments and annotations (critical|high|medium|low|any_new|none)'
     required: false
-    default: 'critical'
+    default: 'any_new'
+  min-cost-delta:
+    description: 'Minimum cost delta ($/month) to trigger PR comment (default: 0 = any change)'
+    required: false
+    default: '0'
+  max-pr-findings:
+    description: 'Maximum total findings to show in PR comments, sorted by severity (default: 10)'
+    required: false
+    default: '10'
   baseline:
     description: 'Path to an explicit baseline JSON (overrides auto-baseline; leave blank to let the action manage it)'
     required: false
@@ -189,6 +197,8 @@ runs:
         CMD+=(--alert-on "${{ inputs.alert-on }}")
         CMD+=(--pr-comment "${{ inputs.pr-comment }}")
         CMD+=(--step-summary "${{ inputs.step-summary }}")
+        CMD+=(--min-cost-delta "${{ inputs.min-cost-delta }}")
+        CMD+=(--max-pr-findings "${{ inputs.max-pr-findings }}")
         CMD+=("${BASELINE_ARG[@]}")
 
         if [ -n "${{ inputs.out }}" ]; then

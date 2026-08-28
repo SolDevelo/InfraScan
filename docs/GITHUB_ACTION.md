@@ -56,7 +56,9 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `github-token` | `github.token` | Token for PR comments and annotations. Defaults to the built-in token — no need to pass `secrets.GITHUB_TOKEN` explicitly |
 | `pr-comment` | `true` | Post/update a PR comment on every pull request |
 | `step-summary` | `true` | Write scan results to the Actions step summary |
-| `alert-on` | `critical` | Severity threshold for PR comments and annotations: `critical`, `critical_high`, or `none` |
+| `alert-on` | `any_new` | Severity threshold for PR comments and annotations: `critical`, `high`, `medium`, `low`, `any_new`, or `none`. `any_new` shows all new findings sorted by severity |
+| `min-cost-delta` | `0` | Minimum cost delta ($/month) to highlight in PR comments. Default 0 = show any cost change |
+| `max-pr-findings` | `10` | Maximum total findings to show in PR comments (sorted by severity, most important first). Additional findings are aggregated |
 | `baseline` | _(none)_ | Path to a baseline JSON for cost/finding delta. Set automatically when using the baseline cache pattern below |
 | `skip-if-no-match` | `true` | Skip the scan on PRs when no files matching the scanner's trigger patterns were changed |
 | `slack-webhook-url` | _(none)_ | Slack Incoming Webhook URL for scan notifications |
@@ -87,17 +89,18 @@ on:
 A PR comment is **always posted** on every pull request — even when there is nothing new — so the team can confirm the scan ran. The comment contains:
 
 1. **Grade overview table** — Category / Grade / Findings for Overall, Security, Cost, and Containers
-2. **Infrastructure cost** — current estimate; when a baseline exists, shown as a Baseline / This PR / Delta table
-3. **New CRITICAL findings** — only findings introduced by this PR (not pre-existing). When none are new: `✅ No new critical findings.`
-4. **New HIGH findings** — only when `alert-on: critical_high`
+2. **Grade changes** — Highlighted in title when overall grade drops (e.g. B→C ⚠️)
+3. **Infrastructure cost** — current estimate; when a baseline exists, shown as a Baseline / This PR / Delta table (any cost change shown by default)
+4. **Top N new IaC findings** — most important findings sorted by severity (CRITICAL → HIGH → MEDIUM → LOW), shown in one unified table, limited to `max-pr-findings` total (default: 10)
+5. **Container findings** — aggregated summary table showing total and new CVE counts per severity, not individual CVE listings
 
 On pushes to the default branch (no open PR) no comment is attempted.
 
-Full details (savings opportunities, MEDIUM findings) are in the step summary only.
+Full details (all findings, savings opportunities) are in the step summary.
 
-**Example comment (new critical found):**
+**Example comment (mixed severities, top 10 shown):**
 ```
-## 🔍 InfraScan: C (71.1%)
+## 🔍 InfraScan: C (71%) B→C ⚠️
 
 | Category   | Grade       | Findings                         |
 |------------|-------------|----------------------------------|
@@ -106,19 +109,38 @@ Full details (savings opportunities, MEDIUM findings) are in the step summary on
 | Cost       | **C** (70%) | 6 high, 16 medium                |
 | Containers | **A** (91%) | 🔴 1 critical, 2 high            |
 
-|            | Baseline  | This PR   | Delta         |
-|------------|-----------|-----------|---------------|
-| Infra cost | $4,625/mo | $5,623/mo | **+$998/mo ⚠️** |
+|            | Baseline  | This PR   | Delta           |
+|------------|-----------|-----------|-----------------|
+| Infra cost | $4,625/mo | $5,623/mo | **+$998/mo ⚠️** (+21.6%) |
 
-### 🔴 New CRITICAL findings (3)
-| Rule      | File        | Description                      |
-|-----------|-------------|----------------------------------|
-| CKV_AWS_7 | main.tf:263 | KMS key rotation not enabled     |
+### New IaC findings (28)
+| Severity | Rule       | File        | Description                      |
+|----------|------------|-------------|----------------------------------|
+| 🔴 CRITICAL | CKV_AWS_7  | main.tf:263 | KMS key rotation not enabled     |
+| 🔴 CRITICAL | COST-006   | eip.tf:12   | Unassociated Elastic IP          |
+| 🔴 CRITICAL | CKV_AWS_20 | s3.tf:5     | S3 bucket not encrypted          |
+| 🟠 HIGH | CKV_AWS_79 | vpc.tf:45   | Security group ingress 0.0.0.0/0 |
+| 🟠 HIGH | CKV_K8S_8  | deploy.yaml:12 | Container runs as root        |
+| 🟠 HIGH | COST-005   | nat.tf:8    | NAT Gateway removable            |
+| 🟠 HIGH | CKV_AWS_18 | lb.tf:23    | ALB access logging not enabled   |
+| 🟠 HIGH | CKV_AWS_33 | rds.tf:15   | RDS encryption not enabled       |
+| 🟡 MEDIUM | CKV_AWS_33 | kms.tf:22   | KMS key no rotation policy       |
+| 🟡 MEDIUM | CKV_K8S_11 | pod.yaml:15 | CPU limits not set               |
 
-→ [Full report in Actions summary](…) (HTML artifact also attached)
+_… and 18 more findings — see full report_
+
+### 🐳 Container Findings
+| Severity | Total | New    |
+|----------|-------|--------|
+| HIGH     | 15    | +3 ⚠️  |
+| MEDIUM   | 32    | +8 ⚠️  |
+
+_→ View all CVEs in full HTML report_
+
+→ [Full report in Actions summary](…)
 ```
 
-**Example comment (no new critical):**
+**Example comment (clean, no actionable changes):**
 ```
 ## 🔍 InfraScan: B (84%)
 
@@ -129,9 +151,9 @@ Full details (savings opportunities, MEDIUM findings) are in the step summary on
 
 **Infrastructure cost:** $1,200/mo
 
-✅ No new critical findings.
+✅ No new findings above threshold.
 
-→ [Full report in Actions summary](…) (HTML artifact also attached)
+→ [Full report in Actions summary](…)
 ```
 
 ### Permissions
@@ -146,11 +168,22 @@ Without `pull-requests: write` the comment attempt produces a 403 in the logs bu
 
 ### `alert-on` values
 
-| Value | New CRITICAL/HIGH shown in comment | Annotations emitted |
+Controls which findings appear in PR comments and inline annotations. Shows the top `max-pr-findings` (default: 10) most important new findings across **all severity levels**, sorted by severity (CRITICAL first).
+
+| Value | Shown in PR comments | Annotations |
 |---|---|---|
-| `critical` (default) | New CRITICAL findings | CRITICAL as `::error` |
-| `critical_high` | New CRITICAL or HIGH findings | CRITICAL `::error`, HIGH `::warning` |
-| `none` | Never | Never |
+| `any_new` (default) | Top N new findings across all severities | CRITICAL `::error`, HIGH `::warning`, others `::notice` |
+| `low` | Top N new findings (LOW/MEDIUM/HIGH/CRITICAL) | CRITICAL `::error`, HIGH `::warning`, MEDIUM/LOW `::notice` |
+| `medium` | Top N new findings (MEDIUM/HIGH/CRITICAL) | CRITICAL `::error`, HIGH `::warning`, MEDIUM `::notice` |
+| `high` | Top N new findings (HIGH/CRITICAL) | CRITICAL `::error`, HIGH `::warning` |
+| `critical` | Top N new CRITICAL only | CRITICAL `::error` |
+| `none` | Never (summary only) | Never |
+
+**Container findings** are aggregated by severity in a summary table instead of listing individual CVEs.
+
+**Cost changes** are always shown when any delta exists (configurable via `min-cost-delta`, default: 0).
+
+**Grade changes** (drops) are highlighted in the comment title.
 
 ---
 
