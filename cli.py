@@ -85,6 +85,25 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
         alert_sevs = {'critical', 'high', 'medium', 'low', 'info'}
     # alert_on == 'none' -> alert_sevs stays empty
 
+    # Create set of container findings for fast lookup
+    container_findings = set(id(f) for f in findings.get('container', []))
+    
+    # Helper to identify container findings
+    def _is_container(f: dict) -> bool:
+        return id(f) in container_findings
+
+    # Sort findings: by severity (critical first), then by type (IaC before containers)
+    severity_order = ['critical', 'high', 'medium', 'low', 'info']
+    def _sort_key(f: dict) -> tuple:
+        sev = f.get('severity', '').lower()
+        try:
+            sev_idx = severity_order.index(sev)
+        except ValueError:
+            sev_idx = 999
+        type_idx = 1 if _is_container(f) else 0
+        return (sev_idx, type_idx)
+    all_findings.sort(key=_sort_key)
+
     for f in all_findings:
         sev = f.get('severity', '').lower()
         if sev not in alert_sevs:

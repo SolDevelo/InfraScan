@@ -2803,11 +2803,14 @@ def format_pr_comment_md(
     def _by_sev(sev: str) -> List[dict]:
         return [f for f in all_findings if f.get("severity", "").lower() == sev]
 
-    # Separate container vs non-container findings
+    # Separate container vs non-container findings using actual categorization
+    container_findings_list = list(findings.get("container", []))
+    container_ids = set(id(f) for f in container_findings_list)
+    
     def _is_container(f: dict) -> bool:
-        return 'image' in f or f.get('file', '').lower().startswith('dockerfile')
+        return id(f) in container_ids
 
-    container_findings = [f for f in all_findings if _is_container(f)]
+    container_findings = container_findings_list
     iac_findings = [f for f in all_findings if not _is_container(f)]
 
     # Compute cost delta
@@ -2834,9 +2837,21 @@ def format_pr_comment_md(
         for f in baseline_findings
     }
 
-    # Filter to new findings in alert severity range
+    # Filter to new findings in alert severity range (IaC + Container)
     new_findings = []
-    for f in iac_findings:  # Only IaC findings shown individually
+    
+    # Include IaC findings
+    for f in iac_findings:
+        sev = f.get("severity", "").lower()
+        if sev not in alert_sevs:
+            continue
+        fkey = (f.get("rule_id") or f.get("check_id",""), f.get("file",""))
+        if baseline and fkey in base_keys:
+            continue
+        new_findings.append(f)
+    
+    # Include Container findings (CVEs)
+    for f in container_findings:
         sev = f.get("severity", "").lower()
         if sev not in alert_sevs:
             continue
@@ -2847,15 +2862,18 @@ def format_pr_comment_md(
 
     # When no baseline exists, treat all as "new"
     if not baseline:
-        new_findings = [f for f in iac_findings if f.get("severity","").lower() in alert_sevs]
+        new_findings = [f for f in iac_findings + container_findings if f.get("severity","").lower() in alert_sevs]
 
-    # Sort new findings by severity (critical first)
-    def _sev_weight(f: dict) -> int:
+    # Sort new findings by severity (critical first), then by type (IaC before containers)
+    def _sev_weight(f: dict) -> tuple:
         sev = f.get("severity", "").lower()
         try:
-            return severity_order.index(sev)
+            sev_idx = severity_order.index(sev)
         except ValueError:
-            return 999
+            sev_idx = 999
+        # 0 for IaC findings, 1 for container findings (IaC shown first)
+        type_idx = 1 if _is_container(f) else 0
+        return (sev_idx, type_idx)
     new_findings.sort(key=_sev_weight)
 
     # Grade change detection
@@ -2944,7 +2962,7 @@ def format_pr_comment_md(
             lines += ["", f"→ [Full report in Actions summary]({run_url})"]
         return "\n".join(lines)
 
-    # ── New IaC findings (top N most important, sorted by severity) ───────────
+    # ── New findings (IaC + Container, top N most important, sorted by severity) ──
     if new_findings:
         # Take top N total findings (not per-severity)
         shown_findings = new_findings[:max_findings]
@@ -2959,7 +2977,7 @@ def format_pr_comment_md(
             'info': '⚪'
         }
         
-        lines += [f"### New IaC findings ({total_new})",
+        lines += [f"### New findings ({total_new})",
                   "| Severity | Rule | File | Description |", "|---|---|---|---|"]
         for f in shown_findings:
             sev = f.get("severity", "").upper()
@@ -2974,28 +2992,6 @@ def format_pr_comment_md(
         if overflow > 0:
             lines += ["", f"_… and {overflow} more findings — see full report_"]
         lines.append("")
-
-    # ── Container findings (aggregated by severity) ───────────────────────────
-    total_container = sum(container_counts.values())
-    if total_container > 0:
-        lines += ["### 🐳 Container Findings"]
-        has_new_containers = any(container_new_counts.get(sev, 0) > 0 for sev in severity_order)
-        if has_new_containers:
-            lines += ["| Severity | Total | New |", "|---|---|---|"]
-            for sev in severity_order:
-                if container_counts.get(sev, 0) == 0:
-                    continue
-                total_sev = container_counts[sev]
-                new_sev = container_new_counts.get(sev, 0)
-                change_str = f"+{new_sev} ⚠️" if new_sev > 0 else "-"
-                lines.append(f"| {sev.upper()} | {total_sev} | {change_str} |")
-        else:
-            lines += ["| Severity | Count |", "|---|---|"]
-            for sev in severity_order:
-                if container_counts.get(sev, 0) == 0:
-                    continue
-                lines.append(f"| {sev.upper()} | {container_counts[sev]} |")
-        lines += ["", "_→ View all CVEs in full HTML report_", ""]
 
     if run_url:
         lines.append(f"→ [Full report in Actions summary]({run_url})")
