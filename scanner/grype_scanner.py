@@ -169,7 +169,12 @@ def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, 
             cmd,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout for image scanning
+            # 4 minutes: this covers grype's own image pull (not just DB
+            # lookup/matching) for images not already present locally --
+            # 120s was tight enough that large private-registry images
+            # (multi-GB Java app images, observed directly in a real CI
+            # pipeline) could time out on pull alone even with a warm DB.
+            timeout=240
         )
         
         if result.stdout.strip():
