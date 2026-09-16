@@ -34,10 +34,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user and add to docker group
+# Create a non-root user and add to docker group.
+# chmod o+rX /home/appuser: traversable/readable by any uid, not just
+# appuser's own (1000). A caller running this image with `-u <other-uid>`
+# (e.g. to make output written to a bind-mounted /scan come out owned by
+# their own host user rather than root) otherwise can't reach anything
+# under here at all, including grype and docker-scout in .local/bin below,
+# and both container scanners then fail with a bare "not installed" with
+# no indication the real cause is a directory traversal denial rather than
+# the tools being missing. No write bit added; the arbitrary uid only
+# needs to read and execute what's already here.
 RUN useradd -m appuser && chown -R appuser /opt/infrascan \
     && groupadd -f docker \
-    && usermod -aG docker appuser
+    && usermod -aG docker appuser \
+    && chmod o+rX /home/appuser
 
 # Install container vulnerability scanners (both Docker Scout and Grype)
 RUN mkdir -p /home/appuser/.local/bin && \

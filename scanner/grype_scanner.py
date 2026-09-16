@@ -98,6 +98,7 @@ class GrypeScanner(Scanner):
         # Perform logins for ECR/Docker Hub if needed
         if all_images_map:
             perform_all_logins(list(all_images_map.keys()))
+            ensure_db_ready()
 
         # Extract images from compose files and scan them
         for image, compose_file in all_images_map.items():
@@ -110,6 +111,36 @@ class GrypeScanner(Scanner):
                 continue
 
         return ScanResult(findings=findings)
+
+
+def ensure_db_ready(timeout: int = 300) -> None:
+    """Make sure grype's vulnerability DB is present before scanning any
+    images, with its own generous timeout.
+
+    Without this, a fresh environment with no cached DB (no baked-in DB in
+    the Docker image, no prior `grype db update`) pays the first-download
+    cost (~140s+ observed) inside scan_image()'s per-image timeout below
+    (120s), which is tuned for actual scan time, not a first-time DB
+    download. That timeout expires before the download finishes, the
+    exception is swallowed by scan()'s per-image try/except, and every
+    image scan silently returns zero findings — the "containers" section
+    of a report can come back looking clean when it was never actually
+    scanned at all. `grype db check` is a fast no-network no-op once a
+    valid DB is already present, so this is a no-op after the first run.
+    """
+    try:
+        check = subprocess.run(["grype", "db", "check"], capture_output=True, text=True, timeout=10)
+        if check.returncode == 0:
+            return
+    except Exception:
+        pass
+    print("Grype vulnerability DB not found or stale, downloading (first run only)...")
+    try:
+        result = subprocess.run(["grype", "db", "update"], capture_output=True, text=True, timeout=timeout)
+        if result.returncode != 0:
+            print(f"Warning: grype db update failed: {result.stderr[-300:]}")
+    except subprocess.TimeoutExpired:
+        print(f"Warning: grype db update did not finish within {timeout}s")
 
 
 def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
