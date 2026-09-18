@@ -1,5 +1,5 @@
 name: 'InfraScan – IaC Cost & Security Scanner'
-description: 'Scan Terraform, Kubernetes, Helm, CloudFormation and Ansible for security issues, Terraform for cost inefficiencies, and container images for vulnerabilities in CI/CD pipelines'
+description: 'Scan IaC (Terraform, K8s, Helm, CloudFormation, Ansible) for security, Terraform for cost, and containers for CVEs in CI/CD'
 author: 'SolDevelo'
 branding:
   icon: 'alert-triangle'
