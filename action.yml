@@ -1,5 +1,5 @@
 name: 'InfraScan – IaC Cost & Security Scanner'
-description: 'Scan Terraform, Kubernetes and Docker for cost inefficiencies and security issues in CI/CD pipelines'
+description: 'Scan Terraform, Kubernetes, Helm, CloudFormation and Ansible for security issues, Terraform for cost inefficiencies, and container images for vulnerabilities in CI/CD pipelines'
 author: 'SolDevelo'
 branding:
   icon: 'alert-triangle'
@@ -22,9 +22,9 @@ inputs:
     required: false
     default: ''
   framework:
-    description: 'Framework (auto, terraform, kubernetes, cloudformation, helm, all)'
+    description: 'Framework (smart, auto, terraform, kubernetes, cloudformation, helm, ansible, all)'
     required: false
-    default: 'auto'
+    default: 'smart'
   download-external-modules:
     description: 'Allow Checkov to download external modules'
     required: false
