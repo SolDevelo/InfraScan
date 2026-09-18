@@ -371,7 +371,7 @@ function initApp() {
         toast.className = `toast ${type}`;
 
         const icon = type === 'error' ? '❌' : '✅';
-        toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+        toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
 
         container.appendChild(toast);
 
@@ -899,7 +899,7 @@ function initApp() {
         const gradePill = (grade, label) => {
             if (!grade) return '';
             const color = gradeColor[grade.letter] || '#6b7280';
-            return `<span class="grade-pill" style="background:${color}22; border-color:${color}; color:${color}" title="${label}: ${grade.percentage}%">${label} ${grade.letter}</span>`;
+            return `<span class="grade-pill" style="background:${color}22; border-color:${color}; color:${color}" title="${escapeHtml(label)}: ${grade.percentage}%">${escapeHtml(label)} ${escapeHtml(grade.letter)}</span>`;
         };
 
         const recipientBadge = '';
@@ -953,7 +953,7 @@ function initApp() {
                         <div class="metadata-item">
                             <span class="metadata-label">Repository:</span>
                             <span class="metadata-value">
-                                <a href="${escapeHtml(metadata.repository_url)}" target="_blank" rel="noopener noreferrer">
+                                <a href="${escapeHtml(safeUrl(metadata.repository_url))}" target="_blank" rel="noopener noreferrer">
                                     ${escapeHtml(metadata.repository_name || metadata.repository_url)}
                                 </a>
                             </span>
@@ -1089,10 +1089,10 @@ function initApp() {
             const first = findings[0];
             const fileCount = findings.length;
             return `
-                <div class="finding-card ${first.severity}">
+                <div class="finding-card ${escapeHtml(first.severity)}">
                     <div class="finding-header">
                         <span class="finding-title">${escapeHtml(first.rule_name)}</span>
-                        <span class="severity-badge ${first.severity}">${first.severity}</span>
+                        <span class="severity-badge ${escapeHtml(first.severity)}">${escapeHtml(first.severity)}</span>
                     </div>
                 ${first.description && first.description !== 'null' ? `
                 <div class="finding-detail" title="${escapeHtml(first.full_description || first.description)}">
@@ -1162,16 +1162,16 @@ function initApp() {
                 <div class="occurrences-list">
                     ${findings.map(f => {
                 // Different display for different scanners
-                let displayText = `📄 ${f.file}${f.line ? `:${f.line}` : ''}`;
+                let displayText = `📄 ${escapeHtml(f.file)}${f.line ? `:${escapeHtml(f.line)}` : ''}`;
 
                 if (f.scanner === 'checkov' && f.match_content && f.match_content.startsWith('Resource: ')) {
                     // Checkov - show resource name
                     const resourceName = f.match_content.replace('Resource: ', '');
-                    displayText = `🔹 ${resourceName} <span style="color: var(--text-secondary); font-size: 0.9em;">(${f.file}:${f.line})</span>`;
+                    displayText = `🔹 ${escapeHtml(resourceName)} <span style="color: var(--text-secondary); font-size: 0.9em;">(${escapeHtml(f.file)}:${escapeHtml(f.line)})</span>`;
                 } else if ((f.scanner === 'docker-scout' || f.scanner === 'grype') && f.image) {
                     // Docker Scout / Grype - show image and package info
                     const cveNumber = f.rule_id || 'UNKNOWN';
-                    displayText = `🐳 ${f.image}<br/><span style="color: var(--text-secondary); font-size: 0.9em;">Package: ${f.package}@${f.package_version}</span><br/><span style="color: var(--warning); font-size: 0.85em; font-weight: 500;">${cveNumber}</span>`;
+                    displayText = `🐳 ${escapeHtml(f.image)}<br/><span style="color: var(--text-secondary); font-size: 0.9em;">Package: ${escapeHtml(f.package)}@${escapeHtml(f.package_version)}</span><br/><span style="color: var(--warning); font-size: 0.85em; font-weight: 500;">${escapeHtml(cveNumber)}</span>`;
                 }
 
                 return `
@@ -1301,7 +1301,12 @@ function initApp() {
                                                         ${(v.full_description || v.description) ? `
                                                             <div class="cve-detail-section">
                                                                 <strong>Description:</strong>
-                                                                <div class="markdown-rendered" style="margin-top: 8px; font-size: 0.85rem; line-height: 1.5;">${window.marked ? window.marked.parse(v.description || v.full_description) : escapeHtml(v.description || v.full_description)}</div>
+                                                                <div class="markdown-rendered" style="margin-top: 8px; font-size: 0.85rem; line-height: 1.5;">${(() => {
+                        const raw = v.description || v.full_description;
+                        if (!window.marked) return escapeHtml(raw);
+                        const rendered = window.marked.parse(raw);
+                        return window.DOMPurify ? window.DOMPurify.sanitize(rendered) : escapeHtml(raw);
+                    })()}</div>
                                                             </div>
                                                         ` : ''}
                                                         <div class="cve-detail-section">
@@ -1355,6 +1360,17 @@ function initApp() {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    // Defense-in-depth: escapeHtml() alone does not stop a javascript: URL from
+    // being placed in an href attribute, since such URLs need no HTML escaping.
+    function safeUrl(url) {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : '#';
+        } catch (e) {
+            return '#';
+        }
     }
 
     function truncateText(text, maxLength = 100) {
@@ -1575,7 +1591,7 @@ function initApp() {
                         <span class="grade-help-icon" title="${getGradeExplanation(title)}">?</span>
                     </div>
                     <div class="grade-letter" style="background: ${getGradeColor(grade.letter)}">
-                        ${grade.letter}
+                        ${escapeHtml(grade.letter)}
                     </div>
                     <div class="grade-percentage">${grade.percentage}%</div>
                     <div class="grade-details">

@@ -68,7 +68,7 @@
                     <div>
                         <h2 class="recent-scans-title">Project Scans: {{ project_name }}</h2>
                         <p class="recent-scans-subtitle">History of all audits performed by InfraScan.</p>
-                        <a href="{{ repo_url }}" target="_blank"
+                        <a href="{{ repo_url|safe_href }}" target="_blank"
                             style="font-size: 0.85rem; color: var(--primary); text-decoration: none; display: inline-block; margin-top: 0.5rem;">{{
                             repo_url }} ↗</a>
                     </div>

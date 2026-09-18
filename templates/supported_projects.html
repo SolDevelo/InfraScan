@@ -602,7 +602,7 @@
                         <tr>
                             <td>
                                 <div class="project-name-cell" style="white-space:nowrap;">
-                                    <a href="${ownerUrl}" target="_blank" class="project-link" style="font-size:0.85rem;opacity:0.75;">${escapeHtml(ownerDisplay)}</a>
+                                    <a href="${escapeHtml(safeUrl(ownerUrl))}" target="_blank" class="project-link" style="font-size:0.85rem;opacity:0.75;">${escapeHtml(ownerDisplay)}</a>
                                 </div>
                             </td>
                             <td>
@@ -610,7 +610,7 @@
                                     <a href="/project-scans?url=${encodeURIComponent(repoUrl)}" class="project-link">${escapeHtml(repoDisplay)}</a>
                                 </div>
                                 <div style="font-size: 0.75rem; margin-top: 4px;">
-                                    <a href="${repoUrl}" target="_blank" style="color: var(--text-muted); text-decoration: none;">GitHub ↗</a>
+                                    <a href="${escapeHtml(safeUrl(repoUrl))}" target="_blank" style="color: var(--text-muted); text-decoration: none;">GitHub ↗</a>
                                 </div>
                             </td>
                             <td style="text-align: center; font-weight: 600;">${proj.scan_count}</td>
@@ -712,6 +712,17 @@
                     .replace(/>/g, "&gt;")
                     .replace(/"/g, "&quot;")
                     .replace(/'/g, "&#039;");
+            }
+
+            // Defense-in-depth: repository_url is server-validated for scheme only,
+            // so also neutralize it here before use in an href attribute.
+            function safeUrl(url) {
+                try {
+                    const parsed = new URL(url, window.location.origin);
+                    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : '#';
+                } catch (e) {
+                    return '#';
+                }
             }
 
             // Fetch on load

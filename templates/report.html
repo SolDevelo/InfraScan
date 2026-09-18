@@ -507,7 +507,7 @@
                 <div id="results-content">
                     <noscript>
                         <h1>InfraScan Report for {{ metadata.repository_name }}</h1>
-                        <p>Repository: <a href="{{ metadata.repository_url }}">{{ metadata.repository_url }}</a></p>
+                        <p>Repository: <a href="{{ metadata.repository_url|safe_href }}">{{ metadata.repository_url }}</a></p>
                         <p>Scan Date: {{ metadata.scan_timestamp }}</p>
                         <p>Overall Grade: {{ grade_report.overall.letter }} ({{ grade_report.overall.percentage }}%)</p>
                         <p>Total Issues: {{ summary.total }}</p>
@@ -652,6 +652,7 @@
     <div id="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <script src="{{ url_for('static', filename='pdf_generator.js') }}?v={{ static_version }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}?v={{ static_version }}"></script>
 </body>

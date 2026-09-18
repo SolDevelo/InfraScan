@@ -63,18 +63,68 @@ def inject_global_vars():
 def get_slack_webhook_url() -> str:
     return os.getenv('SLACK_WEBHOOK_URL', '').strip()
 
-def build_share_url(result_id: str, req, metadata=None) -> str:
+def is_safe_repo_url(url) -> bool:
+    """Only allow http(s) URLs, regardless of git host (GitHub/GitLab/Bitbucket/self-hosted/etc).
+
+    Bare host/path input (e.g. "github.com/foo/bar", no "://") is treated as
+    implicitly https. Anything that already specifies a different scheme
+    (javascript:, data:, vbscript:, file:, ...) is rejected outright, before
+    that leniency can misinterpret it as a hostname.
+
+    Before checking, this mirrors the first two steps of the WHATWG URL
+    parser (what browsers actually do to a raw href value): trim leading/
+    trailing C0 controls and space, then strip embedded tab/CR/LF from
+    anywhere in the string. Skipping this let a leading NUL byte (or other
+    C0 control) hide a "javascript:" scheme from a naive `.strip()` (which
+    only trims real whitespace) while the browser would strip it anyway and
+    still execute it -- a known filter-bypass trick.
+
+    Also rejects quote/angle-bracket/backtick characters: this value is
+    rendered in several places (Jinja templates, raw JS template literals),
+    not all of which HTML-escape it, and a legitimate repo URL never needs
+    those characters anyway.
+    """
+    if not url or not isinstance(url, str):
+        return False
+    import re
+    cleaned = re.sub(r'^[\x00-\x20]+|[\x00-\x20]+$', '', url)
+    cleaned = re.sub(r'[\t\r\n]', '', cleaned)
+    if re.search(r'["\'<>`]', cleaned):
+        return False
+    # Reject scp-style SSH URLs (e.g. "git@github.com:foo/bar.git") before the
+    # bare-host fallback below can misparse them as "https://git@host:foo/bar".
+    if '://' not in cleaned and '@' in cleaned.split('/')[0]:
+        return False
+    scheme_match = re.match(r'^([a-zA-Z][a-zA-Z0-9+.\-]*):', cleaned)
+    if scheme_match and scheme_match.group(1).lower() not in ('http', 'https'):
+        return False
+    parsed = urlparse(cleaned if '://' in cleaned else f'https://{cleaned}')
+    return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
+
+
+@app.template_filter('safe_href')
+def safe_href_filter(url):
+    """Defense-in-depth for templates: only ever render http(s) URLs as href values,
+    since Jinja autoescaping does not block dangerous schemes like javascript:."""
+    return url if is_safe_repo_url(url) else '#'
+
+
+def build_share_url(result_id: str, metadata=None) -> str:
     clean_repo = "report"
     if metadata and 'repository_name' in metadata:
         import re
         clean_repo = re.sub(r'[^a-z0-9]+', '-', metadata['repository_name'].lower()).strip('-')
         if not clean_repo:
             clean_repo = "report"
-    
+
     scan_path = f"report/{clean_repo}-{result_id}"
 
-    if req and req.host_url:
-        return f"{req.host_url.rstrip('/')}/{scan_path}"
+    # Use the configured site domain rather than the request's Host header,
+    # which is attacker-controllable and must not be trusted for building
+    # links that get broadcast (e.g. via Slack).
+    site_domain = os.getenv('SITE_DOMAIN', 'https://infrascan.soldevelo.com')
+    if site_domain:
+        return f"{site_domain.rstrip('/')}/{scan_path}"
 
     return f"/{scan_path}"
 
@@ -129,6 +179,11 @@ def save_scan_result(report_dict):
     with open(file_path, 'w') as f:
         json.dump(report_dict, f)
     return result_id
+
+
+def slack_escape(text) -> str:
+    """Escape Slack mrkdwn control characters per Slack's formatting reference."""
+    return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 def send_slack_notification(message: str) -> None:
@@ -364,7 +419,10 @@ def scan_github():
     
     # Strip query parameters and hash fragments from URL
     repo_url = repo_url.split('?')[0].split('#')[0]
-    
+
+    if not is_safe_repo_url(repo_url):
+        return jsonify({'error': 'Invalid repository URL. Must be an http(s) URL.'}), 400
+
     # Validate scanner type(s)
     valid_scanners = ['regex', 'fast', 'checkov', 'containers', 'comprehensive', 'both']
     incoming_scanners = [s.strip() for s in scanner_type.split(',')]
@@ -508,7 +566,7 @@ def scan_github():
         
         slack_message = (
             "🔔 InfraScan completed | "
-            f"Repo: {repo_url} | "
+            f"Repo: {slack_escape(repo_url)} | "
             f"Grades: {grades_summary} | "
             f"Findings: {total_findings} ({findings_summary}) | "
             f"Resource count: {resource_count} | "
@@ -874,10 +932,16 @@ def save_results():
     data = request.get_json()
     if not data or 'results' not in data:
         return jsonify({'error': 'No results provided'}), 400
-    
+
+    metadata = data.get('metadata', {}) or {}
+    repo_url = metadata.get('repository_url')
+    if repo_url and not is_safe_repo_url(repo_url):
+        return jsonify({'error': 'Invalid repository URL. Must be an http(s) URL.'}), 400
+    repo_url = repo_url or 'unknown'
+
     result_id = str(uuid.uuid4())
     file_path = os.path.join(app.config['RESULTS_DIR'], f"{result_id}.json")
-    
+
     # Store results with summary and metadata
     save_data = {
         'results': data.get('results'),
@@ -890,26 +954,22 @@ def save_results():
         'analysis': data.get('analysis'),
         'metrics': data.get('metrics'),
     }
-    
+
     # Ensure is_private is preserved in metadata
     if 'metadata' not in save_data or save_data['metadata'] is None:
         save_data['metadata'] = {}
-    
+
     if 'is_private' in data:
         save_data['metadata']['is_private'] = data.get('is_private')
-    
+
     with open(file_path, 'w') as f:
         json.dump(save_data, f)
 
-    metadata = data.get('metadata', {}) or {}
-    repo_url = metadata.get('repository_url', 'unknown')
-
-
-    share_url = build_share_url(result_id, request, metadata)
+    share_url = build_share_url(result_id, metadata)
 
     slack_message = (
         "🔗 InfraScan results shared | "
-        f"Repo: {repo_url} | "
+        f"Repo: {slack_escape(repo_url)} | "
         f"Share: {share_url}"
     )
     send_slack_notification(slack_message)
@@ -1383,7 +1443,7 @@ def subscribe_newsletter():
         
         # Send Slack notification if configured
         if app.config['SLACK_WEBHOOK_URL']:
-            send_slack_notification(f"✉️ New Newsletter Subscriber: *{email}*")
+            send_slack_notification(f"✉️ New Newsletter Subscriber: *{slack_escape(email)}*")
 
         return jsonify({'message': 'Subscribed successfully'}), 200
     except Exception as e:
