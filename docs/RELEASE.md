@@ -82,7 +82,7 @@ Before releasing, always verify the image works as expected.
 
 ### Test Web Mode
 ```bash
-docker run -d -p 5000:5000 --name infrascan-test soldevelo/infrascan:latest
+docker run -d -p 5000:5000 --name infrascan-test soldevelo/infrascan:latest web
 # Visit http://localhost:5000
 docker stop infrascan-test && docker rm infrascan-test
 ```
