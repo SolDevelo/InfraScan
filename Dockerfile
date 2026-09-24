@@ -69,6 +69,7 @@ ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Prepare entrypoint script and install CLI launcher
 RUN chmod +x /opt/infrascan/entrypoint.sh && chown appuser:appuser /opt/infrascan/entrypoint.sh && \
+    chmod +x /opt/infrascan/pipe/pipe.sh && chown appuser:appuser /opt/infrascan/pipe/pipe.sh && \
     printf '#!/bin/bash\npython /opt/infrascan/cli.py "$@"\n' > /usr/local/bin/infrascan && \
     chmod +x /usr/local/bin/infrascan
 
@@ -78,7 +79,15 @@ VOLUME ["/scan"]
 # Default port for web mode
 EXPOSE 5000
 
-# Use non-root user for security
+# Use non-root user for security. (A Bitbucket pipe container runs in its
+# own isolated user namespace, separate from the one regular Bitbucket
+# script steps run in -- confirmed live: a pre-provisioned `caches:`
+# directory that regular steps see as root:root shows up owned by the
+# unmapped overflow identity (65534/nobody) from inside a pipe, and even
+# uid=0 there gets "Operation not permitted" trying to chmod it. Root has no
+# special privilege outside its own namespace's mapped UID range, so running
+# this image as root buys pipes nothing -- the actual fix lives in the
+# calling bitbucket-pipelines.yml, not here. See docs/BITBUCKET_PIPELINE.md.)
 USER appuser
 
 # Entrypoint handles switching between web and cli

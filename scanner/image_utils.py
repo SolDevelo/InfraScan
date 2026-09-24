@@ -60,65 +60,98 @@ def filter_container_files(files: List[str]) -> tuple[List[str], List[str]]:
             continue
     return compose_files, k8s_files
 
-def extract_images_from_compose(compose_file: str) -> List[str]:
-    """Extract Docker image names from a compose file with environment variable expansion."""
+def _image_line_loader():
+    """A yaml.SafeLoader subclass that also records the source line of each
+    mapping's 'image:' key, keyed by id(mapping) -- lets callers recover
+    "which line declared this image" without a second, line-aware parse.
+    """
+    import yaml
+
+    image_lines: Dict[int, int] = {}  # id(mapping) -> 1-indexed line of its 'image' key
+
+    class _Loader(yaml.SafeLoader):
+        pass
+
+    def _construct_mapping(loader, node, deep=False):
+        mapping = yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+        for key_node, _value_node in node.value:
+            if getattr(key_node, 'value', None) == 'image':
+                image_lines[id(mapping)] = key_node.start_mark.line + 1
+        return mapping
+
+    _Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
+    return _Loader, image_lines
+
+def extract_images_from_compose(compose_file: str) -> List[tuple]:
+    """Extract (image, line) pairs from a compose file, with env var expansion.
+
+    *line* is the 1-indexed source line of the service's 'image:' key, or 0
+    if it couldn't be determined -- callers should treat 0 as "no line".
+    """
     images = []
-    
+
     try:
         import yaml
+        Loader, image_lines = _image_line_loader()
         with open(compose_file, 'r') as f:
-            compose_data = yaml.safe_load(f)
-        
+            compose_data = yaml.load(f, Loader=Loader)
+
         if compose_data and 'services' in compose_data:
             for service_name, service_config in compose_data['services'].items():
                 if isinstance(service_config, dict) and 'image' in service_config:
                     image_name = str(service_config['image'])
-                    
+                    line_no = image_lines.get(id(service_config), 0)
+
                     # 1. Expand standard $VAR and ${VAR} using os.path.expandvars
                     expanded_image = os.path.expandvars(image_name)
-                    
+
                     # 2. Expand ${VAR:-default} style strings which os.path.expandvars doesn't handle well
                     # This regex matches ${VAR:-DEFAULT} where VAR is letters/numbers/underscores and DEFAULT is anything but }
                     expanded_image = re.sub(
-                        r'\$\{([a-zA-Z_][a-zA-Z0-9_]*):-([^}]*)\}', 
-                        lambda m: os.getenv(m.group(1), m.group(2)), 
+                        r'\$\{([a-zA-Z_][a-zA-Z0-9_]*):-([^}]*)\}',
+                        lambda m: os.getenv(m.group(1), m.group(2)),
                         expanded_image
                     )
-                    
-                    images.append(expanded_image)
+
+                    images.append((expanded_image, line_no))
     except Exception as e:
         print(f"Warning: Could not parse {compose_file}: {e}")
-    
+
     return images
 
-def extract_images_from_kubernetes(k8s_file: str) -> List[str]:
-    """Extract Docker image names from a Kubernetes manifest file."""
+def extract_images_from_kubernetes(k8s_file: str) -> List[tuple]:
+    """Extract (image, line) pairs from a Kubernetes manifest file.
+
+    *line* is the 1-indexed source line of the 'image:' key, or 0 if it
+    couldn't be determined -- callers should treat 0 as "no line".
+    """
     images = []
-    
+
     try:
         import yaml
+        Loader, image_lines = _image_line_loader()
         with open(k8s_file, 'r') as f:
             # K8s files can have multiple documents separated by ---
-            docs = yaml.safe_load_all(f)
+            docs = yaml.load_all(f, Loader=Loader)
             for doc in docs:
                 if not doc or not isinstance(doc, dict):
                     continue
-                
+
                 # Recursive function to find 'image' keys in any container spec
                 def find_images(obj):
                     if isinstance(obj, dict):
                         if 'image' in obj and isinstance(obj['image'], str):
-                            images.append(obj['image'])
+                            images.append((obj['image'], image_lines.get(id(obj), 0)))
                         for v in obj.values():
                             find_images(v)
                     elif isinstance(obj, list):
                         for item in obj:
                             find_images(item)
-                
+
                 find_images(doc)
     except Exception as e:
         print(f"Warning: Could not parse {k8s_file}: {e}")
-    
+
     return images
 
 def ecr_login(image_name: str) -> bool:

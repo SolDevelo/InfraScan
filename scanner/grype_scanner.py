@@ -81,30 +81,49 @@ class GrypeScanner(Scanner):
         if not compose_files and not k8s_files:
             return ScanResult()
 
-        # Collect ALL images from ALL files first
-        all_images_map = {} # image -> source_file
+        # Collect ALL images from ALL files first. Track every (file, line)
+        # that references each image (not just the first) -- the same image
+        # is often reused across multiple compose/k8s files, and each of
+        # those files legitimately has the vulnerability too.
+        all_images_map = {}  # image -> list of (source_file, line) referencing it
         for compose_file in compose_files:
-            images = extract_images_from_compose(compose_file)
-            for image in images:
-                if image not in all_images_map:
-                    all_images_map[image] = compose_file
+            for image, line in extract_images_from_compose(compose_file):
+                entry = (compose_file, line)
+                if entry not in all_images_map.setdefault(image, []):
+                    all_images_map[image].append(entry)
 
         for k8s_file in k8s_files:
-            images = extract_images_from_kubernetes(k8s_file)
-            for image in images:
-                if image not in all_images_map:
-                    all_images_map[image] = k8s_file
+            for image, line in extract_images_from_kubernetes(k8s_file):
+                entry = (k8s_file, line)
+                if entry not in all_images_map.setdefault(image, []):
+                    all_images_map[image].append(entry)
 
         # Perform logins for ECR/Docker Hub if needed
         if all_images_map:
             perform_all_logins(list(all_images_map.keys()))
             ensure_db_ready()
 
-        # Extract images from compose files and scan them
-        for image, compose_file in all_images_map.items():
+        # Scan each unique image once regardless of how many files
+        # reference it (re-scanning per file would be redundant, expensive
+        # work against the same image). Each finding stays a single entry
+        # -- grading, the severity breakdown and the PR comment all count
+        # this list directly, so duplicating entries per file would double
+        # (or N-x) count the same vulnerability. Extra referencing
+        # (file, line) pairs are recorded on `also_in_files` instead,
+        # purely for CI adapters that want to attach a per-file marker
+        # (e.g. Bitbucket annotations) without inflating the finding count.
+        for image, source_refs in all_images_map.items():
             print(f"Scanning image with Grype: {image}")
             try:
-                image_findings = scan_image(image, compose_file, directory_path)
+                primary_file, primary_line = source_refs[0]
+                image_findings = scan_image(image, primary_file, directory_path, primary_line)
+                if len(source_refs) > 1:
+                    also_in = [
+                        {'file': os.path.relpath(f, directory_path), 'line': ln}
+                        for f, ln in source_refs[1:]
+                    ]
+                    for finding in image_findings:
+                        finding['also_in_files'] = also_in
                 findings.extend(image_findings)
             except Exception as e:
                 print(f"Warning: Failed to scan image {image}: {e}")
@@ -143,15 +162,16 @@ def ensure_db_ready(timeout: int = 300) -> None:
         print(f"Warning: grype db update did not finish within {timeout}s")
 
 
-def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
+def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
     """
     Scan a Docker image with Grype.
-    
+
     Args:
         image: Docker image name
         compose_file: Path to the compose file containing this image
         base_path: Base directory path
-    
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         List of normalized findings
     """
@@ -180,7 +200,7 @@ def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, 
         if result.stdout.strip():
             try:
                 grype_data = json.loads(result.stdout)
-                findings = parse_grype_output(grype_data, image, compose_file, base_path)
+                findings = parse_grype_output(grype_data, image, compose_file, base_path, line)
             except json.JSONDecodeError as e:
                 print(f"Failed to parse Grype JSON output: {e}")
         
@@ -195,16 +215,17 @@ def scan_image(image: str, compose_file: str, base_path: str) -> List[Dict[str, 
     return findings
 
 
-def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
+def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
     """
     Parse Grype JSON output into normalized format.
-    
+
     Args:
         grype_data: Parsed JSON data from Grype
         image: Docker image name
         compose_file: Path to compose file
         base_path: Base directory path
-    
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         List of normalized findings
     """
@@ -252,7 +273,8 @@ def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str
                 image,
                 compose_file,
                 base_path,
-                data['count']
+                data['count'],
+                line
             )
             findings.append(finding)
     
@@ -277,10 +299,10 @@ def severity_to_number(severity: str) -> int:
     return severity_map.get(severity, 0)
 
 
-def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], image: str, compose_file: str, base_path: str, count: int = 1) -> Dict[str, Any]:
+def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], image: str, compose_file: str, base_path: str, count: int = 1, line: int = 0) -> Dict[str, Any]:
     """
     Normalize a Grype vulnerability finding to match our internal format.
-    
+
     Args:
         vuln: Vulnerability data
         artifact: Artifact data
@@ -288,7 +310,8 @@ def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], imag
         compose_file: Path to compose file
         base_path: Base directory path
         count: Number of occurrences
-    
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         Normalized finding dictionary
     """
@@ -334,7 +357,7 @@ def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], imag
         'full_description': description,
         'remediation': f"Update {package_name} from {package_version} to {fix_version}" if fix_available == 'Yes' else f"Review {package_name}@{package_version} - no fix available",
         'estimated_savings': f"Security risk mitigation ({severity})",
-        'line': 0,
+        'line': line,
         'match_content': f"Image: {image}, Package: {package_name}@{package_version} ({package_type})",
         'scanner': 'grype',
         'image': image,

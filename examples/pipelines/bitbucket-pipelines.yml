@@ -1,35 +1,89 @@
 # Example Bitbucket Pipelines configuration for InfraScan
 # Copy this to your bitbucket-pipelines.yml
 #
-# This configuration runs a comprehensive scan on every push.
-# It is set to 'Monitoring Mode' (won't fail the build).
-# To enable 'Enforcement Mode', add --fail-on high_critical to the infrascan command.
+# Built entirely on a `pipe: docker://...` reference -- no `services: docker`,
+# no Docker-in-Docker daemon, no manually forwarding BITBUCKET_* env vars
+# (Bitbucket provides those to a pipe's container automatically) -- except
+# for the auth token, see below.
+#
+# One shared step definition runs for both triggers below (same anchor):
+# pushes to DEFAULT_BRANCH only, and every PR. Baseline / cost-delta
+# tracking is automatic and needs no per-trigger config: the pipe
+# auto-detects whether the current run is a push to DEFAULT_BRANCH (and not
+# a PR) and only *writes* the shared baseline then; a PR run *reads* it, or
+# falls back to scanning its own base branch directly if that cache is
+# cold or doesn't apply (see pipe/pipe.sh and "Baseline / cost delta" in
+# docs/BITBUCKET_PIPELINE.md for the detection logic).
+#
+# Deliberately `branches: main` below, not `default:` -- `default:` runs on
+# *every* branch push, not just the default branch, which would burn a full
+# scan (and post a Code Insights report) on every feature-branch push for
+# no benefit: the pipe already only writes the baseline on DEFAULT_BRANCH,
+# so anything else is wasted compute. If your default branch isn't "main",
+# update both this branch pattern and the DEFAULT_BRANCH variable below --
+# they aren't linked automatically.
+#
+# Every PR/push is scanned unconditionally -- no skip-if-no-match. See
+# "Scan skipping" in docs/BITBUCKET_PIPELINE.md for an opt-in snippet.
+#
+# Auth (only required for the PR comment): the Code Insights report and
+# annotations need no token -- they go through a local proxy Bitbucket
+# Pipelines runs alongside every step, authenticated automatically. The PR
+# comment uses a different API that proxy doesn't cover, so without a token
+# only the PR comment is skipped (everything else still works).
+#   1. Repository settings > Access tokens > create one with
+#      pullrequest:write.
+#   2. Repository settings > Pipelines > Repository variables > add it as a
+#      SECURED variable, e.g. named INFRASCAN_TOKEN.
+#   3. Reference it below (already wired up) -- $INFRASCAN_TOKEN resolves to
+#      that repository variable at pipeline run time.
+#
+# Set DEFAULT_BRANCH below if your default branch isn't "main".
+#
+# The chmod line matters, it's not boilerplate: Bitbucket pre-provisions any
+# `caches:`-declared path before the step starts, and a `pipe:` container
+# runs in its own isolated user namespace, separate from this step's own --
+# confirmed live, the pipe sees that pre-provisioned directory as owned by
+# an unmapped foreign identity it has no access to (uid=0 inside the pipe
+# still gets "Operation not permitted" there; namespaced root has no special
+# privilege outside its own namespace's mapped UID range). Running the pipe
+# itself as root doesn't fix this -- it's a namespace boundary, not a
+# permission-bits problem. What does fix it: `chmod -R 777` runs in *this*
+# step's own namespace, which does have legitimate access, and mode bits
+# (unlike UID/GID) apply universally across every namespace -- so opening the
+# "other" bits here is what actually bridges the two. The `-R` matters on
+# repeat runs too: a file a pipe already wrote into the cache carries that
+# run's own mode bits, and a non-recursive chmod on the directory alone
+# won't reopen access to it for the next run's differently-mapped pipe.
 
-image: python:3.9
+definitions:
+  caches:
+    infrascan-baseline: infrascan-baseline
+  steps:
+    - step: &infrascan-audit
+        name: InfraScan Audit
+        caches:
+          - infrascan-baseline
+        script:
+          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - pipe: docker://soldevelo/infrascan:latest
+            variables:
+              BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
+              SCANNER: comprehensive
+              FORMAT: html
+              OUT: infrascan-report.html
+              ALERT_ON: any_new
+              DEFAULT_BRANCH: main
+              # Optional: FAIL_ON: high_critical
+              # Optional: MIN_COST_DELTA: "5"
+              # Optional: MAX_PR_FINDINGS: "10"
+        artifacts:
+          - infrascan-report.html
 
 pipelines:
-  default:
-    - step:
-        name: InfraScan Audit
-        services:
-          - docker
-        script:
-          # Create artifacts directory with write permissions for the container
-          - mkdir -p infrascan-reports
-          - chmod 777 infrascan-reports
-          
-          # Run InfraScan via Docker
-          # Using the official image is recommended as it has all scanners pre-installed
-          - docker run --rm 
-              -v $(pwd):/scan 
-              soldevelo/infrascan:latest 
-              --scanner comprehensive 
-              --format html 
-              --out /scan/infrascan-reports/report.html
-              
-          # Optional: Use --fail-on to break the build if issues are found
-          # - docker run ... --fail-on high_critical
-          
-        artifacts:
-          # This ensures the report is saved and viewable in the 'Artifacts' tab
-          - infrascan-reports/**
+  branches:
+    main:
+      - step: *infrascan-audit
+  pull-requests:
+    '**':
+      - step: *infrascan-audit

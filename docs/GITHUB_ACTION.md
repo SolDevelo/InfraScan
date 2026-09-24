@@ -91,14 +91,13 @@ A PR comment is **always posted** on every pull request — even when there is n
 1. **Grade overview table** — Category / Grade / Findings for Overall, Security, Cost, and Containers
 2. **Grade changes** — Highlighted in title when overall grade drops (e.g. B→C ⚠️)
 3. **Infrastructure cost** — current estimate; when a baseline exists, shown as a Baseline / This PR / Delta table (any cost change shown by default)
-4. **Top N new IaC findings** — most important findings sorted by severity (CRITICAL → HIGH → MEDIUM → LOW), shown in one unified table, limited to `max-pr-findings` total (default: 10)
-5. **Container findings** — aggregated summary table showing total and new CVE counts per severity, not individual CVE listings
+4. **Top N new findings** — IaC findings *and* container CVEs merged into one table, sorted by severity (CRITICAL → HIGH → MEDIUM → LOW, IaC before containers on ties), limited to `max-pr-findings` total (default: 10). There is no separate aggregated container table — individual CVEs appear in the same list as IaC findings.
 
 On pushes to the default branch (no open PR) no comment is attempted.
 
 Full details (all findings, savings opportunities) are in the step summary.
 
-**Example comment (mixed severities, top 10 shown):**
+**Example comment (mixed severities, IaC + container findings merged, top 10 shown):**
 ```
 ## 🔍 InfraScan: C (71%) B→C ⚠️
 
@@ -113,32 +112,30 @@ Full details (all findings, savings opportunities) are in the step summary.
 |------------|-----------|-----------|-----------------|
 | Infra cost | $4,625/mo | $5,623/mo | **+$998/mo ⚠️** (+21.6%) |
 
-### New IaC findings (28)
+### New findings (28)
 | Severity | Rule       | File        | Description                      |
 |----------|------------|-------------|----------------------------------|
 | 🔴 CRITICAL | CKV_AWS_7  | main.tf:263 | KMS key rotation not enabled     |
 | 🔴 CRITICAL | COST-006   | eip.tf:12   | Unassociated Elastic IP          |
-| 🔴 CRITICAL | CKV_AWS_20 | s3.tf:5     | S3 bucket not encrypted          |
+| 🔴 CRITICAL | CVE-2024-9821 | Dockerfile | Critical libc vulnerability   |
 | 🟠 HIGH | CKV_AWS_79 | vpc.tf:45   | Security group ingress 0.0.0.0/0 |
 | 🟠 HIGH | CKV_K8S_8  | deploy.yaml:12 | Container runs as root        |
 | 🟠 HIGH | COST-005   | nat.tf:8    | NAT Gateway removable            |
-| 🟠 HIGH | CKV_AWS_18 | lb.tf:23    | ALB access logging not enabled   |
-| 🟠 HIGH | CKV_AWS_33 | rds.tf:15   | RDS encryption not enabled       |
+| 🟠 HIGH | CVE-2024-1122 | Dockerfile | openssl HIGH vulnerability     |
 | 🟡 MEDIUM | CKV_AWS_33 | kms.tf:22   | KMS key no rotation policy       |
 | 🟡 MEDIUM | CKV_K8S_11 | pod.yaml:15 | CPU limits not set               |
+| 🟡 MEDIUM | CVE-2024-3301 | Dockerfile | openssl MEDIUM vulnerability  |
 
 _… and 18 more findings — see full report_
 
-### 🐳 Container Findings
-| Severity | Total | New    |
-|----------|-------|--------|
-| HIGH     | 15    | +3 ⚠️  |
-| MEDIUM   | 32    | +8 ⚠️  |
-
-_→ View all CVEs in full HTML report_
-
 → [Full report in Actions summary](…)
 ```
+
+Note: `alert-on` defaults to `any_new`, so MEDIUM/LOW/INFO findings can appear
+in "New findings" too, as shown above — the table isn't CRITICAL/HIGH-only
+unless you set `alert-on: high` or `alert-on: critical`. There is no separate
+aggregated container table any more — CVEs are sorted into the same list as
+IaC findings (severity first, IaC before containers on ties).
 
 **Example comment (clean, no actionable changes):**
 ```

@@ -164,6 +164,7 @@ def create_finding_dict(
     cvss_score: Any = 'N/A',
     package_type: str = 'unknown',
     occurrences: int = 1,
+    line: int = 0,
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -234,7 +235,7 @@ def create_finding_dict(
         'full_description': description,
         'remediation': remediation,
         'estimated_savings': f"Security risk mitigation ({severity})",
-        'line': 0,
+        'line': line,
         'match_content': f"Image: {image}, Package: {package_name}@{package_version}" + (f" ({package_type})" if package_type != 'unknown' else ''),
         'scanner': 'docker-scout',
         'image': image,
@@ -345,26 +346,38 @@ class DockerScoutScanner(Scanner):
             for file in k8s_files:
                 print(f"  - {os.path.relpath(file, directory_path)}")
 
-        # Collect ALL images from ALL files first
-        all_images_map = {} # image -> source_file
+        # Collect ALL images from ALL files first. Track every (file, line)
+        # that references each image (not just the first) -- the same image
+        # is often reused across multiple compose/k8s files, and each of
+        # those files legitimately has the vulnerability too.
+        all_images_map = {}  # image -> list of (source_file, line) referencing it
         for compose_file in compose_files:
-            images = extract_images_from_compose(compose_file)
-            for image in images:
-                if image not in all_images_map:
-                    all_images_map[image] = compose_file
+            for image, line in extract_images_from_compose(compose_file):
+                entry = (compose_file, line)
+                if entry not in all_images_map.setdefault(image, []):
+                    all_images_map[image].append(entry)
 
         for k8s_file in k8s_files:
-            images = extract_images_from_kubernetes(k8s_file)
-            for image in images:
-                if image not in all_images_map:
-                    all_images_map[image] = k8s_file
+            for image, line in extract_images_from_kubernetes(k8s_file):
+                entry = (k8s_file, line)
+                if entry not in all_images_map.setdefault(image, []):
+                    all_images_map[image].append(entry)
 
         # Authenticate with registries (collecting all unique images first)
         if all_images_map:
             perform_all_logins(list(all_images_map.keys()))
 
-        # Scan collected images
-        for image, compose_file in all_images_map.items():
+        # Scan collected images -- once per unique image regardless of how
+        # many files reference it (re-scanning per file would be redundant,
+        # expensive work against the same image). Each finding stays a
+        # single entry -- grading, the severity breakdown and the PR
+        # comment all count this list directly, so duplicating entries per
+        # file would double (or N-x) count the same vulnerability. Extra
+        # referencing (file, line) pairs go on `also_in_files` instead,
+        # purely for CI adapters that want a per-file marker (e.g.
+        # Bitbucket annotations) without inflating the finding count.
+        for image, source_refs in all_images_map.items():
+            compose_file, primary_line = source_refs[0]
             # Check if image exists locally before scanning
             image_existed_before = check_image_exists(image)
 
@@ -377,7 +390,14 @@ class DockerScoutScanner(Scanner):
             print(f"  Source file: {relative_file}")
 
             try:
-                image_findings, image_auth_failed = scan_image(image, compose_file, directory_path)
+                image_findings, image_auth_failed = scan_image(image, compose_file, directory_path, primary_line)
+                if len(source_refs) > 1:
+                    also_in = [
+                        {'file': os.path.relpath(f, directory_path), 'line': ln}
+                        for f, ln in source_refs[1:]
+                    ]
+                    for finding in image_findings:
+                        finding['also_in_files'] = also_in
                 findings.extend(image_findings)
 
                 if image_auth_failed:
@@ -413,20 +433,21 @@ class DockerScoutScanner(Scanner):
         return ScanResult(findings=findings, extra_recommendations=extra_recommendations, auth_failed=auth_failed)
 
 
-def scan_image(image: str, compose_file: str, base_path: str) -> Tuple[List[Dict[str, Any]], bool]:
+def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> Tuple[List[Dict[str, Any]], bool]:
     """
     Scan a Docker image with Docker Scout.
-    
+
     Note: Docker Scout may be slower than Grype because:
     - It pulls images from registries if not locally cached
     - It performs more thorough vulnerability analysis
     - It connects to Docker Hub for latest CVE data
-    
+
     Args:
         image: Docker image name
         compose_file: Path to the compose file containing this image
         base_path: Base directory path
-    
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         Tuple of (findings, auth_failed)
     """
@@ -482,12 +503,12 @@ def scan_image(image: str, compose_file: str, base_path: str) -> Tuple[List[Dict
         if result.stdout.strip():
             try:
                 scout_data = json.loads(result.stdout)
-                findings = parse_docker_scout_output(scout_data, image, compose_file, base_path)
+                findings = parse_docker_scout_output(scout_data, image, compose_file, base_path, line)
             except json.JSONDecodeError as e:
                 # Fallback check for text output
                 if "Analyzing image" in result.stdout or "Target" in result.stdout:
                     print(f"  Docker Scout returned text instead of JSON for {image}. Trying fallback parser...")
-                    findings = parse_text_output(result.stdout, image, compose_file, base_path)
+                    findings = parse_text_output(result.stdout, image, compose_file, base_path, line)
                 else:
                     print(f"  Failed to parse Docker Scout output for {image}: {e}")
         
@@ -503,7 +524,7 @@ def scan_image(image: str, compose_file: str, base_path: str) -> Tuple[List[Dict
     return findings, False
 
 
-def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
+def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
     """Parse Docker Scout SARIF format output."""
     findings = []
     
@@ -567,7 +588,7 @@ def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str
                 findings.append(create_finding_dict(
                     file_path, rule_id, package_name, package_version,
                     severity, message, fix_version, image, cvss_score,
-                    cvss_vector=cvss_vector, cwes=cwes
+                    line=line, cvss_vector=cvss_vector, cwes=cwes
                 ))
     
     except Exception as e:
@@ -582,26 +603,27 @@ def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str
 # Output Format Parsers
 # ============================================================================
 
-def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
+def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
     """
     Parse Docker Scout JSON output into normalized format.
     Supports both SARIF and native JSON formats.
-    
+
     Args:
         scout_data: Parsed JSON data from Docker Scout
         image: Docker image name
         compose_file: Path to compose file
         base_path: Base directory path
-    
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         List of normalized findings
     """
     findings = []
-    
+
     try:
         # Check if this is SARIF format
         if 'runs' in scout_data and '$schema' in scout_data:
-            return parse_sarif_format(scout_data, image, compose_file, base_path)
+            return parse_sarif_format(scout_data, image, compose_file, base_path, line)
         
         # Docker Scout native structure: vulnerabilities array with packages
         vulnerabilities = scout_data.get('vulnerabilities', [])
@@ -648,7 +670,8 @@ def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_fi
                 image,
                 compose_file,
                 base_path,
-                data['count']
+                data['count'],
+                line
             )
             findings.append(finding)
     
@@ -677,7 +700,7 @@ def severity_to_number(severity: str) -> int:
     return severity_map.get(severity.upper(), 0)
 
 
-def normalize_docker_scout_finding(vuln: Dict[str, Any], package: Dict[str, Any], image: str, compose_file: str, base_path: str, count: int = 1) -> Dict[str, Any]:
+def normalize_docker_scout_finding(vuln: Dict[str, Any], package: Dict[str, Any], image: str, compose_file: str, base_path: str, count: int = 1, line: int = 0) -> Dict[str, Any]:
     """Normalize a Docker Scout vulnerability finding to internal format."""
     # Extract basic info
     cve_id = vuln.get('id') or vuln.get('cve', 'UNKNOWN')
@@ -725,23 +748,24 @@ def normalize_docker_scout_finding(vuln: Dict[str, Any], package: Dict[str, Any]
     return create_finding_dict(
         file_path, cve_id, package_name, package_version,
         normalized_severity, description, fix_version, image,
-        cvss_base, package_type, count,
+        cvss_base, package_type, count, line,
         cvss_vector=cvss_vector, epss_score=epss_score, epss_percentile=epss_percentile,
         cwes=cwes, references=references
     )
 
 
-def parse_text_output(text_output: str, image: str, compose_file: str, base_path: str) -> List[Dict[str, Any]]:
+def parse_text_output(text_output: str, image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
     """
     Fallback parser for human-readable Docker Scout output.
     This is a best-effort parser - structured output is preferred.
-    
+
     Args:
         text_output: Human-readable text output from Docker Scout
         image: Docker image name
         compose_file: Path to compose file
         base_path: Base directory path
-        
+        line: Source line of the image's declaring key in compose_file (0 if unknown)
+
     Returns:
         List of normalized findings (may be empty if parsing fails)
     """
@@ -763,7 +787,7 @@ def parse_text_output(text_output: str, image: str, compose_file: str, base_path
         'full_description': text_output[:500],
         'remediation': 'Install latest Docker Scout CLI with JSON output support',
         'estimated_savings': 'Security risk mitigation',
-        'line': 0,
+        'line': line,
         'match_content': f"Image: {image}",
         'scanner': 'docker-scout',
         'image': image,

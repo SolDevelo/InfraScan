@@ -226,12 +226,21 @@ def normalize_checkov_finding(check: Any, base_path: str) -> Dict[str, Any]:
     check_name = get_attr(check, 'check_name', 'Unknown Check')
     severity = get_attr(check, 'severity', 'MEDIUM') or 'MEDIUM'  # Handle None
     file_path = get_attr(check, 'file_path', '')
+    file_abs_path = get_attr(check, 'file_abs_path', '')
     file_line_range = get_attr(check, 'file_line_range', [0, 0])
     resource = get_attr(check, 'resource', '')
     guideline = get_attr(check, 'guideline', '')
-    
-    # Make file path relative
-    if file_path and base_path:
+
+    # Make file path relative. file_path is Checkov's own synthetic
+    # "root-relative" marker -- prefixed with a leading os.sep relative to
+    # *Checkov's own* root_folder, not the real filesystem root -- so
+    # relpath-ing it against our base_path (several directories deeper)
+    # computes a bogus multi-level ../../../ climb. file_abs_path is a real
+    # filesystem absolute path; use that instead, falling back to file_path
+    # only if it's somehow absent.
+    if file_abs_path and base_path:
+        file_path = os.path.relpath(file_abs_path, base_path)
+    elif file_path and base_path:
         file_path = os.path.relpath(file_path, base_path)
     
     # Map Checkov severity to our format

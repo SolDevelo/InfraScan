@@ -1,0 +1,80 @@
+# Bitbucket Pipe metadata. Schema per:
+# https://support.atlassian.com/bitbucket-cloud/docs/write-a-pipe-for-bitbucket-pipelines/
+#
+# `image` is the same soldevelo/infrascan image the GitHub Action uses --
+# no separate pipe image to build or maintain.
+#
+# entrypoint.sh detects a bare, zero-argv invocation with BITBUCKET_CLONE_DIR
+# set (exactly how Bitbucket runs a `pipe: docker://...` reference) and
+# routes to pipe.sh, which translates the variables below into the
+# equivalent cli.py flags.
+name: InfraScan
+pipe: soldevelo/infrascan
+image: soldevelo/infrascan:latest
+description: >-
+  Scan Terraform, Kubernetes and Docker for cost inefficiencies and security
+  issues. Posts a PR comment, a Code Insights report, and inline annotations
+  automatically.
+maintainer: SolDevelo <support@soldevelo.com>
+repository: https://github.com/soldevelo/infrascan
+website: https://github.com/soldevelo/infrascan
+vendor:
+  name: SolDevelo
+  link: https://soldevelo.com
+tags:
+  - security
+  - cost
+  - terraform
+  - kubernetes
+  - docker
+  - iac
+variables:
+  - name: BITBUCKET_ACCESS_TOKEN
+    default: ""
+    description: >-
+      REQUIRED for PR comments, the Code Insights report, and annotations --
+      pipe containers don't receive an OAuth token automatically. Create a
+      Repository Access Token (Repository settings > Access tokens) with
+      pullrequest:write + repository:write, store it as a secured repository
+      variable, and pass it through: BITBUCKET_ACCESS_TOKEN:
+      $YOUR_VARIABLE_NAME. The scan itself and the HTML report still work
+      without it -- only the PR-facing features need it.
+  - name: DIRECTORY
+    default: "."
+    description: Directory to scan, relative to the repository root.
+  - name: SCANNER
+    default: comprehensive
+    description: "Scanner to run: regex, checkov, containers, or comprehensive."
+  - name: FORMAT
+    default: html
+    description: "Output format: text, json, or html."
+  - name: OUT
+    default: infrascan-report.html
+    description: Output file path, relative to the repository root.
+  - name: FRAMEWORK
+    default: smart
+    description: "IaC framework: smart, auto, terraform, kubernetes, cloudformation, helm, ansible, or all."
+  - name: ALERT_ON
+    default: any_new
+    description: "Severity threshold for PR comments and annotations: critical, high, medium, low, any_new, or none."
+  - name: MIN_COST_DELTA
+    default: "0"
+    description: Minimum cost delta ($/month) to highlight in the PR comment.
+  - name: MAX_PR_FINDINGS
+    default: "10"
+    description: Maximum total findings shown in the PR comment.
+  - name: FAIL_ON
+    default: ""
+    description: "Optional exit-code-1 threshold: any, high_critical, grade_a-grade_f, priority_critical-priority_info."
+  - name: BASELINE
+    default: infrascan-baseline/infrascan-baseline.json
+    description: Path (relative to the repository root) read for cost/finding delta, if present. Missing file is treated as "no baseline" -- safe by default, no setup required beyond declaring the cache (see docs/BITBUCKET_PIPELINE.md).
+  - name: BASELINE_OUT
+    default: infrascan-baseline/infrascan-baseline.json
+    description: Path (relative to the repository root) this scan's result is written to as JSON, for the next run's baseline -- but only on a push to DEFAULT_BRANCH that isn't a PR (auto-detected from BITBUCKET_BRANCH/BITBUCKET_PR_ID). Written regardless of FORMAT/OUT, so one invocation produces both the report and the next baseline.
+  - name: DEFAULT_BRANCH
+    default: main
+    description: Branch name whose scans refresh the shared baseline (BASELINE_OUT is only actually used on this branch). Set to your real default branch if it isn't "main".
+  - name: DOWNLOAD_EXTERNAL_MODULES
+    default: "false"
+    description: Allow Checkov to download external Terraform modules ("true"/"false").

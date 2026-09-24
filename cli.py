@@ -18,6 +18,19 @@ from dotenv import load_dotenv
 from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
+from ci_adapters import detect_platform
+from ci_adapters.github import (
+    emit_annotations,
+    post_pr_comment,
+    write_gh_step_summary,
+    build_gh_actions_context,
+)
+from ci_adapters.bitbucket import (
+    emit_bb_annotations,
+    post_bb_pr_comment,
+    upsert_bb_report,
+    build_bb_pipelines_context,
+)
 
 __version__ = "1.1.1"
 
@@ -55,95 +68,6 @@ def collect_ci_limits(scanner_type: str) -> dict:
     }
 
 
-def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
-    """Emit GitHub Actions workflow commands for inline PR annotations.
-
-    Security findings at or above alert_on threshold -> ::error/::warning.
-    Resources that became more expensive vs baseline -> ::warning.
-    """
-    if not os.getenv('GITHUB_ACTIONS'):
-        return
-
-    findings = report_dict.get('findings', {})
-    all_findings = (
-        list(findings.get('security', [])) +
-        list(findings.get('container', [])) +
-        list(findings.get('cost', []))
-    )
-
-    # Map alert_on to severity levels
-    alert_sevs = set()
-    if alert_on == 'critical':
-        alert_sevs = {'critical'}
-    elif alert_on in ('critical_high', 'high'):  # critical_high is deprecated alias
-        alert_sevs = {'critical', 'high'}
-    elif alert_on == 'medium':
-        alert_sevs = {'critical', 'high', 'medium'}
-    elif alert_on == 'low':
-        alert_sevs = {'critical', 'high', 'medium', 'low'}
-    elif alert_on == 'any_new':
-        alert_sevs = {'critical', 'high', 'medium', 'low', 'info'}
-    # alert_on == 'none' -> alert_sevs stays empty
-
-    # Create set of container findings for fast lookup
-    container_findings = set(id(f) for f in findings.get('container', []))
-    
-    # Helper to identify container findings
-    def _is_container(f: dict) -> bool:
-        return id(f) in container_findings
-
-    # Sort findings: by severity (critical first), then by type (IaC before containers)
-    severity_order = ['critical', 'high', 'medium', 'low', 'info']
-    def _sort_key(f: dict) -> tuple:
-        sev = f.get('severity', '').lower()
-        try:
-            sev_idx = severity_order.index(sev)
-        except ValueError:
-            sev_idx = 999
-        type_idx = 1 if _is_container(f) else 0
-        return (sev_idx, type_idx)
-    all_findings.sort(key=_sort_key)
-
-    for f in all_findings:
-        sev = f.get('severity', '').lower()
-        if sev not in alert_sevs:
-            continue
-        rid   = f.get('rule_id') or f.get('check_id', 'FINDING')
-        fpath = f.get('file', '')
-        line  = f.get('line', '')
-        desc  = f.get('description', f.get('name', rid))
-        # Critical = error, High = warning, others = notice
-        if sev == 'critical':
-            level = 'error'
-        elif sev == 'high':
-            level = 'warning'
-        else:
-            level = 'notice'
-        loc   = f"file={fpath}" + (f",line={line}" if line else "")
-        print(f"::{level} {loc},title={rid}::{desc}")
-
-    # Cost-increase annotations only when a baseline is present
-    if not baseline:
-        return
-    base_costs = {
-        rc['resource_name']: rc['total_usd_month']
-        for rc in baseline.get('metrics', {}).get('resource_costs', [])
-    }
-    for rc in report_dict.get('metrics', {}).get('resource_costs', []):
-        base = base_costs.get(rc['resource_name'])
-        if base is None:
-            continue
-        delta = round(rc['total_usd_month'] - base, 2)
-        if delta > 1.0:
-            fpath = rc.get('file', '')
-            line  = rc.get('line', '')
-            loc   = f"file={fpath}" + (f",line={line}" if line else "")
-            print(f"::warning {loc},title=COST-DELTA::"
-                  f"{rc['resource_name']} cost increased: "
-                  f"${base:.2f}/mo \u2192 ${rc['total_usd_month']:.2f}/mo "
-                  f"(+${delta:.2f}/mo)")
-
-
 def send_slack_notification(message: str) -> None:
     """Send a Slack notification via webhook URL from environment variable."""
     webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
@@ -155,72 +79,6 @@ def send_slack_notification(message: str) -> None:
             print(f"Slack notification failed: {response.status_code} - {response.text}", file=sys.stderr)
     except Exception as e:
         print(f"Slack notification error: {e}", file=sys.stderr)
-
-def post_pr_comment(body: str) -> None:
-    """Post (or update) a PR comment via the GitHub REST API."""
-    token      = os.getenv('GITHUB_TOKEN', '').strip()
-    event_path = os.getenv('GITHUB_EVENT_PATH', '').strip()
-    repo       = os.getenv('GITHUB_REPOSITORY', '').strip()
-    if not (token and event_path and repo):
-        return
-    try:
-        with open(event_path, 'r', encoding='utf-8') as f:
-            event = json.load(f)
-        pr_number = (
-            event.get('pull_request', {}).get('number')
-            or event.get('issue', {}).get('number')
-        )
-        if not pr_number:
-            return
-        marker   = '<!-- infrascan-cost-report -->'
-        full_body = f"{marker}\n{body}"
-        api_url  = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
-        headers  = {
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-        }
-        # Check for an existing comment with the marker to update rather than post duplicate.
-        existing_resp = requests.get(api_url, headers=headers, timeout=10)
-        if existing_resp.status_code == 200:
-            for comment in existing_resp.json():
-                if marker in comment.get('body', ''):
-                    patch_url = comment['url']
-                    requests.patch(patch_url, json={'body': full_body}, headers=headers, timeout=10)
-                    return
-        requests.post(api_url, json={'body': full_body}, headers=headers, timeout=10)
-    except Exception as e:
-        print(f"PR comment error: {e}", file=sys.stderr)
-
-
-def write_gh_step_summary(content: str) -> None:
-    """Append *content* to the GitHub Actions step summary file."""
-    summary_path = os.getenv('GITHUB_STEP_SUMMARY', '').strip()
-    if not summary_path:
-        return
-    try:
-        with open(summary_path, 'a', encoding='utf-8') as f:
-            f.write(content + '\n')
-    except Exception as e:
-        print(f"Step summary write error: {e}", file=sys.stderr)
-
-
-def build_gh_actions_context() -> dict:
-    """Extract GitHub Actions context from environment variables."""
-    repo = os.getenv('GITHUB_REPOSITORY', '')
-    server = os.getenv('GITHUB_SERVER_URL', 'https://github.com').rstrip('/')
-    run_id = os.getenv('GITHUB_RUN_ID', '')
-    workflow = os.getenv('GITHUB_WORKFLOW', '')
-    ref_name = os.getenv('GITHUB_REF_NAME', '')
-    actor = os.getenv('GITHUB_ACTOR', '')
-    run_url = f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ''
-    return {
-        'repo': repo,
-        'workflow': workflow,
-        'branch': ref_name,
-        'actor': actor,
-        'run_url': run_url,
-    }
 
 def setup_args():
     parser = argparse.ArgumentParser(
@@ -639,6 +497,7 @@ def main():
         }
         report_dict['metadata'] = report_dict.get('metadata', {})
         gh_ctx = build_gh_actions_context()
+        bb_ctx = build_bb_pipelines_context()
         if gh_ctx['repo'] or gh_ctx['workflow'] or gh_ctx['run_url']:
             report_dict['metadata'].update({
                 'scan_source': 'github_actions',
@@ -646,6 +505,13 @@ def main():
             })
             if gh_ctx['repo'] and 'repository_url' not in report_dict['metadata']:
                 report_dict['metadata']['repository_url'] = f"https://github.com/{gh_ctx['repo']}"
+        elif bb_ctx['repo'] or bb_ctx['run_url']:
+            report_dict['metadata'].update({
+                'scan_source': 'bitbucket_pipelines',
+                'bitbucket_pipelines': bb_ctx,
+            })
+            if bb_ctx['repo'] and 'repository_url' not in report_dict['metadata']:
+                report_dict['metadata']['repository_url'] = f"https://bitbucket.org/{bb_ctx['repo']}"
         
         # Output Results to file/stdout
         if args.out:
@@ -661,10 +527,16 @@ def main():
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
 
-        # Write a JSON copy for use as a future baseline (independent of --format)
+        # Write a JSON copy for use as a future baseline (independent of --format).
+        # Non-fatal on failure (e.g. a stale cache file left behind with the
+        # wrong owner/permissions by a previous run) -- losing the baseline
+        # write should never fail the scan itself.
         if getattr(args, 'baseline_out', ''):
-            with open(args.baseline_out, 'w') as f:
-                json.dump(report_dict, f, indent=2)
+            try:
+                with open(args.baseline_out, 'w') as f:
+                    json.dump(report_dict, f, indent=2)
+            except OSError as e:
+                print(f"[warn] Could not write baseline {args.baseline_out}: {e}", file=sys.stderr)
 
         # Handle console output
         if args.format == 'json' and not args.out:
@@ -679,17 +551,19 @@ def main():
             if args.out:
                  print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
 
-        # ── CI output (step summary + PR comment + annotations) ──────────────
+        # ── CI output (step summary/report + PR comment + annotations) ───────
         baseline_dict = load_baseline(getattr(args, 'baseline', ''))
         alert_on      = getattr(args, 'alert_on', 'critical')
         do_summary    = getattr(args, 'step_summary', 'true').lower() != 'false'
         do_pr_comment = getattr(args, 'pr_comment', 'true').lower() != 'false'
         force_comment = getattr(args, 'force_comment', False)
 
-        gh_ctx  = build_gh_actions_context()
-        run_url = gh_ctx.get('run_url', '')
+        platform = detect_platform()
+        gh_ctx   = build_gh_actions_context()
+        bb_ctx   = build_bb_pipelines_context()
+        run_url  = gh_ctx.get('run_url', '') or bb_ctx.get('run_url', '')
 
-        if do_summary and os.getenv('GITHUB_STEP_SUMMARY'):
+        if do_summary and platform == 'github' and os.getenv('GITHUB_STEP_SUMMARY'):
             from reporter.cost_estimator import format_ci_summary_md
             ci_limits = collect_ci_limits(args.scanner)
             summary_md = format_ci_summary_md(
@@ -699,8 +573,10 @@ def main():
                 run_url=run_url,
             )
             write_gh_step_summary(summary_md)
+        elif do_summary and platform == 'bitbucket':
+            upsert_bb_report(report_dict, baseline=baseline_dict or None, run_url=run_url)
 
-        if do_pr_comment and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
+        if do_pr_comment and platform == 'github' and os.getenv('GITHUB_TOKEN') and os.getenv('GITHUB_EVENT_PATH'):
             from reporter.cost_estimator import format_pr_comment_md
             min_cost_delta = getattr(args, 'min_cost_delta', 5.0)
             max_findings = getattr(args, 'max_pr_findings', 5)
@@ -714,8 +590,24 @@ def main():
             )
             if comment_md or force_comment:
                 post_pr_comment(comment_md or f"## 🔍 InfraScan\nNo actionable findings.")
+        elif do_pr_comment and platform == 'bitbucket' and os.getenv('BITBUCKET_PR_ID'):
+            from reporter.cost_estimator import format_pr_comment_md
+            min_cost_delta = getattr(args, 'min_cost_delta', 5.0)
+            max_findings = getattr(args, 'max_pr_findings', 5)
+            comment_md = format_pr_comment_md(
+                report_dict,
+                baseline=baseline_dict or None,
+                alert_on=alert_on,
+                run_url=run_url,
+                platform='bitbucket',
+                min_cost_delta=min_cost_delta,
+                max_findings=max_findings,
+            )
+            if comment_md or force_comment:
+                post_bb_pr_comment(comment_md or f"## 🔍 InfraScan\nNo actionable findings.")
 
         emit_annotations(report_dict, baseline_dict, alert_on)
+        emit_bb_annotations(report_dict, baseline_dict, alert_on)
 
         # ── Slack notification ────────────────────────────────────────────────
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
@@ -738,8 +630,11 @@ def main():
                 grades_parts.append(f"Containers {container.get('letter','?')} ({container.get('percentage',0)}%)")
             grades_summary = " | ".join(grades_parts)
 
-            ctx = build_gh_actions_context()
-            lines = ["🤖 InfraScan used in *GitHub Actions*"]
+            platform_label = {'github': 'GitHub Actions', 'bitbucket': 'Bitbucket Pipelines'}.get(
+                detect_platform(), 'CI'
+            )
+            ctx = build_gh_actions_context() if detect_platform() == 'github' else build_bb_pipelines_context()
+            lines = [f"🤖 InfraScan used in *{platform_label}*"]
             if ctx['repo']:
                 lines.append(f"Repo: *{ctx['repo']}*")
             if ctx['branch']:

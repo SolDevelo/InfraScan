@@ -2497,6 +2497,7 @@ def _findings_section_md(
     limit: Optional[int],
     always_expanded: bool = False,
     total: Optional[int] = None,
+    render_html_details: bool = True,
 ) -> List[str]:
     """
     Render a list of findings as a Markdown section.
@@ -2506,7 +2507,14 @@ def _findings_section_md(
     *limit* controls how many rows appear; None = all.  0 = omit entirely.
     *total* is the untruncated count (shown in the header as "X of Y").
     Rows beyond the limit are replaced with "… and N more — see full report".
+
+    *render_html_details* controls whether collapsed sections use a raw
+    <details>/<summary> wrapper. Some renderers (Bitbucket's PR/report
+    Markdown) don't pass through HTML, so pass False there -- the section is
+    rendered fully expanded instead, same as always_expanded=True.
     """
+    if not render_html_details:
+        always_expanded = True
     if limit == 0 or not findings:
         return []
 
@@ -2558,9 +2566,12 @@ def format_ci_summary_md(
     ci_limits: Optional[Dict[str, Dict[str, Optional[int]]]] = None,
     baseline: Optional[dict] = None,
     run_url: str = "",
+    render_html_details: bool = True,
 ) -> str:
     """
-    Return GitHub-flavoured Markdown for the GitHub Actions step summary.
+    Return Markdown for the GitHub Actions step summary (or, with
+    render_html_details=False, a Bitbucket Code Insights report's `details`
+    field -- same content, just without collapsible sections).
 
     Security-first layout:
       1. Grade overview (always visible)
@@ -2576,6 +2587,10 @@ def format_ci_summary_md(
     defaults when not supplied.
 
     *baseline* is a previously saved report_dict used to compute deltas.
+
+    *render_html_details* — set False for renderers that don't support raw
+    HTML (e.g. Bitbucket): collapsed sections render fully expanded instead
+    of inside <details>/<summary>.
     """
     _DEFAULT_LIMITS: Dict[str, Optional[int]] = {
         "critical": None, "high": None, "medium": 10, "low": 0, "info": 0,
@@ -2661,7 +2676,8 @@ def format_ci_summary_md(
     )
     if crit_all:
         lines += _findings_section_md("CRITICAL findings", crit_all,
-                                       limit=None, always_expanded=True)
+                                       limit=None, always_expanded=True,
+                                       render_html_details=render_html_details)
     else:
         lines += ["✅ No critical findings", ""]
 
@@ -2682,7 +2698,8 @@ def format_ci_summary_md(
         lines += _findings_section_md("HIGH findings", high_all,
                                        limit=len(high_all),
                                        always_expanded=False,
-                                       total=total_high)
+                                       total=total_high,
+                                       render_html_details=render_html_details)
 
     # MEDIUM — collapsed; containers omitted when limit=0
     med_sec_all  = _by_sev(all_sec, "medium")
@@ -2700,7 +2717,8 @@ def format_ci_summary_md(
                                        shown_med,
                                        limit=len(shown_med),
                                        always_expanded=False,
-                                       total=total_med)
+                                       total=total_med,
+                                       render_html_details=render_html_details)
     if med_cont_limit == 0 and med_cont_all:
         lines += [f"_ℹ️ {len(med_cont_all)} container MEDIUM CVEs omitted "
                   f"\u2014 see full HTML report._", ""]
@@ -2734,11 +2752,14 @@ def format_ci_summary_md(
             line_n = pf.get("line", "")
             s_str  = _fmt_usd(s_lo) if s_lo == s_hi else f"{_fmt_usd(s_lo)}–{_fmt_usd(s_hi)}"
             rows_md.append(f"| {rid} | {rname} | {fname}:{line_n} | {s_str} |")
-        lines += [
-            "<details>",
-            f"<summary>Cost savings opportunities: {saving_str}/mo</summary>",
-            "",
-        ] + rows_md + ["", "</details>", ""]
+        if render_html_details:
+            lines += [
+                "<details>",
+                f"<summary>Cost savings opportunities: {saving_str}/mo</summary>",
+                "",
+            ] + rows_md + ["", "</details>", ""]
+        else:
+            lines += [f"**Cost savings opportunities: {saving_str}/mo**", ""] + rows_md + [""]
 
     # no run_url link in step summary — you're already on the run page
 
@@ -2750,6 +2771,7 @@ def format_pr_comment_md(
     baseline: Optional[dict] = None,
     alert_on: str = "any_new",
     run_url: str = "",
+    platform: str = "github",
     min_cost_delta: float = 0.0,
     max_findings: int = 10,
 ) -> str:
@@ -2768,9 +2790,18 @@ def format_pr_comment_md(
         baseline: Previous scan report for delta detection
         alert_on: Severity threshold (critical|high|medium|low|any_new|none)
         run_url: Link to workflow run
+        platform: "github" or "bitbucket" -- only changes the wording of the
+            "full report" link, since Bitbucket has no Actions-summary
+            equivalent (points at the Code Insights report / pipeline
+            artifact instead).
         min_cost_delta: Minimum $ change to highlight (default: 0.0 = any change)
         max_findings: Max total findings across all severities (default: 10)
     """
+    def _full_report_link() -> str:
+        if platform == "bitbucket":
+            return f"→ [Full report: see the Code Insights report, or download the HTML artifact]({run_url})"
+        return f"→ [Full report in Actions summary]({run_url})"
+
     findings = report_dict.get("findings", {})
     metrics  = report_dict.get("metrics", {})
     savings  = metrics.get("savings_estimate", {})
@@ -2959,7 +2990,7 @@ def format_pr_comment_md(
     if not has_actionable:
         lines.append("✅ No new findings above threshold.")
         if run_url:
-            lines += ["", f"→ [Full report in Actions summary]({run_url})"]
+            lines += ["", _full_report_link()]
         return "\n".join(lines)
 
     # ── New findings (IaC + Container, top N most important, sorted by severity) ──
@@ -2994,7 +3025,7 @@ def format_pr_comment_md(
         lines.append("")
 
     if run_url:
-        lines.append(f"→ [Full report in Actions summary]({run_url})")
+        lines.append(_full_report_link())
 
     return "\n".join(lines)
 

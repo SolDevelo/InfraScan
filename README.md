@@ -188,21 +188,46 @@ infrascan:
 
 #### Bitbucket Pipelines
 
+Beyond scanning, InfraScan also posts a PR comment, a Code Insights report
+(the Bitbucket equivalent of a GitHub Actions step summary), inline
+annotations, and an automatic cost/security baseline delta. The report and
+annotations need no setup — Bitbucket authenticates those automatically. The
+PR comment is the one piece that needs a Repository Access Token passed in
+as `BITBUCKET_ACCESS_TOKEN`. See
+[docs/BITBUCKET_PIPELINE.md](docs/BITBUCKET_PIPELINE.md) (Authentication
+section) and
+[examples/pipelines/bitbucket-pipelines.yml](examples/pipelines/bitbucket-pipelines.yml)
+for the full example.
+
 ```yaml
-pipelines:
-  default:
-    - step:
+definitions:
+  caches:
+    infrascan-baseline: infrascan-baseline
+  steps:
+    - step: &infrascan-audit
         name: InfraScan Audit
+        caches:
+          - infrascan-baseline
         script:
-          - docker run --rm
-              -v $BITBUCKET_CLONE_DIR:/scan
-              soldevelo/infrascan:latest
-              --scanner comprehensive
-              --format html
-              --out /scan/infrascan-report.html
-              --fail-on high_critical
+          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - pipe: docker://soldevelo/infrascan:latest
+            variables:
+              BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
+              SCANNER: comprehensive
+              FORMAT: html
+              OUT: infrascan-report.html
+              ALERT_ON: any_new
+              DEFAULT_BRANCH: main
         artifacts:
           - infrascan-report.html
+
+pipelines:
+  branches:
+    main:
+      - step: *infrascan-audit
+  pull-requests:
+    '**':
+      - step: *infrascan-audit
 ```
 
 > **Building images locally** (contributors):
