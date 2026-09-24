@@ -315,6 +315,16 @@ def upsert_bb_report(report_dict: dict, baseline: Optional[dict] = None, run_url
     the pipeline just updates the same report in place. No marker/dedup logic
     needed, unlike post_bb_pr_comment(). Uses _reports_api_call(), so this
     works even with no BITBUCKET_ACCESS_TOKEN set -- see its docstring.
+
+    Deletes the existing report first (Bitbucket cascades that to delete
+    its annotations too) before recreating it. Annotations otherwise
+    accumulate forever: POST .../annotations only creates/updates by
+    external_id, it never removes one that's simply absent from a later
+    run's payload -- so a finding that gets fixed, or a run that posts
+    fewer annotations after --max-annotations-per-image caps them, would
+    otherwise leave every annotation any earlier run ever posted still
+    attached, unbounded. A 404 on the delete (nothing to delete yet, e.g.
+    the first-ever run) is expected and harmless.
     """
     ctx    = _repo_context()
     commit = os.getenv('BITBUCKET_COMMIT', '').strip()
@@ -327,6 +337,7 @@ def upsert_bb_report(report_dict: dict, baseline: Optional[dict] = None, run_url
         overall = report_dict.get('overall', {})
         bd = overall.get('severity_breakdown', {})
         path = f"repositories/{ctx['workspace']}/{ctx['repo_slug']}/commit/{commit}/reports/{REPORT_ID}"
+        _reports_api_call('DELETE', path)
         body = {
             'title': f"InfraScan: {overall.get('letter', '?')} ({overall.get('percentage', 0)}%)",
             'details': _truncate_details(_report_details_text(report_dict, baseline), run_url),
