@@ -53,6 +53,10 @@ inputs:
     description: 'Severity threshold for PR comments and annotations (critical|high|medium|low|any_new|none)'
     required: false
     default: 'any_new'
+  review-comment-on:
+    description: 'Severity threshold for real inline PR review comments -- the threaded, resolvable kind a human reviewer leaves, not the lightweight annotations (critical|high|medium|low|any_new|none)'
+    required: false
+    default: 'critical'
   min-cost-delta:
     description: 'Minimum cost delta ($/month) to trigger PR comment (default: 0 = any change)'
     required: false
@@ -195,6 +199,7 @@ runs:
         CMD+=(--format "${{ inputs.format }}")
         CMD+=(--framework "${{ inputs.framework }}")
         CMD+=(--alert-on "${{ inputs.alert-on }}")
+        CMD+=(--review-comment-on "${{ inputs.review-comment-on }}")
         CMD+=(--pr-comment "${{ inputs.pr-comment }}")
         CMD+=(--step-summary "${{ inputs.step-summary }}")
         CMD+=(--min-cost-delta "${{ inputs.min-cost-delta }}")

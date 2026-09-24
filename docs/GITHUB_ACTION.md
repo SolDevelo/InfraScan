@@ -5,6 +5,7 @@ The `soldevelo/infrascan` composite action runs InfraScan inside Docker and surf
 - **Step summary** — full scan results in the workflow run's Summary tab (always written)
 - **PR comment** — grade table, cost estimate, and new CRITICAL/HIGH findings posted on every pull request (updated on re-runs)
 - **Inline annotations** — `::error` / `::warning` annotations appear in the PR diff view
+- **Inline review comments** — real threaded, resolvable comments (the same kind a human reviewer leaves) for CRITICAL findings by default — a more prominent step up from the lightweight annotations above
 - **HTML report** — full interactive report uploaded as a workflow artifact (optional but recommended)
 
 ---
@@ -39,7 +40,7 @@ jobs:
 ```
 
 `permissions: pull-requests: write` is the only addition vs. the original Quick Start.  
-All other new behaviour (step summary, skip-on-no-match, annotations) is on by default and needs no extra params.
+All other new behaviour (step summary, skip-on-no-match, annotations, review comments) is on by default and needs no extra params. `pull-requests: write` is required for review comments too — same permission as PR comments, nothing extra to grant.
 
 ---
 
@@ -57,6 +58,7 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `pr-comment` | `true` | Post/update a PR comment on every pull request |
 | `step-summary` | `true` | Write scan results to the Actions step summary |
 | `alert-on` | `any_new` | Severity threshold for PR comments and annotations: `critical`, `high`, `medium`, `low`, `any_new`, or `none`. `any_new` shows all new findings sorted by severity |
+| `review-comment-on` | `critical` | Severity threshold for real inline review comments (separate from `alert-on`'s lightweight annotations — these are threaded and resolvable, so the bar defaults higher): `critical`, `high`, `medium`, `low`, `any_new`, or `none` to disable |
 | `min-cost-delta` | `0` | Minimum cost delta ($/month) to highlight in PR comments. Default 0 = show any cost change |
 | `max-pr-findings` | `10` | Maximum total findings to show in PR comments (sorted by severity, most important first). Additional findings are aggregated |
 | `baseline` | _(none)_ | Path to a baseline JSON for cost/finding delta. Set automatically when using the baseline cache pattern below |
@@ -160,8 +162,9 @@ IaC findings (severity first, IaC before containers on ties).
 | Step summary | _(none — uses file system)_ |
 | PR comment | `pull-requests: write` |
 | Inline annotations | _(none — uses workflow commands)_ |
+| Inline review comments | `pull-requests: write` |
 
-Without `pull-requests: write` the comment attempt produces a 403 in the logs but does **not** fail the scan.
+Without `pull-requests: write` the comment/review-comment attempts produce a 403 in the logs but do **not** fail the scan.
 
 ### `alert-on` values
 
@@ -266,6 +269,7 @@ If your workflow uses `soldevelo/infrascan@v1.0.x`:
 | Skip unchanged PRs | None — automatic (`skip-if-no-match: true` default) |
 | Inline annotations | None — automatic |
 | PR comments | Add `permissions: pull-requests: write` to the job |
+| Inline review comments (CRITICAL findings) | Same `permissions: pull-requests: write` as PR comments — nothing extra |
 | Cost delta / baseline | None — automatic (`auto-baseline: true` default) |
 
-Without `pull-requests: write` the scan result is unchanged — the comment just won't be posted.
+Without `pull-requests: write` the scan result is unchanged — the comment and review comments just won't be posted.
