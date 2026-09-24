@@ -22,7 +22,6 @@ from ci_adapters import detect_platform
 from ci_adapters.github import (
     emit_annotations,
     post_pr_comment,
-    post_pr_review_comments,
     write_gh_step_summary,
     build_gh_actions_context,
 )
@@ -162,18 +161,6 @@ def setup_args():
         help="Severity threshold for PR comments and annotations "
              "(critical | high | medium | low | any_new | none). Default: any_new. "
              "'critical_high' is deprecated, use 'high' instead."
-    )
-
-    parser.add_argument(
-        "--review-comment-on",
-        choices=["critical", "high", "medium", "low", "any_new", "none"],
-        default="critical",
-        dest="review_comment_on",
-        help="Severity threshold for real inline PR review comments (GitHub only) -- the "
-             "same threaded, resolvable kind a human reviewer leaves, distinct from the "
-             "lightweight ::error/::warning annotations. Default: critical (these are far "
-             "more prominent, so the bar is higher than --alert-on's any_new default). "
-             "'none' disables them."
     )
 
     parser.add_argument(
@@ -632,10 +619,6 @@ def main():
         max_annotations_per_image = getattr(args, 'max_annotations_per_image', 10)
         emit_annotations(report_dict, baseline_dict, alert_on)
         emit_bb_annotations(report_dict, baseline_dict, alert_on, max_annotations_per_image)
-
-        if platform == 'github':
-            review_comment_on = getattr(args, 'review_comment_on', 'critical')
-            post_pr_review_comments(report_dict, review_comment_on)
 
         # ── Slack notification ────────────────────────────────────────────────
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()

@@ -55,8 +55,7 @@ jobs:
 With `permissions: pull-requests: write`, the action automatically:
 - Posts a **PR comment** on every PR with the grade table, cost estimate, and new CRITICAL findings
 - Writes a **step summary** visible in the workflow run's Summary tab
-- Emits **inline annotations** (`::error`/`::warning`) on the changed files in the PR diff
-- Posts real **inline review comments** — the threaded, resolvable kind a human reviewer leaves — for CRITICAL findings by default (`review-comment-on`, separate from the lightweight annotations above)
+- Emits **inline annotations** on the changed files in the PR diff
 - **Skips the scan** on PRs where no IaC or container files were changed
 
 No extra inputs are required — all new behaviour is on by default. See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all inputs, outputs, the baseline/delta workflow, and upgrade notes for existing workflows.

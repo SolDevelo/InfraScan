@@ -113,7 +113,6 @@ jobs:
 - 📈 **Cost delta** — automatic baseline management shows infrastructure cost changes
 - ⏭️ **Smart skipping** — skips scan when no matching files changed in PRs
 - 🔔 **Inline annotations** — `::error` and `::warning` markers in PR diff view
-- 🧵 **Inline review comments** — real threaded, resolvable comments for CRITICAL findings by default
 
 See [GITHUB_ACTION.md](GITHUB_ACTION.md) for full documentation of all inputs and features.
 
