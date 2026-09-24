@@ -126,7 +126,7 @@ infrascan --scanner comprehensive
 infrascan --framework kubernetes --scanner comprehensive
 
 # Use a specific infrascan version
-INFRASCAN_VERSION=1.1.1 infrascan
+INFRASCAN_VERSION=1.2.0 infrascan
 
 # Do not pull for updates
 infrascan --no-update
@@ -261,7 +261,7 @@ infrascan --framework kubernetes --scanner checkov
 infrascan --framework kubernetes --scanner containers
 ```
 
-## � Ansible Support
+## ⚙️ Ansible Support
 
 InfraScan natively supports **Ansible playbooks** (`.yml`/`.yaml`). When Ansible files are detected (files containing `hosts:` and `tasks:` or `roles:` keys), InfraScan will:
 
@@ -285,7 +285,7 @@ infrascan --framework ansible --scanner checkov
 infrascan --framework ansible -f playbooks/ -f roles/
 ```
 
-## �🐳 Advanced Container Scanning
+## 🐳 Advanced Container Scanning
 
 InfraScan supports advanced container scanning features:
 - **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
@@ -297,7 +297,7 @@ InfraScan supports advanced container scanning features:
   - **Other Registries**: Pre-authenticate manually using `docker login` before running InfraScan, and it will use your existing local Docker credentials.
 
 
-## � Cost Estimation
+## 💰 Cost Estimation
 
 InfraScan calculates actual dollar savings for every finding — not just static text like "$10-50/month", but a computed before/after cost derived from real AWS pricing.
 
@@ -353,7 +353,7 @@ When running via the GitHub Action, InfraScan automatically posts a PR comment a
 
 A PR comment is **always posted** on pull requests. It contains the grade overview table, infrastructure cost (with baseline delta when available), and the new CRITICAL findings table. Full details (savings, MEDIUM findings) are in the step summary only.
 
-## �📊 Grading System
+## 📊 Grading System
 
 InfraScan provides four separate grades:
 

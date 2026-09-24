@@ -5,7 +5,9 @@ This document outlines the steps required to release a new version of InfraScan,
 ## 📌 Release Checklist
 
 - [ ] All tests pass on `main` branch.
+- [ ] Version bumped in `cli.py` (`__version__`).
 - [ ] Version number updated in `README.md` (if applicable).
+- [ ] Version string updated in the web app footer (`templates/index.html`, `report.html`, `project_scans.html`, `supported_projects.html` — each has its own hardcoded `InfraScan vX.Y.Z` string, no shared partial; this has been missed on past releases).
 - [ ] Docker Hub image built and pushed (`latest` and `<version>`).
 - [ ] Git tag created and pushed.
 - [ ] Major version tag (e.g., `v1`) updated.
