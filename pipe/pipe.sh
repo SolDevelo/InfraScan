@@ -19,6 +19,7 @@ FRAMEWORK="${FRAMEWORK:-smart}"
 ALERT_ON="${ALERT_ON:-any_new}"
 MIN_COST_DELTA="${MIN_COST_DELTA:-0}"
 MAX_PR_FINDINGS="${MAX_PR_FINDINGS:-10}"
+MAX_ANNOTATIONS_PER_IMAGE="${MAX_ANNOTATIONS_PER_IMAGE:-10}"
 # Fixed default path so baseline tracking works with zero YAML config beyond
 # declaring the cache -- same path used to read (BASELINE) and, on a default-
 # branch push, to write (BASELINE_OUT). Override either if you need to.
@@ -33,7 +34,8 @@ CMD=(python /opt/infrascan/cli.py "${CLONE_DIR}/${DIRECTORY}"
   --framework "${FRAMEWORK}"
   --alert-on "${ALERT_ON}"
   --min-cost-delta "${MIN_COST_DELTA}"
-  --max-pr-findings "${MAX_PR_FINDINGS}")
+  --max-pr-findings "${MAX_PR_FINDINGS}"
+  --max-annotations-per-image "${MAX_ANNOTATIONS_PER_IMAGE}")
 
 [ -n "${FAIL_ON}" ] && CMD+=(--fail-on "${FAIL_ON}")
 

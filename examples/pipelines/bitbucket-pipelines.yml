@@ -77,6 +77,7 @@ definitions:
               # Optional: FAIL_ON: high_critical
               # Optional: MIN_COST_DELTA: "5"
               # Optional: MAX_PR_FINDINGS: "10"
+              # Optional: MAX_ANNOTATIONS_PER_IMAGE: "10"
         artifacts:
           - infrascan-report.html
 

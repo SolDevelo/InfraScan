@@ -360,7 +360,7 @@ def _annotation_external_id(f: dict, is_container: bool, path: str) -> str:
     return _EXTERNAL_ID_RE.sub('-', raw)[:450]
 
 
-def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
+def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str, max_per_image: int = 10) -> None:
     """Post Code Insights annotations for findings at/above the alert_on threshold.
 
     Structural equivalent of ci_adapters.github.emit_annotations(), posted via
@@ -370,6 +370,12 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str) -> Non
     (same REPORT_ID) -- call this after upsert_bb_report() in the same run.
     Uses _reports_api_call(), so this works even with no BITBUCKET_ACCESS_TOKEN
     set -- see its docstring.
+
+    max_per_image caps how many container-image findings get an annotation
+    each (0/None = no cap) -- a single vulnerable image can easily have
+    dozens of CVEs, which would otherwise bury every other finding in the
+    PR. Doesn't affect IaC findings or anything counted elsewhere (grading,
+    PR comment, report data grid all still see every finding).
     """
     ctx    = _repo_context()
     commit = os.getenv('BITBUCKET_COMMIT', '').strip()
@@ -413,11 +419,27 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str) -> Non
     all_findings.sort(key=_sort_key)
 
     annotations = []
+    image_counts = {}  # image -> annotated-finding count so far, container findings only
+    skipped_by_image = {}
     for f in all_findings:
         sev = f.get('severity', '').lower()
         if sev not in alert_sevs:
             continue
         is_container = _is_container(f)
+        # Cap how many distinct findings from a single container image get
+        # annotated -- one noisy image (dozens of CVEs) can otherwise drown
+        # out everything else in the PR. findings are already severity-
+        # sorted (all_findings.sort above), so this always keeps the most
+        # severe ones. IaC findings have no image concept and aren't capped
+        # here. A capped finding still counts fully in grading/PR
+        # comment/report -- only its annotation is skipped.
+        if is_container and max_per_image:
+            image = f.get('image', '')
+            count = image_counts.get(image, 0)
+            if count >= max_per_image:
+                skipped_by_image[image] = skipped_by_image.get(image, 0) + 1
+                continue
+            image_counts[image] = count + 1
         rid  = f.get('rule_id') or f.get('check_id', 'FINDING')
         desc = f.get('description', f.get('name', rid))
         # A finding is one entry in report_dict (so grading/counts never
@@ -467,6 +489,14 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str) -> Non
                         f"${base:.2f}/mo → ${rc['total_usd_month']:.2f}/mo (+${delta:.2f}/mo)"
                     )[:450],
                 })
+
+    if skipped_by_image:
+        details = ', '.join(f"{img}: {n} more" for img, n in skipped_by_image.items())
+        print(
+            f"[info] Capped container annotations at {max_per_image} per image -- "
+            f"skipped ({details}); still counted in grading/PR comment/report.",
+            file=sys.stderr,
+        )
 
     if not annotations:
         print(

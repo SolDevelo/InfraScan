@@ -32,13 +32,13 @@ variables:
   - name: BITBUCKET_ACCESS_TOKEN
     default: ""
     description: >-
-      REQUIRED for PR comments, the Code Insights report, and annotations --
-      pipe containers don't receive an OAuth token automatically. Create a
-      Repository Access Token (Repository settings > Access tokens) with
-      pullrequest:write + repository:write, store it as a secured repository
-      variable, and pass it through: BITBUCKET_ACCESS_TOKEN:
-      $YOUR_VARIABLE_NAME. The scan itself and the HTML report still work
-      without it -- only the PR-facing features need it.
+      Only required for the PR comment -- the Code Insights report and
+      annotations authenticate automatically via Bitbucket's own Reports
+      API proxy, no token needed. Create a Repository Access Token
+      (Repository settings > Access tokens) with pullrequest:write, store
+      it as a secured repository variable, and pass it through:
+      BITBUCKET_ACCESS_TOKEN: $YOUR_VARIABLE_NAME. Without it, everything
+      else still works but the PR comment is skipped.
   - name: DIRECTORY
     default: "."
     description: Directory to scan, relative to the repository root.
@@ -63,6 +63,9 @@ variables:
   - name: MAX_PR_FINDINGS
     default: "10"
     description: Maximum total findings shown in the PR comment.
+  - name: MAX_ANNOTATIONS_PER_IMAGE
+    default: "10"
+    description: Maximum Code Insights annotations per container image, sorted by severity ("0" = no cap). Keeps one noisy image's CVE list from drowning out every other finding; doesn't affect grading, the PR comment, or the report.
   - name: FAIL_ON
     default: ""
     description: "Optional exit-code-1 threshold: any, high_critical, grade_a-grade_f, priority_critical-priority_info."

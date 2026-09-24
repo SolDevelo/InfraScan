@@ -109,6 +109,7 @@ these (see [pipe/README.md](../pipe/README.md)):
 | `--alert-on` | `any_new` | Severity threshold for PR comments and annotations: `critical`, `high`, `medium`, `low`, `any_new`, or `none` |
 | `--min-cost-delta` | `0` | Minimum cost delta ($/month) to highlight |
 | `--max-pr-findings` | `10` | Maximum total findings shown in the PR comment |
+| `--max-annotations-per-image` | `10` | Maximum Code Insights annotations per container image, sorted by severity (`0` = no cap) — keeps one noisy image's CVE list from drowning out every other finding; doesn't affect grading, the PR comment, or the report |
 | `--baseline` | _(none)_ | Path to a baseline JSON for cost/finding delta. The pipe passes this automatically — see "Baseline / cost delta" below |
 | `--baseline-out` | _(none)_ | Path to write this scan's result as JSON, for a future baseline — written regardless of `--format`/`--out`. The pipe passes this automatically, only on default-branch runs |
 | `--download-external-modules` | `false` | Allow Checkov to download external Terraform modules |

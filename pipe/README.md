@@ -73,6 +73,7 @@ for the full copy-pasteable version with comments.
 | ALERT_ON | `critical`, `high`, `medium`, `low`, `any_new`, `none` | `any_new` |
 | MIN_COST_DELTA | Minimum cost delta ($/month) to highlight in the PR comment | `0` |
 | MAX_PR_FINDINGS | Maximum findings shown in the PR comment | `10` |
+| MAX_ANNOTATIONS_PER_IMAGE | Maximum Code Insights annotations per container image, sorted by severity (`0` = no cap) — one noisy image's CVE list can't drown out other findings; doesn't affect grading/PR comment/report | `10` |
 | FAIL_ON | (optional) Exit-code-1 threshold | _(none)_ |
 | BASELINE | Path read for cost/finding delta, if present. Missing file = "no baseline", safe by default | `infrascan-baseline/infrascan-baseline.json` |
 | BASELINE_OUT | Path this scan's result is written to as JSON — but only when this run is a push to `DEFAULT_BRANCH` that isn't a PR, auto-detected (see below) | `infrascan-baseline/infrascan-baseline.json` |

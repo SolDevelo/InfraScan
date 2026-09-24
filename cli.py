@@ -182,6 +182,16 @@ def setup_args():
     )
 
     parser.add_argument(
+        "--max-annotations-per-image",
+        type=int,
+        default=10,
+        dest="max_annotations_per_image",
+        help="Maximum Bitbucket Code Insights annotations per container image, sorted by "
+             "severity (default: 10, 0 = no cap). Keeps one noisy image from drowning out "
+             "every other finding; doesn't affect grading, the PR comment, or the report."
+    )
+
+    parser.add_argument(
         "--baseline",
         default="",
         help="Path to a baseline InfraScan JSON for cost/finding delta comparison."
@@ -606,8 +616,9 @@ def main():
             if comment_md or force_comment:
                 post_bb_pr_comment(comment_md or f"## 🔍 InfraScan\nNo actionable findings.")
 
+        max_annotations_per_image = getattr(args, 'max_annotations_per_image', 10)
         emit_annotations(report_dict, baseline_dict, alert_on)
-        emit_bb_annotations(report_dict, baseline_dict, alert_on)
+        emit_bb_annotations(report_dict, baseline_dict, alert_on, max_annotations_per_image)
 
         # ── Slack notification ────────────────────────────────────────────────
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
