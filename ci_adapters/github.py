@@ -167,9 +167,13 @@ def post_pr_review_comments(report_dict: dict, review_comment_on: str = 'critica
     review comments (marked via _REVIEW_COMMENT_MARKER -- a real invisible
     HTML comment; unlike Bitbucket, GitHub does hide these properly) before
     posting the current set, so re-running the workflow doesn't pile up
-    duplicates. Each comment is posted individually rather than batched
-    into one review, so one finding whose line isn't part of the diff hunk
-    (GitHub rejects those) can't take the rest down with it.
+    duplicates. Findings are grouped by (file, line) into a single combined
+    comment -- several findings often land on the same line (multiple
+    Checkov checks on one resource, several CVEs for one package), and that
+    should be one thread, not one piling up per finding. Each (file, line)
+    group is posted individually rather than batched into one review, so
+    one group whose line isn't part of the diff hunk (GitHub rejects those)
+    can't take the rest down with it.
     """
     token      = os.getenv('GITHUB_TOKEN', '').strip()
     event_path = os.getenv('GITHUB_EVENT_PATH', '').strip()
@@ -239,16 +243,37 @@ def post_pr_review_comments(report_dict: dict, review_comment_on: str = 'critica
             and f.get('line')
         ]
 
-        posted, skipped = 0, 0
+        # Group by (file, line) -- multiple findings often land on the same
+        # line (several Checkov checks on one resource block, several CVEs
+        # for one package) and should be one comment thread, not one per
+        # finding piling up at the same spot.
+        severity_rank = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
+        by_location = {}
         for f in candidates:
-            rid  = f.get('rule_id') or f.get('check_id', 'FINDING')
-            desc = f.get('description', f.get('name', rid))
-            body = f"**{rid}**: {desc}\n\n{_REVIEW_COMMENT_MARKER}"
+            by_location.setdefault((f['file'], f['line']), []).append(f)
+        for group in by_location.values():
+            group.sort(key=lambda f: severity_rank.get(f.get('severity', '').lower(), 99))
+
+        posted, skipped = 0, 0
+        for (path, line), group in by_location.items():
+            if len(group) == 1:
+                f = group[0]
+                rid  = f.get('rule_id') or f.get('check_id', 'FINDING')
+                desc = f.get('description', f.get('name', rid))
+                body = f"**{rid}**: {desc}\n\n{_REVIEW_COMMENT_MARKER}"
+            else:
+                lines = [f"**{len(group)} findings on this line:**", ""]
+                for f in group:
+                    rid  = f.get('rule_id') or f.get('check_id', 'FINDING')
+                    desc = f.get('description', f.get('name', rid))
+                    lines.append(f"- **{rid}**: {desc}")
+                lines += ["", _REVIEW_COMMENT_MARKER]
+                body = "\n".join(lines)
             resp = requests.post(
                 f"{base_url}/comments", headers=headers,
                 json={
                     'body': body, 'commit_id': commit_sha,
-                    'path': f['file'], 'line': f['line'], 'side': 'RIGHT',
+                    'path': path, 'line': line, 'side': 'RIGHT',
                 },
                 timeout=15,
             )
