@@ -1,0 +1,23 @@
+version: "3.8"
+
+# Test fixtures: intentionally vulnerable and misconfigured container services.
+# This file exists solely to surface CRITICAL container CVE findings and
+# Checkov docker-compose violations in InfraScan CI output.
+# DO NOT use in any production or staging environment.
+
+services:
+
+  # nginx:1.14.0-alpine — EOL Alpine 3.8 base (~8 MB image).
+  # Produces a small number of critical CVEs (BusyBox, zlib, FreeType, libxml2)
+  # without flooding the report with dozens of Python-specific hits.
+  # CKV_DC_1 / CKV_DOCKER_2: privileged flag gives container full host access.
+  legacy-web:
+    image: nginx:1.14.0-alpine
+    privileged: true
+    # CKV_DOCKER_3: Docker socket mount grants container root on the host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Hardcoded credential — triggers secret-detection rules
+      ADMIN_PASSWORD: "hardcoded-secret-do-not-use-12345"
+    # No read_only, no security_opt: no-new-privileges
