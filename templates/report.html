@@ -54,19 +54,22 @@
     {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      "headline": "InfraScan Report for {{ metadata.repository_name }}",
-      "datePublished": "{{ metadata.scan_timestamp }}",
-      "about": {
-        "@type": "Thing",
-        "name": "{{ metadata.repository_name }}"
+      "headline": {{ ("InfraScan Report for " ~ metadata.repository_name)|tojson }},
+      "datePublished": {{ (metadata.scan_timestamp|default('', true)).replace(' UTC', 'Z').replace(' ', 'T')|tojson }},
+      "url": {{ (site_domain ~ "/report/" ~ current_scan_id)|tojson }},
+      "author": {
+        "@type": "Organization",
+        "name": "SolDevelo",
+        "url": "https://soldevelo.com"
       },
-      "review": {
-        "@type": "Review",
-        "reviewRating": {
-          "@type": "Rating",
-          "ratingValue": "{{ grade_report.overall.percentage|default('0') }}",
-          "bestRating": "100"
-        }
+      "publisher": {
+        "@type": "Organization",
+        "name": "SolDevelo",
+        "url": "https://soldevelo.com"
+      },
+      "about": {
+        "@type": "SoftwareSourceCode",
+        "name": {{ metadata.repository_name|tojson }}
       }
     }
     </script>
