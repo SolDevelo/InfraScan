@@ -10,11 +10,26 @@ import sys
 import requests
 
 
+_GH_ANNOTATION_LIMIT = 10  # GitHub Actions' own hard cap: 10 errors, 10 warnings,
+                           # 10 notices per step -- independent buckets, not a
+                           # shared pool. Beyond that GitHub silently keeps only
+                           # "a random subset" with no truncation notice, so
+                           # without this cap which findings survive is
+                           # arbitrary on any run with more than 10 per level.
+
+
 def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
     """Emit GitHub Actions workflow commands for inline PR annotations.
 
     Security findings at or above alert_on threshold -> ::error/::warning.
     Resources that became more expensive vs baseline -> ::warning.
+
+    Capped at _GH_ANNOTATION_LIMIT per level (error/warning/notice) to match
+    GitHub's own per-step limit -- findings are already severity-sorted, so
+    this deterministically keeps the most severe ones instead of leaving it
+    to GitHub's undocumented, non-deterministic truncation. Doesn't affect
+    grading, the PR comment, or the step summary -- only which findings get
+    an inline annotation.
     """
     if not os.getenv('GITHUB_ACTIONS'):
         return
@@ -59,14 +74,12 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
         return (sev_idx, type_idx)
     all_findings.sort(key=_sort_key)
 
+    level_counts = {'error': 0, 'warning': 0, 'notice': 0}
+
     for f in all_findings:
         sev = f.get('severity', '').lower()
         if sev not in alert_sevs:
             continue
-        rid   = f.get('rule_id') or f.get('check_id', 'FINDING')
-        fpath = f.get('file', '')
-        line  = f.get('line', '')
-        desc  = f.get('description', f.get('name', rid))
         # Critical = error, High = warning, others = notice
         if sev == 'critical':
             level = 'error'
@@ -74,10 +87,20 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
             level = 'warning'
         else:
             level = 'notice'
+        if level_counts[level] >= _GH_ANNOTATION_LIMIT:
+            continue
+        level_counts[level] += 1
+        rid   = f.get('rule_id') or f.get('check_id', 'FINDING')
+        fpath = f.get('file', '')
+        line  = f.get('line', '')
+        desc  = f.get('description', f.get('name', rid))
         loc   = f"file={fpath}" + (f",line={line}" if line else "")
         print(f"::{level} {loc},title={rid}::{desc}")
 
-    # Cost-increase annotations only when a baseline is present
+    # Cost-increase annotations only when a baseline is present. These share
+    # the same "warning" bucket/limit as HIGH-severity findings above (it's
+    # GitHub's own per-step counter, not per-source), so actual HIGH findings
+    # -- processed first -- take priority over cost deltas for the shared 10.
     if not baseline:
         return
     base_costs = {
@@ -90,6 +113,9 @@ def emit_annotations(report_dict: dict, baseline: dict, alert_on: str) -> None:
             continue
         delta = round(rc['total_usd_month'] - base, 2)
         if delta > 1.0:
+            if level_counts['warning'] >= _GH_ANNOTATION_LIMIT:
+                continue
+            level_counts['warning'] += 1
             fpath = rc.get('file', '')
             line  = rc.get('line', '')
             loc   = f"file={fpath}" + (f",line={line}" if line else "")

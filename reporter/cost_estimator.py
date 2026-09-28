@@ -2525,7 +2525,7 @@ def _findings_section_md(
     for f in shown:
         sev  = f.get("severity", "").upper()
         rid  = f.get("rule_id") or f.get("check_id", "")
-        fname = os.path.basename(f.get("file", "") or f.get("image", ""))
+        fname = f.get("file", "") or f.get("image", "")
         line_n = f.get("line", "")
         loc = f"{fname}:{line_n}" if line_n else fname
         raw_desc = f.get("description", f.get("name", ""))
@@ -2748,7 +2748,7 @@ def format_ci_summary_md(
             s_hi   = pf.get("saving_high", 0)
             rid    = pf.get("rule_id", "")
             rname  = rule_names.get(rid, "")
-            fname  = os.path.basename(pf.get("file", ""))
+            fname  = pf.get("file", "")
             line_n = pf.get("line", "")
             s_str  = _fmt_usd(s_lo) if s_lo == s_hi else f"{_fmt_usd(s_lo)}–{_fmt_usd(s_hi)}"
             rows_md.append(f"| {rid} | {rname} | {fname}:{line_n} | {s_str} |")
@@ -3014,7 +3014,7 @@ def format_pr_comment_md(
             sev = f.get("severity", "").upper()
             emoji = emoji_map.get(sev.lower(), '⚪')
             rid   = f.get("rule_id") or f.get("check_id", "")
-            fname = os.path.basename(f.get("file", ""))
+            fname = f.get("file", "") or f.get("image", "")
             line_n = f.get("line", "")
             loc   = f"{fname}:{line_n}" if line_n else fname
             desc  = (f.get("description", f.get("name", "")))[:70]
