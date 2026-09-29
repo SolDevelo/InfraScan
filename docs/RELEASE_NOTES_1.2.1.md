@@ -22,4 +22,4 @@ This release contains all changes since `v1.2.0`.
 ## Notes
 
 - The application version has been updated to `1.2.1`.
-- Bitbucket users can add the Grype DB cache to their pipeline — see "Grype DB cache" in [docs/BITBUCKET_PIPELINE.md](BITBUCKET_PIPELINE.md). No token permission changes are needed.
+- Bitbucket users can add the Grype DB cache to their pipeline — see "Grype DB cache" in [docs/BITBUCKET_PIPELINE.md](https://github.com/SolDevelo/InfraScan/blob/main/docs/BITBUCKET_PIPELINE.md#grype-db-cache). No token permission changes are needed.
