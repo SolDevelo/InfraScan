@@ -174,6 +174,9 @@ their registries by the pipe itself:
 
 - **Scanner**: Docker Scout when `DOCKER_HUB_USERNAME`/`DOCKER_HUB_PASSWORD`
   are set, Grype otherwise.
+- **Variables in image names** (`${PROMETHEUS_VERSION}`) are expanded like
+  docker compose does, from the environment, `.env`, or the committed
+  `.env.example` next to the compose file or in a parent directory.
 - **Images that can't be pulled** (private registry unreachable from
   Bitbucket's runners, no credentials, tag doesn't exist) are listed in the
   build log, the PR comment and the Code Insights report — they are never

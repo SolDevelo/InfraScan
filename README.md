@@ -295,7 +295,7 @@ infrascan --framework ansible -f playbooks/ -f roles/
 
 InfraScan supports advanced container scanning features:
 - **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
-- **Environment Variables**: You can use variables in your `docker-compose.yml` image names (e.g., `image: ${REGISTRY}/my-app:${TAG}`). Both `$VAR` and `${VAR:-default}` syntax are supported. Variables are expanded using the environment where InfraScan is running (including your `.env` file).
+- **Environment Variables**: You can use variables in your `docker-compose.yml` image names (e.g., `image: ${REGISTRY}/my-app:${TAG}`), with docker compose's syntax (`$VAR`, `${VAR}`, `${VAR:-default}`, `${VAR-default}`). Like compose, InfraScan reads them from the environment and from a `.env` file — and, since `.env` is usually gitignored, falls back to the committed `.env.example` — next to the compose file or in a parent directory up to the scanned directory. They're used only to expand image names, never exported. An image with a variable that can't be resolved is reported as not scanned, naming the variable.
 - **Private Registries**:
   - **Docker Hub**: Set `DOCKER_HUB_USERNAME` and `DOCKER_HUB_PASSWORD` in your environment or `.env` file for automatic authentication.
   - **Amazon ECR**: InfraScan automatically detects ECR images and attempts authentication using `aws ecr get-login-password`. This requires the AWS CLI to be installed and configured with appropriate credentials in the environment.

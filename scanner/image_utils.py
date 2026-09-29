@@ -83,8 +83,133 @@ def _image_line_loader():
     _Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
     return _Loader, image_lines
 
-def extract_images_from_compose(compose_file: str) -> List[tuple]:
-    """Extract (image, line) pairs from a compose file, with env var expansion.
+_ENV_FILES = ('.env', '.env.example')
+_env_file_cache: Dict[str, Dict[str, str]] = {}
+
+
+def _read_env_file(path: str) -> Dict[str, str]:
+    """Parse a .env file the way docker compose does, for the common cases:
+    KEY=VALUE lines, optional `export `, quoted values, `#` comments."""
+    if path in _env_file_cache:
+        return _env_file_cache[path]
+    values: Dict[str, str] = {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if line.startswith('export '):
+                    line = line[len('export '):].lstrip()
+                key, sep, value = line.partition('=')
+                key = key.strip()
+                if not sep or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
+                    continue
+                value = value.strip()
+                if value[:1] in ('"', "'") and value.endswith(value[0]) and len(value) > 1:
+                    value = value[1:-1]
+                else:
+                    value = re.split(r'\s+#', value, 1)[0]
+                values[key] = value
+    except OSError:
+        pass
+    _env_file_cache[path] = values
+    return values
+
+
+def compose_variables(compose_file: str, root: Optional[str] = None) -> tuple:
+    """Variables `docker compose` would interpolate into *compose_file*.
+
+    Compose reads the environment plus the project's .env. In a checkout .env
+    is usually absent (it's gitignored), but .env.example -- the committed
+    template, typically holding the pinned image versions -- is there, so it
+    is used as the lowest-priority fallback. Files are looked for from the
+    compose file's directory up to *root*; nearer files win, and the
+    environment beats both. Returns (variables, [env files used]).
+
+    These values are only ever used to expand image names -- never exported
+    -- so a placeholder like SLACK_WEBHOOK_URL in .env.example has no effect.
+    """
+    root = os.path.abspath(root or os.path.dirname(compose_file))
+    directory = os.path.abspath(os.path.dirname(compose_file))
+    chain = []
+    while True:
+        chain.append(directory)
+        if directory == root or os.path.dirname(directory) == directory \
+                or not directory.startswith(root + os.sep):
+            break
+        directory = os.path.dirname(directory)
+    variables: Dict[str, str] = {}
+    used: List[str] = []
+    # Lowest priority first: .env.example farthest -> nearest, then .env
+    # farthest -> nearest, then the environment on top.
+    for name in reversed(_ENV_FILES):
+        for d in reversed(chain):
+            path = os.path.join(d, name)
+            if os.path.isfile(path):
+                values = _read_env_file(path)
+                if values:
+                    variables.update(values)
+                    used.append(path)
+    variables.update(os.environ)
+    return variables, used
+
+
+_VAR_RE = re.compile(
+    r'\$\$'                                             # escaped $
+    r'|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?+])([^}]*))?\}'  # ${VAR}, ${VAR:-d}, ${VAR-d}, ${VAR:?e}, ${VAR:+a}
+    r'|\$([A-Za-z_][A-Za-z0-9_]*)'                       # $VAR
+)
+
+
+def interpolate(value: str, variables: Dict[str, str]) -> tuple:
+    """Compose-style variable interpolation. Returns (result, [unresolved names])."""
+    unresolved: List[str] = []
+
+    def _sub(m):
+        if m.group(0) == '$$':
+            return '$'
+        name = m.group(1) or m.group(4)
+        op, arg = m.group(2), m.group(3) or ''
+        current = variables.get(name)
+        is_set = current is not None
+        non_empty = bool(current)
+        if op in (':-', '-'):
+            if (non_empty if op == ':-' else is_set):
+                return current
+            expanded, missing = interpolate(arg, variables)
+            unresolved.extend(missing)
+            return expanded
+        if op in (':+', '+'):
+            if (non_empty if op == ':+' else is_set):
+                expanded, missing = interpolate(arg, variables)
+                unresolved.extend(missing)
+                return expanded
+            return ''
+        # plain, or ${VAR:?err} / ${VAR?err}: needs a value
+        if (non_empty if op == ':?' else is_set):
+            return current
+        unresolved.append(name)
+        return m.group(0)
+
+    return _VAR_RE.sub(_sub, value), unresolved
+
+
+def unresolved_image_reason(image: str) -> Optional[str]:
+    """Why *image* can't be scanned if it still has an unexpanded variable."""
+    names = sorted(set(re.findall(r'\$\{?([A-Za-z_][A-Za-z0-9_]*)', image)))
+    if not names:
+        return None
+    listed = ', '.join('${%s}' % n for n in names)
+    return (f"unresolved {listed} -- set it in the environment, or in a .env / .env.example "
+            f"next to the compose file or in a parent directory")
+
+
+def extract_images_from_compose(compose_file: str, root: Optional[str] = None) -> List[tuple]:
+    """Extract (image, line) pairs from a compose file, with compose-style
+    variable interpolation (see compose_variables()). An image whose
+    variables can't be resolved is returned as written; check it with
+    unresolved_image_reason() before scanning.
 
     *line* is the 1-indexed source line of the service's 'image:' key, or 0
     if it couldn't be determined -- callers should treat 0 as "no line".
@@ -98,23 +223,20 @@ def extract_images_from_compose(compose_file: str) -> List[tuple]:
             compose_data = yaml.load(f, Loader=Loader)
 
         if compose_data and 'services' in compose_data:
+            variables, used_files = None, []
             for service_name, service_config in compose_data['services'].items():
                 if isinstance(service_config, dict) and 'image' in service_config:
                     image_name = str(service_config['image'])
                     line_no = image_lines.get(id(service_config), 0)
-
-                    # 1. Expand standard $VAR and ${VAR} using os.path.expandvars
-                    expanded_image = os.path.expandvars(image_name)
-
-                    # 2. Expand ${VAR:-default} style strings which os.path.expandvars doesn't handle well
-                    # This regex matches ${VAR:-DEFAULT} where VAR is letters/numbers/underscores and DEFAULT is anything but }
-                    expanded_image = re.sub(
-                        r'\$\{([a-zA-Z_][a-zA-Z0-9_]*):-([^}]*)\}',
-                        lambda m: os.getenv(m.group(1), m.group(2)),
-                        expanded_image
-                    )
-
-                    images.append((expanded_image, line_no))
+                    if '$' in image_name:
+                        if variables is None:
+                            variables, used_files = compose_variables(compose_file, root)
+                        image_name, _ = interpolate(image_name, variables)
+                    images.append((image_name, line_no))
+            if used_files:
+                base = root or os.path.dirname(compose_file)
+                print(f"[i] {os.path.relpath(compose_file, base)}: image variables from "
+                      + ', '.join(os.path.relpath(p, base) for p in used_files))
     except Exception as e:
         print(f"Warning: Could not parse {compose_file}: {e}")
 

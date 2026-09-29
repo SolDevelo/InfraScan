@@ -288,6 +288,11 @@ current one. The build log states which path each run took.
 Images come from `docker-compose` / Kubernetes files and are pulled from
 their registries by the pipe itself.
 
+- **Variables in image names** (`prom/prometheus:${PROMETHEUS_VERSION}`)
+  are expanded like docker compose does — from the environment and a `.env`
+  — with the committed `.env.example` as a fallback, since `.env` is rarely
+  in the repo. Looked for next to the compose file and in parent directories.
+  An image whose variable can't be resolved is reported as not scanned.
 - **Scanner**: Docker Scout when `DOCKER_HUB_USERNAME` and
   `DOCKER_HUB_PASSWORD` (a password or access token, as a secured variable)
   are set — it produces fewer false positives — and Grype otherwise, since

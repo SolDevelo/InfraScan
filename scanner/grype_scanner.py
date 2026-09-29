@@ -23,6 +23,7 @@ from scanner.image_utils import (
     filter_container_files,
     drop_ignored_images,
     image_registry,
+    unresolved_image_reason,
 )
 
 IMAGE_SCAN_TIMEOUT = 240
@@ -37,8 +38,17 @@ _UNREACHABLE_MARKERS = (
 _UNAUTHORIZED_MARKERS = ('unauthorized', 'authentication required', 'denied', '401', '403')
 
 
-def _registry_blocked(reason: str, registry: str) -> bool:
+def _registry_blocked(reason: str, registry: str, reachable: set) -> bool:
+    # A registry that already served an image in this run is reachable --
+    # one slow or broken image (e.g. a large one hitting the per-image
+    # timeout) says nothing about the next.
+    if registry in reachable:
+        return False
     r = reason.lower()
+    # Our own per-image timeout on Docker Hub is a slow pull, not an
+    # unreachable registry.
+    if registry == 'docker.io' and r.startswith('timed out after'):
+        return False
     if any(m in r for m in _UNREACHABLE_MARKERS):
         return True
     # Docker Hub answers 401 for repositories that simply don't exist, so an
@@ -112,7 +122,7 @@ class GrypeScanner(Scanner):
         # those files legitimately has the vulnerability too.
         all_images_map = {}  # image -> list of (source_file, line) referencing it
         for compose_file in compose_files:
-            for image, line in extract_images_from_compose(compose_file):
+            for image, line in extract_images_from_compose(compose_file, directory_path):
                 entry = (compose_file, line)
                 if entry not in all_images_map.setdefault(image, []):
                     all_images_map[image].append(entry)
@@ -146,9 +156,15 @@ class GrypeScanner(Scanner):
         # image with zero vulnerabilities.
         unscanned: List[Dict[str, str]] = []
         blocked_registries: Dict[str, str] = {}  # registry -> first failure reason
+        reachable_registries: set = set()
         for image, source_refs in all_images_map.items():
             primary_file, primary_line = source_refs[0]
             rel_file = os.path.relpath(primary_file, directory_path)
+            unresolved = unresolved_image_reason(image)
+            if unresolved:
+                print(f"[warn] Could not scan image {image} ({rel_file}): {unresolved}")
+                unscanned.append({'image': image, 'file': rel_file, 'reason': unresolved})
+                continue
             registry = image_registry(image)
             if registry in blocked_registries:
                 reason = f"not attempted: {registry} already failed for an earlier image"
@@ -163,11 +179,12 @@ class GrypeScanner(Scanner):
             if error:
                 print(f"[warn] Could not scan image {image} ({rel_file}): {error}")
                 unscanned.append({'image': image, 'file': rel_file, 'reason': error})
-                if _registry_blocked(error, registry):
+                if _registry_blocked(error, registry, reachable_registries):
                     blocked_registries[registry] = error
                     print(f"[warn] Skipping remaining images from {registry} -- "
                           f"unreachable or rejecting credentials from this runner.")
                 continue
+            reachable_registries.add(registry)
             if len(source_refs) > 1:
                 also_in = [
                     {'file': os.path.relpath(f, directory_path), 'line': ln}

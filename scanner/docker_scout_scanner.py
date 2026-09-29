@@ -26,6 +26,7 @@ from scanner.image_utils import (
     perform_all_logins,
     filter_container_files,
     drop_ignored_images,
+    unresolved_image_reason,
 )
 
 # ============================================================================
@@ -353,7 +354,7 @@ class DockerScoutScanner(Scanner):
         # those files legitimately has the vulnerability too.
         all_images_map = {}  # image -> list of (source_file, line) referencing it
         for compose_file in compose_files:
-            for image, line in extract_images_from_compose(compose_file):
+            for image, line in extract_images_from_compose(compose_file, directory_path):
                 entry = (compose_file, line)
                 if entry not in all_images_map.setdefault(image, []):
                     all_images_map[image].append(entry)
@@ -381,6 +382,10 @@ class DockerScoutScanner(Scanner):
         # Bitbucket annotations) without inflating the finding count.
         for image, source_refs in all_images_map.items():
             compose_file, primary_line = source_refs[0]
+            unresolved = unresolved_image_reason(image)
+            if unresolved:
+                print(f"[warn] Skipping image {image} ({os.path.relpath(compose_file, directory_path)}): {unresolved}")
+                continue
             # Check if image exists locally before scanning
             image_existed_before = check_image_exists(image)
 
