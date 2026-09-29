@@ -59,6 +59,7 @@ def is_root_module(directory_path: str) -> bool:
 from scanner.checkov_scanner import CheckovScanner
 from scanner.docker_scout_scanner import DockerScoutScanner
 from scanner.grype_scanner import GrypeScanner
+from scanner.image_utils import docker_hub_credentials_available
 
 CHECKOV_SCANNER = CheckovScanner()
 DOCKER_SCOUT_SCANNER = DockerScoutScanner()
@@ -344,7 +345,7 @@ def resolve_included_paths(base_path, included_paths):
     
     return list(set(resolved_files))
 
-def scan_directory(path, scanner_type='regex', framework='terraform', download_external_modules=False, included_paths=None):
+def scan_directory(path, scanner_type='regex', framework='terraform', download_external_modules=False, included_paths=None, scan_info=None):
     """
     Scan a directory for IaC issues.
     
@@ -358,6 +359,10 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         framework: IaC framework type (terraform, kubernetes, cloudformation, auto)
         download_external_modules: Whether to download external modules
         included_paths: Optional list of specific files or directories to scan
+        scan_info: Optional dict filled with container-scan coverage --
+            'unscanned_images' (list of {image, file, reason}) and
+            'container_images_total'. Kept out of the return tuple so
+            existing callers don't change.
     
     Returns:
         Tuple of (findings_list, resource_count, extra_recommendations)
@@ -522,11 +527,26 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     if 'containers' in active_scanners:
         container_scanner = get_container_scanner()
 
+        def _record_coverage(result):
+            if scan_info is not None:
+                scan_info['unscanned_images'] = result.unscanned_images
+                scan_info['container_images_total'] = result.images_total
+
+        # Scout gives fewer false positives, but needs a Docker Hub login
+        # even on a free account -- without one every image fails auth, so
+        # go straight to Grype rather than paying for a doomed Scout attempt.
+        if (container_scanner != 'grype' and not docker_hub_credentials_available()
+                and GRYPE_SCANNER.is_available()):
+            print("[i] No Docker Hub credentials found (DOCKER_HUB_USERNAME/DOCKER_HUB_PASSWORD) -- "
+                  "using Grype instead of Docker Scout. Set them to use Docker Scout (fewer false positives).")
+            container_scanner = 'grype'
+
         if container_scanner == 'grype':
             if GRYPE_SCANNER.is_available():
                 try:
                     grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
                     results.extend(grype_result.findings)
+                    _record_coverage(grype_result)
                 except Exception as e:
                     print(f"Warning: Grype scan failed: {e}")
             else:
@@ -541,6 +561,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         try:
                             grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
                             results.extend(grype_result.findings)
+                            _record_coverage(grype_result)
                             print(f"    Grype scan completed with {len(grype_result.findings)} findings.")
                         except Exception as grype_e:
                             print(f"    Grype fallback failed: {grype_e}")
@@ -554,6 +575,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                 try:
                     grype_result = GRYPE_SCANNER.scan(path, files=resolved_files)
                     results.extend(grype_result.findings)
+                    _record_coverage(grype_result)
                     print(f"    Grype scan completed with {len(grype_result.findings)} findings.")
                 except Exception as grype_e:
                     print(f"    Grype fallback failed: {grype_e}")

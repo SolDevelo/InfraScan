@@ -1,6 +1,6 @@
 """GitHub Actions adapter: PR comments, step summary, inline annotations.
 
-Moved out of cli.py unchanged (see docs/bitbucket-integration-plan.md) so the
+Moved out of cli.py so the
 GitHub and Bitbucket adapters sit side by side behind the same call shape.
 """
 import json

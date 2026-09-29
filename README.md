@@ -203,13 +203,15 @@ for the full example.
 definitions:
   caches:
     infrascan-baseline: infrascan-baseline
+    infrascan-grype-db: infrascan-grype-db
   steps:
     - step: &infrascan-audit
         name: InfraScan Audit
         caches:
           - infrascan-baseline
+          - infrascan-grype-db
         script:
-          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - mkdir -p infrascan-baseline infrascan-grype-db && chmod -R 777 infrascan-baseline infrascan-grype-db
           - pipe: docker://soldevelo/infrascan:latest
             variables:
               BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
@@ -293,8 +295,10 @@ InfraScan supports advanced container scanning features:
 - **Private Registries**:
   - **Docker Hub**: Set `DOCKER_HUB_USERNAME` and `DOCKER_HUB_PASSWORD` in your environment or `.env` file for automatic authentication.
   - **Amazon ECR**: InfraScan automatically detects ECR images and attempts authentication using `aws ecr get-login-password`. This requires the AWS CLI to be installed and configured with appropriate credentials in the environment.
-  - **Intelligent Fallback**: If Docker Scout is not authenticated, InfraScan will automatically run a fallback scan using **Grype** so your pipeline never fails due to missing Docker Hub tokens.
+  - **Scanner choice**: Docker Scout (fewer false positives) is used when Docker Hub credentials are available; otherwise InfraScan uses **Grype** directly, since Scout requires a Docker login. Force one with `CONTAINER_SCANNER=grype` or `CONTAINER_SCANNER=docker-scout`.
   - **Other Registries**: Pre-authenticate manually using `docker login` before running InfraScan, and it will use your existing local Docker credentials.
+- **Unscannable images are reported, not hidden**: an image that can't be pulled (unreachable registry, missing credentials, nonexistent tag) is listed with its reason in the console output, PR comment and CI report, rather than counted as clean.
+- **Skipping images**: `CONTAINER_IGNORE_IMAGES` takes a regex of image references to skip — e.g. `-SNAPSHOT$` for images a repo builds itself and only publishes after merge.
 
 
 ## 💰 Cost Estimation

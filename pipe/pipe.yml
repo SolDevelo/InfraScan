@@ -63,6 +63,21 @@ variables:
   - name: MAX_PR_FINDINGS
     default: "10"
     description: Maximum total findings shown in the PR comment.
+  - name: DOCKER_HUB_USERNAME
+    default: ""
+    description: Docker Hub username. With DOCKER_HUB_PASSWORD, container images are scanned with Docker Scout (fewer false positives); without them, Grype is used -- Scout needs a Docker login even on a free account.
+  - name: DOCKER_HUB_PASSWORD
+    default: ""
+    description: Docker Hub password or access token for DOCKER_HUB_USERNAME (use a secured repository variable).
+  - name: CONTAINER_SCANNER
+    default: ""
+    description: Force a container scanner ("grype" or "docker-scout"). Default picks Docker Scout when Docker Hub credentials are set, Grype otherwise.
+  - name: CONTAINER_IGNORE_IMAGES
+    default: ""
+    description: Regex of container images to skip, e.g. "-SNAPSHOT$" for images this repo builds itself and only publishes after merge -- on a PR the registry only has the previous build.
+  - name: GRYPE_DB_CACHE
+    default: infrascan-grype-db
+    description: Directory (and Bitbucket cache name) holding Grype's vulnerability DB. Only used if the directory exists, i.e. you declared the cache -- see docs/BITBUCKET_PIPELINE.md. Scans always use a current DB; when a newer one is published the pipe replaces the cache so later runs skip the download.
   - name: MAX_ANNOTATIONS_PER_IMAGE
     default: "10"
     description: Maximum Code Insights annotations per container image, sorted by severity ("0" = no cap). Keeps one noisy image's CVE list from drowning out every other finding; doesn't affect grading, the PR comment, or the report.

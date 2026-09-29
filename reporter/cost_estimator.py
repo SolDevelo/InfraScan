@@ -2491,6 +2491,34 @@ def _fmt_usd(n: float) -> str:
     return f"${n:,.0f}"
 
 
+def _unscanned_images_md(report_dict: dict, detailed: bool = False) -> List[str]:
+    """Warn that some container images couldn't be scanned.
+
+    A failed pull contributes zero findings, which otherwise looks exactly
+    like a clean image and flatters the Containers grade -- so say so
+    wherever the grade is shown. *detailed* adds a per-image reason table
+    (step summary); the PR comment gets a one-line version.
+    """
+    meta = report_dict.get("metadata", {})
+    unscanned = meta.get("unscanned_images") or []
+    if not unscanned:
+        return []
+    total = meta.get("container_images_total") or len(unscanned)
+    head = (f"> ⚠️ **{len(unscanned)} of {total} container images could not be scanned** "
+            f"— their vulnerabilities are not included, so container findings and grade are incomplete.")
+    if not detailed:
+        names = ", ".join(f"`{u.get('image', '?')}`" for u in unscanned[:5])
+        more = f" (+{len(unscanned) - 5} more)" if len(unscanned) > 5 else ""
+        return [head, f"> {names}{more}", ""]
+    rows = ["| Image | Referenced in | Reason |", "|---|---|---|"]
+    for u in unscanned[:50]:
+        reason = " ".join(str(u.get("reason", "")).split()).replace("|", "\u2502")[:160]
+        rows.append(f"| `{u.get('image', '?')}` | {u.get('file', '')} | {reason} |")
+    if len(unscanned) > 50:
+        rows.append(f"| _… and {len(unscanned) - 50} more_ | | |")
+    return [head, ""] + rows + [""]
+
+
 def _findings_section_md(
     title: str,
     findings: List[dict],
@@ -2632,6 +2660,7 @@ def format_ci_summary_md(
 
     if grade_rows:
         lines += ["| Category | Grade | Findings |", "|---|---|---|"] + grade_rows + [""]
+    lines += _unscanned_images_md(report_dict, detailed=True)
 
     # ── 2. Infrastructure cost / baseline delta ──────────────────────────────
     total_cost_early = savings.get("total_infra_cost_usd_month")
@@ -2968,6 +2997,7 @@ def format_pr_comment_md(
     ] if r]
     if grade_rows:
         lines += ["| Category | Grade | Findings |", "|---|---|---|"] + grade_rows + [""]
+    lines += _unscanned_images_md(report_dict)
 
     # ── Infrastructure cost (show if exists OR changed above threshold) ───────
     show_cost = total_cost > 0 or abs(cost_delta) >= min_cost_delta

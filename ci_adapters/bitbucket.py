@@ -1,7 +1,6 @@
 """Bitbucket Cloud adapter: PR comments, Code Insights report, annotations.
 
-Mirrors ci_adapters/github.py's call shape (see docs/bitbucket-integration-plan.md)
-so cli.py can treat both platforms symmetrically. Differences from the GitHub
+Mirrors ci_adapters/github.py's call shape so cli.py can treat both platforms symmetrically. Differences from the GitHub
 side are dictated by what Bitbucket Cloud actually offers:
 
 - No GITHUB_STEP_SUMMARY equivalent -> a Code Insights *report* fills that role
@@ -267,6 +266,15 @@ def _report_details_text(report_dict: dict, baseline: Optional[dict] = None) -> 
             lines.append(f"Monthly cost: ${total_cost:,.2f} (baseline ${base_cost:,.2f}, {trend})")
         else:
             lines.append(f"Monthly cost: ${total_cost:,.2f}")
+
+    unscanned = report_dict.get('metadata', {}).get('unscanned_images') or []
+    if unscanned:
+        total = report_dict.get('metadata', {}).get('container_images_total') or len(unscanned)
+        names = ', '.join(u.get('image', '?') for u in unscanned[:3])
+        more = f" (+{len(unscanned) - 3} more)" if len(unscanned) > 3 else ""
+        lines.append("")
+        lines.append(f"WARNING: {len(unscanned)} of {total} container images could not be scanned "
+                     f"(container results incomplete): {names}{more}")
 
     lines.append("")
     lines.append("See this report's annotations for per-finding detail, or the full HTML report artifact.")

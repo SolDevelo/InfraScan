@@ -24,13 +24,15 @@ Bitbucket's own env vars, not from which pipeline definition invoked it (see
 definitions:
   caches:
     infrascan-baseline: infrascan-baseline
+    infrascan-grype-db: infrascan-grype-db
   steps:
     - step: &infrascan-audit
         name: InfraScan Audit
         caches:
           - infrascan-baseline
+          - infrascan-grype-db
         script:
-          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - mkdir -p infrascan-baseline infrascan-grype-db && chmod -R 777 infrascan-baseline infrascan-grype-db
           - pipe: docker://soldevelo/infrascan:latest
             variables:
               BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
@@ -244,31 +246,103 @@ same step definition handles both writing and reading the baseline.
   `--baseline-out` at the same path, refreshing the shared baseline —
   reusing the scan already run for the report, so this never costs a second
   scan. PR runs never write to the shared baseline.
-- **On a PR**, if the cached baseline is missing, empty, or unreadable (cold
-  cache, first-ever run, or a stale-permission cache entry), the pipe falls
-  back to scanning the PR's own base branch directly — fetched into a
-  throwaway worktree — to build a baseline on the spot, instead of showing
-  every finding as new. If that fallback itself fails (e.g. no network
-  access), the scan still proceeds with no baseline; this never fails the
-  pipeline.
+- **On a PR**, the cached baseline is used only if it still matches the
+  PR's destination branch (see below); otherwise the pipe fetches the
+  destination branch into a throwaway worktree and scans it to build a
+  baseline on the spot. If that fails (e.g. no network access), the scan
+  still proceeds with no baseline; this never fails the pipeline.
 
 That's why the one step definition in the setup above works unchanged for
 both `pipelines.default` and `pipelines.pull-requests`, with the cache
 (`infrascan-baseline`) declared once and shared by both.
 
-Bitbucket's cache mechanism is repo-wide, not branch-scoped — every branch
-and PR in the repo reads and writes the same cache slot, so a PR does
-compare against `DEFAULT_BRANCH`'s baseline by design. What Bitbucket's
-cache lacks, unlike the GitHub Action's cache (keyed per **base-branch
-commit SHA** via `actions/cache`, so a stale cache is automatically
-bypassed the moment the base branch advances), is native invalidation: its
-key can only be derived from **file contents** (`key.files`), not branch
-names or commit SHAs. In practice that means the cached baseline can lag by
-up to one default-branch pipeline run behind the latest commit on
-`DEFAULT_BRANCH`, which is normally the last commit merged before your PR.
-The PR-side fallback above covers the *empty*-cache case (first run, or an
-evicted/corrupted cache); it does not eliminate this one-run lag on an
-otherwise warm cache.
+### How the cache is kept honest
+
+Bitbucket's cache is repo-wide, not branch-scoped, so every branch and PR
+reads the same slot. But Bitbucket **uploads a cache only when none exists
+yet** ("Skipping upload for existing cache" in Build teardown) and keeps it
+for up to a week — a default-branch run that refreshes the baseline file
+doesn't replace the cached copy. The cached baseline can therefore be many
+merges old.
+
+To avoid comparing a PR against that, every baseline records a
+**fingerprint** of the files the scanners read (a hash of their paths and
+contents from `git ls-tree`, no checkout needed). On a PR the pipe computes
+the same fingerprint for the destination branch as it is now:
+
+- **Match** — no infrastructure file changed since the cache was saved (only
+  application code, say). The cached baseline is exactly what a fresh scan
+  would produce, so it's used as-is; no extra scan.
+- **Mismatch**, no cache, or a cache saved by an older version without a
+  fingerprint — the destination branch is scanned directly, one extra scan.
+
+Once an infrastructure change lands on `DEFAULT_BRANCH`, PRs keep taking the
+extra-scan path until the cache expires or is cleared (Pipelines → Caches).
+Clearing it after such a merge lets the next default-branch run save a
+current one. The build log states which path each run took.
+
+---
+
+## Container scanning
+
+Images come from `docker-compose` / Kubernetes files and are pulled from
+their registries by the pipe itself.
+
+- **Scanner**: Docker Scout when `DOCKER_HUB_USERNAME` and
+  `DOCKER_HUB_PASSWORD` (a password or access token, as a secured variable)
+  are set — it produces fewer false positives — and Grype otherwise, since
+  Scout requires a Docker login even on a free account. Force one with
+  `CONTAINER_SCANNER: grype` / `docker-scout`.
+- **Images that can't be pulled** — a private registry that isn't reachable
+  from Bitbucket's cloud runners, missing credentials, a tag that doesn't
+  exist — are never counted as clean. Each one is logged with its reason, and
+  the PR comment, Code Insights report and step summary say how many images
+  couldn't be scanned, since the container grade doesn't cover them. After
+  the first unreachable or unauthorized registry, its remaining images are
+  skipped rather than each waiting out a timeout. (Docker Hub answers
+  "unauthorized" for repositories that don't exist, so there it moves on to
+  the next image instead.)
+- **Images this repo builds itself**, published only after merge (e.g.
+  `-SNAPSHOT` tags): on a PR the registry holds only the previous build, so
+  scanning it reports stale results or nothing. Skip them on the PR pipeline
+  with `CONTAINER_IGNORE_IMAGES` (a regex matched against the image
+  reference), and scan them in the default-branch pipeline after the step
+  that builds and pushes them:
+
+  ```yaml
+  pull-requests:
+    '**':
+      - step:
+          <<: *infrascan-audit
+          script:
+            - mkdir -p infrascan-baseline infrascan-grype-db && chmod -R 777 infrascan-baseline infrascan-grype-db
+            - pipe: docker://soldevelo/infrascan:latest
+              variables:
+                CONTAINER_IGNORE_IMAGES: '-SNAPSHOT$'
+                # ...same variables as the shared step
+  ```
+
+### Grype DB cache
+
+Grype downloads its vulnerability database (~175 MB, ~3 GB unpacked) on
+every run — about 2.5 minutes. The setup above caches it as a second cache,
+`infrascan-grype-db`, next to the baseline one. It's optional: remove it
+from `caches:` and the `mkdir`/`chmod` line and the pipe just downloads the
+DB each run.
+
+Scans always use a current DB: when the cached one is older than Anchore's
+latest (published daily), Grype downloads the new one before scanning. The
+cache only decides whether that download is needed. Bitbucket never
+replaces a cache that already exists, so on the first run after a new DB
+appears the pipe deletes **only** the `infrascan-grype-db` cache
+(`DELETE .../pipelines-config/caches?name=infrascan-grype-db`) and the fresh
+DB gets saved in its place; later runs that day skip the download. The
+delete goes through the same local auth proxy as the Code Insights report,
+so no token permission is needed; `BITBUCKET_ACCESS_TOKEN` is only a
+fallback. If neither can delete it, the build log says so, and until
+Bitbucket expires the old cache (up to 7 days) each run downloads the DB,
+the same as without a cache. The cache is ~550 MB compressed, within
+Bitbucket's 1 GB limit.
 
 ---
 
@@ -316,5 +390,5 @@ anyway to refresh the baseline.
 | Step summary | `GITHUB_STEP_SUMMARY` file | Code Insights report (`PUT .../reports/infrascan-report`) |
 | Inline findings | `::error`/`::warning` workflow commands | Code Insights annotations (REST) |
 | Comment dedup | Invisible `<!-- --> ` marker | Visible footer line (Bitbucket doesn't render raw HTML) |
-| Baseline caching | Automatic, base-branch-**commit-SHA** keyed (`actions/cache`) — self-invalidates when the base branch advances, hidden inside the Action | Automatic, auto-detected at runtime from `BITBUCKET_BRANCH`/`BITBUCKET_PR_ID` — a single unkeyed cache slot shared repo-wide, can lag by up to one default-branch pipeline run; falls back to scanning the PR's base branch directly when the cache is cold |
+| Baseline caching | Automatic, base-branch-**commit-SHA** keyed (`actions/cache`) — self-invalidates when the base branch advances, hidden inside the Action | Automatic, auto-detected at runtime from `BITBUCKET_BRANCH`/`BITBUCKET_PR_ID` — a single cache slot shared repo-wide that Bitbucket never re-uploads once it exists (kept up to a week); a fingerprint of the scanned files decides per PR whether the cache still matches the base branch or the base branch is scanned directly |
 | Skip unchanged PRs | On by default, declarative `if:` on a separate step (`skip-if-no-match`) | **Opt-in** — not in the default example (see "Scan skipping" above); when added, an early `exit 0` inside the step's script has the same effect |

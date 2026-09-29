@@ -11,6 +11,11 @@ class ScanResult:
     findings: List[Dict[str, Any]] = field(default_factory=list)
     extra_recommendations: List[str] = field(default_factory=list)
     auth_failed: bool = False
+    # Container scanners: images that were found but couldn't be scanned
+    # ({'image', 'file', 'reason'}), and how many images there were in total --
+    # a failed pull otherwise looks exactly like a clean image.
+    unscanned_images: List[Dict[str, str]] = field(default_factory=list)
+    images_total: int = 0
 
 
 class Scanner(ABC):

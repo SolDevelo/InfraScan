@@ -62,6 +62,9 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `baseline` | _(none)_ | Path to a baseline JSON for cost/finding delta. Set automatically when using the baseline cache pattern below |
 | `skip-if-no-match` | `true` | Skip the scan on PRs when no files matching the scanner's trigger patterns were changed |
 | `slack-webhook-url` | _(none)_ | Slack Incoming Webhook URL for scan notifications |
+| `docker-hub-username` / `docker-hub-password` | _(none)_ | Docker Hub login (pass the password/token as a secret). With it, container images are scanned with Docker Scout (fewer false positives); without it, Grype |
+| _(automatic)_ | | Grype's vulnerability DB is cached per day with `actions/cache` (~2.5 min download otherwise): the first run of the day downloads it, later runs that day reuse it. Nothing to configure |
+| `container-ignore-images` | _(none)_ | Regex of container images to skip, e.g. `-SNAPSHOT$` for images this repo builds itself and only publishes after merge |
 | `download-external-modules` | `false` | Allow Checkov to download external Terraform modules |
 
 ## Outputs

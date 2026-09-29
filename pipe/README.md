@@ -20,13 +20,15 @@ reference it from both, via a YAML anchor:
 definitions:
   caches:
     infrascan-baseline: infrascan-baseline
+    infrascan-grype-db: infrascan-grype-db
   steps:
     - step: &infrascan-audit
         name: InfraScan Audit
         caches:
           - infrascan-baseline
+          - infrascan-grype-db
         script:
-          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - mkdir -p infrascan-baseline infrascan-grype-db && chmod -R 777 infrascan-baseline infrascan-grype-db
           - pipe: docker://soldevelo/infrascan:latest
             variables:
               BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
@@ -73,6 +75,10 @@ for the full copy-pasteable version with comments.
 | ALERT_ON | `critical`, `high`, `medium`, `low`, `any_new`, `none` | `any_new` |
 | MIN_COST_DELTA | Minimum cost delta ($/month) to highlight in the PR comment | `0` |
 | MAX_PR_FINDINGS | Maximum findings shown in the PR comment | `10` |
+| DOCKER_HUB_USERNAME / DOCKER_HUB_PASSWORD | Docker Hub login (password or access token, as a secured variable). With it, container images are scanned with Docker Scout (fewer false positives); without it, Grype | _(none)_ |
+| CONTAINER_SCANNER | Force `grype` or `docker-scout`. Default: Scout when Docker Hub credentials are set, Grype otherwise | _(auto)_ |
+| CONTAINER_IGNORE_IMAGES | Regex of images to skip, e.g. `-SNAPSHOT$` — see "Container scanning" below | _(none)_ |
+| GRYPE_DB_CACHE | Directory / cache name for Grype's DB — used only if you declared that cache | `infrascan-grype-db` |
 | MAX_ANNOTATIONS_PER_IMAGE | Maximum Code Insights annotations per container image, sorted by severity (`0` = no cap) — one noisy image's CVE list can't drown out other findings; doesn't affect grading/PR comment/report | `10` |
 | FAIL_ON | (optional) Exit-code-1 threshold | _(none)_ |
 | BASELINE | Path read for cost/finding delta, if present. Missing file = "no baseline", safe by default | `infrascan-baseline/infrascan-baseline.json` |
@@ -142,25 +148,44 @@ decide, per run:
   `BASELINE_OUT` — reusing the same scan already run for the report, so this
   never costs a second scan. PR runs never overwrite the shared baseline
   with PR-branch results.
-- **On a PR**, the pipe falls back to scanning the PR's own base branch
-  directly — `git fetch`-ing it into a throwaway worktree and running a
-  second, internal scan to build a baseline on the spot — whenever either:
-  `BASELINE` is missing, empty, or unreadable (cold cache, first-ever run,
-  or a permission issue), or the PR targets a branch other than
-  `DEFAULT_BRANCH` (the cache only ever holds `DEFAULT_BRANCH`'s baseline,
-  so it's the wrong one to use for a PR into anywhere else even if it's
-  readable). This costs one extra scan only when the fallback actually
-  triggers; a same-branch warm cache never does. If the fallback itself
-  fails (e.g. no network access to fetch), the pipe just proceeds with no
-  baseline, same as it always has — this never fails the pipeline. Every
-  outcome here is logged (cache found/not found, fallback triggered or not,
-  fallback succeeded/failed) so it's visible in the build log which path a
-  given run took.
+- **On a PR**, the cached baseline is only used if it still matches the
+  PR's destination branch. Bitbucket uploads a cache only when none exists
+  yet and then keeps it for up to a week, so the cached baseline can be many
+  merges old. Each baseline therefore carries a fingerprint of the files the
+  scanners read (from `git ls-tree`, no checkout); the pipe compares it with
+  the destination branch as it is now. If they match — including when only
+  non-infrastructure code was merged since — the cache is used as-is. If
+  not (infrastructure files changed, cache missing, or saved by an older
+  version), the pipe fetches the destination branch into a throwaway
+  worktree and scans it to build a fresh baseline, which costs one extra
+  scan. A failure anywhere here never fails the pipeline; at worst the scan
+  runs without a baseline. Every outcome is logged, so the build log shows
+  which path a run took.
 
 This is why the exact same step definition (see the YAML above) works
 unchanged for both `pipelines.default` and `pipelines.pull-requests` — the
 pipe figures out which behavior applies from Bitbucket's own env vars, not
 from which pipeline definition invoked it.
+
+## Container scanning
+
+Images are taken from `docker-compose` / Kubernetes files and pulled from
+their registries by the pipe itself:
+
+- **Scanner**: Docker Scout when `DOCKER_HUB_USERNAME`/`DOCKER_HUB_PASSWORD`
+  are set, Grype otherwise.
+- **Images that can't be pulled** (private registry unreachable from
+  Bitbucket's runners, no credentials, tag doesn't exist) are listed in the
+  build log, the PR comment and the Code Insights report — they are never
+  counted as clean. After the first unreachable or unauthorized registry,
+  its remaining images are skipped instead of each waiting out a timeout.
+- **Grype's vulnerability DB** (~2.5 min to download) can be cached — see
+  "Grype DB cache" in [docs/BITBUCKET_PIPELINE.md](../docs/BITBUCKET_PIPELINE.md).
+- **Images this repo builds itself** (e.g. `-SNAPSHOT` tags published only
+  after merge) can't be scanned meaningfully on a PR — the registry only has
+  the previous build. Skip them with `CONTAINER_IGNORE_IMAGES` on the PR
+  pipeline, and scan them on the default branch after the build step
+  pushes them.
 
 ## What this pipe does *not* do
 

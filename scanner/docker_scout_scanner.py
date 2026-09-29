@@ -24,7 +24,8 @@ from scanner.image_utils import (
     find_kubernetes_files,
     extract_images_from_kubernetes,
     perform_all_logins,
-    filter_container_files
+    filter_container_files,
+    drop_ignored_images,
 )
 
 # ============================================================================
@@ -363,6 +364,8 @@ class DockerScoutScanner(Scanner):
                 if entry not in all_images_map.setdefault(image, []):
                     all_images_map[image].append(entry)
 
+        all_images_map = drop_ignored_images(all_images_map)
+
         # Authenticate with registries (collecting all unique images first)
         if all_images_map:
             perform_all_logins(list(all_images_map.keys()))
@@ -401,7 +404,12 @@ class DockerScoutScanner(Scanner):
                 findings.extend(image_findings)
 
                 if image_auth_failed:
+                    # Scout's login is account-wide (its vulnerability DB,
+                    # not the image's registry), so every remaining image
+                    # would fail the same way -- stop here and let the
+                    # caller fall back to Grype instead of retrying N times.
                     auth_failed = True
+                    break
 
                 if image_findings:
                     print(f"  Found {len(image_findings)} vulnerabilities in {image}")

@@ -37,6 +37,18 @@ inputs:
     description: 'Slack Incoming Webhook URL for scan notifications (optional)'
     required: false
     default: ''
+  docker-hub-username:
+    description: 'Docker Hub username -- enables Docker Scout for container scanning (fewer false positives); without it Grype is used'
+    required: false
+    default: ''
+  docker-hub-password:
+    description: 'Docker Hub password or access token (pass a secret) for docker-hub-username'
+    required: false
+    default: ''
+  container-ignore-images:
+    description: 'Regex of container images to skip, e.g. images this repo builds itself that are only published after merge'
+    required: false
+    default: ''
   github-token:
     description: 'GitHub token for PR comments and annotations (defaults to the built-in token)'
     required: false
@@ -107,6 +119,27 @@ runs:
         echo "$CHANGED" >> "$GITHUB_OUTPUT"
         echo "EOF" >> "$GITHUB_OUTPUT"
 
+    # ── Grype vulnerability DB cache ──────────────────────────────────────────
+    # Grype's DB (~175 MB download, ~3 GB unpacked) otherwise costs ~2.5 min
+    # per run. Anchore publishes one a day, so key on the date: the first run
+    # of the day restores yesterday's, Grype updates it, and it's saved under
+    # today's key; later runs that day hit it exactly and download nothing.
+    - name: Grype DB cache key
+      id: grype-db-key
+      if: steps.check-files.outputs.skip != 'true' && (inputs.scanner == 'comprehensive' || contains(inputs.scanner, 'containers'))
+      shell: bash
+      run: echo "key=infrascan-grype-db-$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Grype DB cache
+      id: grype-db-cache
+      if: steps.grype-db-key.outputs.key != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/infrascan-grype-db
+        key: ${{ steps.grype-db-key.outputs.key }}
+        restore-keys: |
+          infrascan-grype-db-
+
     # ── Baseline cache restore ────────────────────────────────────────────────
     # Key on the BASE branch commit SHA so the cache is invalidated when the
     # target branch advances, not when the PR branch changes files.
@@ -129,11 +162,31 @@ runs:
         git worktree add "$RUNNER_TEMP/base-worktree" origin/${{ github.base_ref }}
         mkdir -p "$RUNNER_TEMP/baseline-out"
         chmod 777 "$RUNNER_TEMP/baseline-out"
+        # Same scanner settings as the PR scan below -- a baseline scanned
+        # differently (other container scanner, other framework, images
+        # not ignored) makes the delta report false "new" findings.
+        CONTAINER_ENV=()
+        if [ -n "${{ inputs.docker-hub-username }}" ]; then
+          CONTAINER_ENV+=(
+            -e DOCKER_HUB_USERNAME="${{ inputs.docker-hub-username }}"
+            -e DOCKER_HUB_PASSWORD="${{ inputs.docker-hub-password }}"
+          )
+        fi
+        if [ -n "${{ inputs.container-ignore-images }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
+        fi
+        # Shared Grype DB (see "Grype DB cache" above). a+rwX because this
+        # container runs as a different user than the restore/save steps.
+        mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
+        chmod -R a+rwX "$RUNNER_TEMP/infrascan-grype-db"
+        CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
         docker run --rm \
+          "${CONTAINER_ENV[@]}" \
           -v "$RUNNER_TEMP/base-worktree:/scan:ro" \
           -v "$RUNNER_TEMP/baseline-out:/output" \
           "soldevelo/infrascan:latest" \
-          cli /scan --format json --out /output/infrascan-baseline.json
+          cli "/scan/${{ inputs.directory }}" --scanner "${{ inputs.scanner }}" --framework "${{ inputs.framework }}" \
+          --format json --out /output/infrascan-baseline.json
         cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
 
     - name: Run InfraScan
@@ -152,6 +205,20 @@ runs:
             -e SLACK_WEBHOOK_URL="${{ inputs.slack-webhook-url }}"
           )
         fi
+
+        CONTAINER_ENV=()
+        if [ -n "${{ inputs.docker-hub-username }}" ]; then
+          CONTAINER_ENV+=(
+            -e DOCKER_HUB_USERNAME="${{ inputs.docker-hub-username }}"
+            -e DOCKER_HUB_PASSWORD="${{ inputs.docker-hub-password }}"
+          )
+        fi
+        if [ -n "${{ inputs.container-ignore-images }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
+        fi
+        mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
+        chmod -R a+rwX "$RUNNER_TEMP/infrascan-grype-db"
+        CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
 
         # Mount event file and a writable step-summary file into the container
         SUMMARY_TMP="$(mktemp)"
@@ -184,6 +251,7 @@ runs:
 
         CMD=(docker run --rm --user root
           "${SLACK_ENV[@]}"
+          "${CONTAINER_ENV[@]}"
           "${GH_ENV[@]}"
           "${BASELINE_MOUNT[@]}"
           -v "${{ github.workspace }}:/scan"
@@ -239,3 +307,13 @@ runs:
       with:
         path: ${{ runner.temp }}/infrascan-baseline.json
         key: infrascan-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
+
+    # ── Save Grype DB cache ────────────────────────────────────────────────────
+    # always(): a scan that fails the job via fail-on still downloaded a
+    # perfectly good DB -- don't make every failing run re-download it.
+    - name: Save Grype DB cache
+      if: always() && steps.grype-db-key.outputs.key != '' && steps.grype-db-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/infrascan-grype-db
+        key: ${{ steps.grype-db-key.outputs.key }}

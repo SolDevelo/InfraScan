@@ -198,6 +198,13 @@ def setup_args():
     )
 
     parser.add_argument(
+        "--baseline-fingerprint",
+        default="",
+        dest="baseline_fingerprint",
+        help=argparse.SUPPRESS,  # set by pipe/pipe.sh: identifies the source tree a --baseline-out was scanned from
+    )
+
+    parser.add_argument(
         "--baseline-out",
         default="",
         dest="baseline_out",
@@ -480,12 +487,14 @@ def main():
             print(f"Analyzing {target_path} with '{args.scanner}' scanner...")
             
         # Run Scanners
+        scan_info = {}
         results, resource_count, recommendations = scan_directory(
             target_path, 
             scanner_type=args.scanner,
             framework=args.framework,
             download_external_modules=args.download_external_modules,
-            included_paths=args.include
+            included_paths=args.include,
+            scan_info=scan_info,
         )
         
         # Generate Report
@@ -506,6 +515,11 @@ def main():
             'scanner_used': args.scanner
         }
         report_dict['metadata'] = report_dict.get('metadata', {})
+        if scan_info.get('unscanned_images'):
+            report_dict['metadata']['unscanned_images'] = scan_info['unscanned_images']
+            report_dict['metadata']['container_images_total'] = scan_info.get('container_images_total', 0)
+        if getattr(args, 'baseline_fingerprint', ''):
+            report_dict['metadata']['baseline_fingerprint'] = args.baseline_fingerprint
         gh_ctx = build_gh_actions_context()
         bb_ctx = build_bb_pipelines_context()
         if gh_ctx['repo'] or gh_ctx['workflow'] or gh_ctx['run_url']:

@@ -2,13 +2,16 @@
 Grype integration for container vulnerability scanning.
 This module wraps Grype to scan Docker images and containers.
 
-Note: Docker Scout is the default scanner. To use Grype, set CONTAINER_SCANNER=grype in .env file.
+Note: Docker Scout is the default scanner when Docker Hub credentials are
+available; otherwise Grype is used (see scanner/parser.py). Set
+CONTAINER_SCANNER=grype to always use Grype.
 """
 
 import json
 import os
+import re
 import subprocess
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from scanner.base import Scanner, ScanResult
 from scanner.image_utils import (
@@ -17,8 +20,30 @@ from scanner.image_utils import (
     find_kubernetes_files,
     extract_images_from_kubernetes,
     perform_all_logins,
-    filter_container_files
+    filter_container_files,
+    drop_ignored_images,
+    image_registry,
 )
+
+IMAGE_SCAN_TIMEOUT = 240
+
+# Substrings of a failed scan's error that mean the *registry* is the
+# problem, not the one image -- the next image from it would fail the same
+# way, so there's no point waiting out another timeout per image.
+_UNREACHABLE_MARKERS = (
+    'no such host', 'i/o timeout', 'connection refused', 'network is unreachable',
+    'deadline exceeded', 'tls handshake', 'timed out',
+)
+_UNAUTHORIZED_MARKERS = ('unauthorized', 'authentication required', 'denied', '401', '403')
+
+
+def _registry_blocked(reason: str, registry: str) -> bool:
+    r = reason.lower()
+    if any(m in r for m in _UNREACHABLE_MARKERS):
+        return True
+    # Docker Hub answers 401 for repositories that simply don't exist, so an
+    # auth error there says nothing about the next (possibly public) image.
+    return registry != 'docker.io' and any(m in r for m in _UNAUTHORIZED_MARKERS)
 
 
 class GrypeScanner(Scanner):
@@ -98,6 +123,8 @@ class GrypeScanner(Scanner):
                 if entry not in all_images_map.setdefault(image, []):
                     all_images_map[image].append(entry)
 
+        all_images_map = drop_ignored_images(all_images_map)
+
         # Perform logins for ECR/Docker Hub if needed
         if all_images_map:
             perform_all_logins(list(all_images_map.keys()))
@@ -112,24 +139,50 @@ class GrypeScanner(Scanner):
         # (file, line) pairs are recorded on `also_in_files` instead,
         # purely for CI adapters that want to attach a per-file marker
         # (e.g. Bitbucket annotations) without inflating the finding count.
+        #
+        # A failed scan (image not pullable, registry unreachable or
+        # rejecting credentials) is recorded in `unscanned` and reported,
+        # never silently dropped -- otherwise it's indistinguishable from an
+        # image with zero vulnerabilities.
+        unscanned: List[Dict[str, str]] = []
+        blocked_registries: Dict[str, str] = {}  # registry -> first failure reason
         for image, source_refs in all_images_map.items():
+            primary_file, primary_line = source_refs[0]
+            rel_file = os.path.relpath(primary_file, directory_path)
+            registry = image_registry(image)
+            if registry in blocked_registries:
+                reason = f"not attempted: {registry} already failed for an earlier image"
+                print(f"[warn] Skipping image {image}: {reason}")
+                unscanned.append({'image': image, 'file': rel_file, 'reason': reason})
+                continue
             print(f"Scanning image with Grype: {image}")
             try:
-                primary_file, primary_line = source_refs[0]
-                image_findings = scan_image(image, primary_file, directory_path, primary_line)
-                if len(source_refs) > 1:
-                    also_in = [
-                        {'file': os.path.relpath(f, directory_path), 'line': ln}
-                        for f, ln in source_refs[1:]
-                    ]
-                    for finding in image_findings:
-                        finding['also_in_files'] = also_in
-                findings.extend(image_findings)
+                image_findings, error = scan_image(image, primary_file, directory_path, primary_line)
             except Exception as e:
-                print(f"Warning: Failed to scan image {image}: {e}")
+                image_findings, error = [], str(e)
+            if error:
+                print(f"[warn] Could not scan image {image} ({rel_file}): {error}")
+                unscanned.append({'image': image, 'file': rel_file, 'reason': error})
+                if _registry_blocked(error, registry):
+                    blocked_registries[registry] = error
+                    print(f"[warn] Skipping remaining images from {registry} -- "
+                          f"unreachable or rejecting credentials from this runner.")
                 continue
+            if len(source_refs) > 1:
+                also_in = [
+                    {'file': os.path.relpath(f, directory_path), 'line': ln}
+                    for f, ln in source_refs[1:]
+                ]
+                for finding in image_findings:
+                    finding['also_in_files'] = also_in
+            findings.extend(image_findings)
 
-        return ScanResult(findings=findings)
+        total = len(all_images_map)
+        if unscanned:
+            print(f"[warn] Grype scanned {total - len(unscanned)} of {total} image(s); "
+                  f"{len(unscanned)} could not be scanned -- their vulnerabilities are NOT in this report.")
+
+        return ScanResult(findings=findings, unscanned_images=unscanned, images_total=total)
 
 
 def ensure_db_ready(timeout: int = 300) -> None:
@@ -162,7 +215,23 @@ def ensure_db_ready(timeout: int = 300) -> None:
         print(f"Warning: grype db update did not finish within {timeout}s")
 
 
-def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:
+def _failure_reason(result: subprocess.CompletedProcess) -> str:
+    # On a failed pull grype lists every image source it tried ("- docker:
+    # docker not available", "- snap: ...", ...). Only the registry one says
+    # what actually went wrong (no such host / UNAUTHORIZED / MANIFEST_UNKNOWN).
+    lines = [ln.strip().lstrip('-* ').strip() for ln in (result.stderr or '').splitlines()]
+    for ln in lines:
+        if ln.startswith('oci-registry:'):
+            detail = ln[len('oci-registry:'):].strip()
+            detail = re.sub(r'^failed to get image descriptor from registry:\s*', '', detail)
+            return detail[:300]
+    lines = [ln for ln in lines if ln and not re.match(r'^\d+ errors? occurred:?$', ln)]
+    if not lines:
+        return f"grype exited with code {result.returncode} and no error output"
+    return ' '.join(lines[-3:])[:300]
+
+
+def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Scan a Docker image with Grype.
 
@@ -173,18 +242,14 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
         line: Source line of the image's declaring key in compose_file (0 if unknown)
 
     Returns:
-        List of normalized findings
+        (findings, error) -- error is None on success, otherwise a short
+        reason the image couldn't be scanned (findings is then empty and
+        means "unknown", not "clean").
     """
-    findings = []
-    
+    # No --quiet: with it grype prints nothing at all on a failed pull, so
+    # there'd be no reason to report. stdout stays pure JSON either way.
+    cmd = ["grype", image, "-o", "json"]
     try:
-        cmd = [
-            "grype",
-            image,
-            "-o", "json",
-            "--quiet"
-        ]
-        
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -194,25 +259,19 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
             # 120s was tight enough that large private-registry images
             # (multi-GB Java app images, observed directly in a real CI
             # pipeline) could time out on pull alone even with a warm DB.
-            timeout=240
+            timeout=IMAGE_SCAN_TIMEOUT
         )
-        
-        if result.stdout.strip():
-            try:
-                grype_data = json.loads(result.stdout)
-                findings = parse_grype_output(grype_data, image, compose_file, base_path, line)
-            except json.JSONDecodeError as e:
-                print(f"Failed to parse Grype JSON output: {e}")
-        
-        if result.stderr and "error" in result.stderr.lower():
-            print(f"Grype stderr: {result.stderr}")
-    
     except subprocess.TimeoutExpired:
-        print(f"Timeout scanning image: {image}")
-    except Exception as e:
-        print(f"Error scanning image {image}: {e}")
-    
-    return findings
+        return [], f"timed out after {IMAGE_SCAN_TIMEOUT}s pulling/scanning the image"
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return [], _failure_reason(result)
+
+    try:
+        grype_data = json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        return [], f"could not parse grype output: {e}"
+    return parse_grype_output(grype_data, image, compose_file, base_path, line), None
 
 
 def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str, base_path: str, line: int = 0) -> List[Dict[str, Any]]:

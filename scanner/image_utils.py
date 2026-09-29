@@ -1,7 +1,8 @@
+import json
 import os
 import re
 import subprocess
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 def find_compose_files(directory_path: str) -> List[str]:
     """Find Docker Compose files in the directory."""
@@ -193,6 +194,60 @@ def ecr_login(image_name: str) -> bool:
     except Exception as e:
         print(f"  Warning: Error during ECR login: {e}")
         return False
+
+def image_registry(image: str) -> str:
+    """Registry host an image reference resolves to, per Docker's own rule:
+    the first path component is a registry only if it contains '.' or ':'
+    or is 'localhost' -- anything else (e.g. `vcem/core:1.4`) is Docker Hub."""
+    first, sep, _ = image.partition('/')
+    if sep and ('.' in first or ':' in first or first == 'localhost'):
+        return first
+    return 'docker.io'
+
+
+def drop_ignored_images(all_images_map: dict) -> dict:
+    """Remove images matching the CONTAINER_IGNORE_IMAGES regex, if set.
+
+    Meant for images the repo builds itself and only publishes after merge
+    (e.g. `-SNAPSHOT` tags): on a PR the registry only has the previous
+    build, so scanning it reports stale results -- or nothing, if the tag
+    was never pushed.
+    """
+    raw = os.getenv('CONTAINER_IGNORE_IMAGES', '').strip()
+    if not raw:
+        return all_images_map
+    try:
+        pattern = re.compile(raw)
+    except re.error as e:
+        print(f"[warn] Ignoring invalid CONTAINER_IGNORE_IMAGES regex {raw!r}: {e}")
+        return all_images_map
+    skipped = [img for img in all_images_map if pattern.search(img)]
+    if skipped:
+        print(f"[i] Skipping {len(skipped)} image(s) matching CONTAINER_IGNORE_IMAGES={raw!r}: {', '.join(skipped)}")
+    return {img: refs for img, refs in all_images_map.items() if img not in skipped}
+
+
+def docker_hub_credentials_available() -> bool:
+    """Whether Docker Scout can plausibly authenticate.
+
+    Scout needs a Docker Hub login even on a free account; without one every
+    `docker scout cves` call fails, so callers can go straight to Grype.
+    """
+    for user_var, pass_var in (('DOCKER_HUB_USERNAME', 'DOCKER_HUB_PASSWORD'),
+                               ('DOCKER_SCOUT_HUB_USER', 'DOCKER_SCOUT_HUB_PASSWORD')):
+        if os.getenv(user_var, '').strip() and os.getenv(pass_var, '').strip():
+            return True
+    config_dir = os.getenv('DOCKER_CONFIG') or os.path.expanduser('~/.docker')
+    try:
+        with open(os.path.join(config_dir, 'config.json'), 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return False
+    hub_keys = ('https://index.docker.io/v1/', 'index.docker.io', 'docker.io', 'registry-1.docker.io')
+    if any(k in cfg.get('auths', {}) for k in hub_keys):
+        return True
+    return bool(cfg.get('credsStore')) or any(k in cfg.get('credHelpers', {}) for k in hub_keys)
+
 
 def docker_hub_login() -> bool:
     """Authenticate with Docker Hub if credentials are provided."""

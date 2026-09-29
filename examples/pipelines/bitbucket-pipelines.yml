@@ -40,6 +40,14 @@
 #
 # Set DEFAULT_BRANCH below if your default branch isn't "main".
 #
+# Two caches: infrascan-baseline (the default branch's scan, for PR deltas)
+# and infrascan-grype-db (Grype's vulnerability DB -- saves a ~2.5 min
+# download per run). Bitbucket never replaces an existing cache, so when
+# Grype publishes a newer DB (daily) the pipe deletes just the
+# infrascan-grype-db cache (through the same zero-token proxy) and the fresh
+# DB is saved instead. Scans always use a current DB either way; the cache
+# only saves the download. Either cache can be dropped.
+#
 # The chmod line matters, it's not boilerplate: Bitbucket pre-provisions any
 # `caches:`-declared path before the step starts, and a `pipe:` container
 # runs in its own isolated user namespace, separate from this step's own --
@@ -59,13 +67,15 @@
 definitions:
   caches:
     infrascan-baseline: infrascan-baseline
+    infrascan-grype-db: infrascan-grype-db
   steps:
     - step: &infrascan-audit
         name: InfraScan Audit
         caches:
           - infrascan-baseline
+          - infrascan-grype-db
         script:
-          - mkdir -p infrascan-baseline && chmod -R 777 infrascan-baseline
+          - mkdir -p infrascan-baseline infrascan-grype-db && chmod -R 777 infrascan-baseline infrascan-grype-db
           - pipe: docker://soldevelo/infrascan:latest
             variables:
               BITBUCKET_ACCESS_TOKEN: $INFRASCAN_TOKEN
@@ -78,6 +88,8 @@ definitions:
               # Optional: MIN_COST_DELTA: "5"
               # Optional: MAX_PR_FINDINGS: "10"
               # Optional: MAX_ANNOTATIONS_PER_IMAGE: "10"
+              # Optional: DOCKER_HUB_USERNAME / DOCKER_HUB_PASSWORD -- use Docker Scout instead of Grype
+              # Optional: CONTAINER_IGNORE_IMAGES: '-SNAPSHOT$' -- skip images this repo builds after merge
         artifacts:
           - infrascan-report.html
 
