@@ -13,10 +13,14 @@ The `soldevelo/infrascan` composite action runs InfraScan inside Docker and surf
 
 ```yaml
 name: InfraScan
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
 
 permissions:
-  pull-requests: write   # needed only for PR comments; remove if not wanted
+  contents: read
+  pull-requests: write   # PR comments
 
 jobs:
   scan:
@@ -201,11 +205,14 @@ This is all on by default (`auto-baseline: true`). Your workflow stays minimal:
 
 ```yaml
 name: InfraScan
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
 
 permissions:
-  pull-requests: write
   contents: read
+  pull-requests: write   # PR comments
 
 jobs:
   scan:

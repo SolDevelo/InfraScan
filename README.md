@@ -25,10 +25,14 @@ The fastest way to integrate InfraScan into your repository is using our officia
 
 ```yaml
 name: InfraScan Security Audit
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
 
 permissions:
-  pull-requests: write   # enables automatic PR comments
+  contents: read
+  pull-requests: write   # PR comments
 
 jobs:
   infrascan:

@@ -97,7 +97,13 @@ runs:
       if: inputs.skip-if-no-match == 'true' && github.event_name == 'pull_request'
       shell: bash
       run: |
-        CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || true)
+        # actions/checkout fetches only the PR's merge commit, so the base
+        # isn't there to diff against -- fetch that one commit. A plain
+        # two-tree diff needs no merge-base, so depth 1 is enough. If the
+        # fetch fails, CHANGED is empty and the scan runs (never skipped).
+        BASE_SHA="${{ github.event.pull_request.base.sha }}"
+        git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
+        CHANGED=$(git diff --name-only "$BASE_SHA" HEAD 2>/dev/null || true)
         if [ -z "$CHANGED" ]; then
           echo "skip=false" >> "$GITHUB_OUTPUT"
           exit 0

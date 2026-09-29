@@ -81,11 +81,14 @@ Step summary, PR comments, auto-baseline, and smart PR skipping are all enabled 
 
 ```yaml
 name: InfraScan
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
 
 permissions:
-  pull-requests: write  # Required for PR comments
-  contents: read        # Required for checkout
+  contents: read
+  pull-requests: write   # PR comments
 
 jobs:
   infrascan:
@@ -159,11 +162,14 @@ pipelines:
 ### Example — GitHub Actions for Kubernetes project
 ```yaml
 name: InfraScan K8s Audit
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]   # your default branch
+  pull_request:
 
 permissions:
-  pull-requests: write
   contents: read
+  pull-requests: write   # PR comments
 
 jobs:
   infrascan:
