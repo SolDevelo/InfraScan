@@ -189,11 +189,11 @@ Controls which findings appear in PR comments and inline annotations. Shows the 
 
 ## Baseline / cost delta
 
-The action automatically manages the baseline — no extra steps needed. On every PR it:
+The action automatically manages the baseline — no extra steps needed. On every push to the default branch it saves that scan as the baseline for its commit (`infrascan-<branch>-<sha>`). On every PR it:
 1. Restores a cached baseline JSON keyed by **base branch name + base commit SHA** (`infrascan-<base_ref>-<base.sha>`)
-2. If the cache is cold (first run, or the base branch has advanced), scans the base branch once to create the baseline
+2. If the cache is cold (the default branch wasn't scanned at that commit, e.g. the workflow doesn't run on `push`), scans the base branch once to create the baseline
 3. Runs the main scan with `--baseline` pointing at the cached result
-4. Saves the base-branch scan to cache for future PRs targeting the same base commit
+4. Saves a base-branch scan from step 2 to cache for later runs of the same PR — GitHub only lets a PR read caches saved by the default branch or by that PR itself, so running the workflow on `push` to the default branch is what lets every PR skip step 2
 
 The cache key is intentionally based on the **base branch SHA**, not the PR branch files — this ensures the baseline is always a scan of what you are merging *into*, and it is refreshed automatically whenever the base branch gets new commits.
 

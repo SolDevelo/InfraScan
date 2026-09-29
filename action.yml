@@ -142,7 +142,9 @@ runs:
 
     # ── Baseline cache restore ────────────────────────────────────────────────
     # Key on the BASE branch commit SHA so the cache is invalidated when the
-    # target branch advances, not when the PR branch changes files.
+    # target branch advances, not when the PR branch changes files. Pushes to
+    # the default branch save it under that key (see "Save default-branch
+    # baseline cache"); a cache saved by a PR run is only visible to that PR.
     - name: Restore baseline cache
       id: baseline-cache
       if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.check-files.outputs.skip != 'true'
@@ -155,6 +157,7 @@ runs:
 
     # ── Baseline fallback: scan base branch when cache is cold ────────────────
     - name: Scan base branch (baseline fallback)
+      id: baseline-scan
       if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.baseline-cache.outputs.cache-hit != 'true' && steps.check-files.outputs.skip != 'true'
       shell: bash
       run: |
@@ -175,10 +178,13 @@ runs:
         if [ -n "${{ inputs.container-ignore-images }}" ]; then
           CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
         fi
-        # Shared Grype DB (see "Grype DB cache" above). a+rwX because this
-        # container runs as a different user than the restore/save steps.
+        # Shared Grype DB (see "Grype DB cache" above). The scan containers
+        # run as other users than the runner and write the DB owner-only, so
+        # open it up from a root container -- a host chmod can't touch files
+        # an earlier container created.
         mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
-        chmod -R a+rwX "$RUNNER_TEMP/infrascan-grype-db"
+        docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
+          "soldevelo/infrascan:latest" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
         docker run --rm \
           "${CONTAINER_ENV[@]}" \
@@ -217,7 +223,8 @@ runs:
           CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
         fi
         mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
-        chmod -R a+rwX "$RUNNER_TEMP/infrascan-grype-db"
+        docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
+          "soldevelo/infrascan:latest" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
 
         # Mount event file and a writable step-summary file into the container
@@ -249,11 +256,24 @@ runs:
           BASELINE_ARG=(--baseline "/infrascan-baseline.json")
         fi
 
+        # A push to the default branch is exactly the scan PRs compare
+        # against, so it also writes the baseline for them (saved below).
+        BASELINE_OUT_MOUNT=()
+        if [ "${{ inputs.auto-baseline }}" = "true" ] && [ -z "${{ inputs.baseline }}" ] \
+            && [ "${{ github.event_name }}" = "push" ] \
+            && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+          mkdir -p "$RUNNER_TEMP/baseline-out"
+          chmod 777 "$RUNNER_TEMP/baseline-out"
+          BASELINE_OUT_MOUNT=(-v "$RUNNER_TEMP/baseline-out:/baseline-out")
+          BASELINE_ARG+=(--baseline-out "/baseline-out/infrascan-baseline.json")
+        fi
+
         CMD=(docker run --rm --user root
           "${SLACK_ENV[@]}"
           "${CONTAINER_ENV[@]}"
           "${GH_ENV[@]}"
           "${BASELINE_MOUNT[@]}"
+          "${BASELINE_OUT_MOUNT[@]}"
           -v "${{ github.workspace }}:/scan"
           "soldevelo/infrascan:latest"
           cli "/scan/${{ inputs.directory }}"
@@ -287,8 +307,15 @@ runs:
 
         echo "Running InfraScan:"
         echo "${CMD[*]}"
-        "${CMD[@]}"
-        EXIT_CODE=$?
+        # `|| EXIT_CODE=$?`: the step shell runs with -e, which would
+        # otherwise exit here on fail-on before the summary is appended.
+        EXIT_CODE=0
+        "${CMD[@]}" || EXIT_CODE=$?
+
+        if [ -s "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" ] && [ ${#BASELINE_OUT_MOUNT[@]} -gt 0 ]; then
+          cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
+          echo "baseline-written=true" >> "$GITHUB_OUTPUT"
+        fi
 
         # Append container-written step summary to GitHub's GITHUB_STEP_SUMMARY
         if [ -n "${SUMMARY_TMP:-}" ] && [ -s "${SUMMARY_TMP}" ]; then
@@ -300,17 +327,37 @@ runs:
 
     # ── Save baseline to cache (only when freshly scanned from base branch) ────
     # The file at this point is always a scan of the base branch — never the PR
-    # branch — so future PRs against the same base commit get a correct baseline.
+    # branch — so later runs of this PR against the same base commit reuse it.
+    # always(): a PR scan that fails via fail-on doesn't make the baseline bad.
     - name: Save baseline cache
-      if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.check-files.outputs.skip != 'true' && steps.baseline-cache.outputs.cache-hit != 'true'
+      if: always() && steps.baseline-scan.outcome == 'success'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/infrascan-baseline.json
         key: infrascan-${{ github.base_ref }}-${{ github.event.pull_request.base.sha }}
 
+    # Saved from the default branch itself, so every PR can restore it --
+    # GitHub scopes caches saved by a PR run to that PR only.
+    - name: Save default-branch baseline cache
+      if: always() && steps.run-infrascan.outputs.baseline-written == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/infrascan-baseline.json
+        key: infrascan-${{ github.ref_name }}-${{ github.sha }}
+
     # ── Save Grype DB cache ────────────────────────────────────────────────────
     # always(): a scan that fails the job via fail-on still downloaded a
     # perfectly good DB -- don't make every failing run re-download it.
+    - name: Prepare Grype DB cache for saving
+      if: always() && steps.grype-db-key.outputs.key != '' && steps.grype-db-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        # The DB was written by the scan containers (owner-only, other uids);
+        # the save step's tar runs as the runner user and must read it.
+        [ -d "$RUNNER_TEMP/infrascan-grype-db" ] || exit 0
+        docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
+          "soldevelo/infrascan:latest" -R a+rwX /grype-db
+
     - name: Save Grype DB cache
       if: always() && steps.grype-db-key.outputs.key != '' && steps.grype-db-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
