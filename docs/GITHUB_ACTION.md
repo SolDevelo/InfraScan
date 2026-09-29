@@ -33,7 +33,7 @@ jobs:
           scanner: comprehensive
           format: html
           out: infrascan-report.html
-          fail-on: high_critical
+          fail-on: new_high_critical
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -56,7 +56,7 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `format` | `text` | `text`, `json`, or `html` |
 | `out` | _(auto)_ | Output file path. Auto-set to `infrascan-report.html` / `.json` when `format` is `html`/`json` |
 | `framework` | `auto` | `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible`, `all` |
-| `fail-on` | _(off)_ | Exit-code-1 threshold: `any`, `high_critical`, `grade_a`–`grade_f`, `priority_critical`–`priority_info` |
+| `fail-on` | `never` | Exit-code-1 threshold: `never` (default), `any`, `high_critical`, `grade_a`–`grade_f`, `priority_critical`–`priority_info`, `new_any`, `new_high_critical`, `new_critical`. `new_*` count only findings not in the baseline (i.e. added by the PR) and are skipped when there's none, e.g. on the default branch |
 | `github-token` | `github.token` | Token for PR comments and annotations. Defaults to the built-in token — no need to pass `secrets.GITHUB_TOKEN` explicitly |
 | `pr-comment` | `true` | Post/update a PR comment on every pull request |
 | `step-summary` | `true` | Write scan results to the Actions step summary |
@@ -225,7 +225,7 @@ jobs:
           scanner: comprehensive
           format: html
           out: infrascan-report.html
-          fail-on: high_critical
+          fail-on: new_high_critical
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -112,9 +112,11 @@ def setup_args():
     
     parser.add_argument(
         "--fail-on",
-        choices=["any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f",
-                 "priority_critical", "priority_high", "priority_medium", "priority_low", "priority_info"],
-        help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, grade threshold, or priority threshold)"
+        choices=["never", "any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f",
+                 "priority_critical", "priority_high", "priority_medium", "priority_low", "priority_info",
+                 "new_any", "new_high_critical", "new_critical"],
+        help="Exit with error code 1 if findings match criteria (default: never; any findings, high/critical findings, grade threshold, "
+             "or priority threshold). new_* count only findings not in --baseline, and are skipped without one."
     )
     
     parser.add_argument(
@@ -407,10 +409,33 @@ def _print_savings_block(report_dict: dict) -> None:
             print(f"    • {pf.get('rule_id', '')}: {saving_str}/mo  ({fname}:{pf.get('line', '')})")
 
 
-def should_fail(args, report_dict, results):
-    if not args.fail_on:
+def should_fail(args, report_dict, results, baseline=None):
+    if not args.fail_on or args.fail_on == 'never':
         return False
-        
+
+    # new_*: only findings the baseline doesn't have (same identity as the PR
+    # comment's "new findings"). No baseline -- a push to the default branch,
+    # or a PR whose base couldn't be scanned -- means nothing to compare
+    # against, so don't fail rather than treat every existing finding as new.
+    if args.fail_on.startswith('new_'):
+        if not baseline:
+            print(f"\n[i] --fail-on={args.fail_on} not evaluated: no baseline to compare against "
+                  "(expected on the default branch; on a PR it means the base branch couldn't be scanned).",
+                  file=sys.stderr)
+            return False
+        from reporter.cost_estimator import finding_key, baseline_finding_keys
+        base_keys = baseline_finding_keys(baseline)
+        new = [r for r in results if finding_key(r) not in base_keys]
+        if args.fail_on == 'new_high_critical':
+            new = [r for r in new if r.get('severity', '').lower() in ('critical', 'high')]
+        elif args.fail_on == 'new_critical':
+            new = [r for r in new if r.get('severity', '').lower() == 'critical']
+        if new:
+            print(f"\n[ERROR] Build failed: {len(new)} new finding(s) not in the baseline and --fail-on={args.fail_on} specified.",
+                  file=sys.stderr)
+            return True
+        return False
+
     if args.fail_on == 'any' and len(results) > 0:
         print("\n[ERROR] Build failed: Findings detected and --fail-on=any specified.", file=sys.stderr)
         return True
@@ -688,7 +713,7 @@ def main():
             send_slack_notification(" | ".join(lines))
 
         # Determine Exit Code
-        if should_fail(args, report_dict, results):
+        if should_fail(args, report_dict, results, baseline_dict):
             sys.exit(1)
             
         sys.exit(0)

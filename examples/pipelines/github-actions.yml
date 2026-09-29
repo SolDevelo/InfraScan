@@ -3,7 +3,8 @@
 #
 # This workflow runs a comprehensive scan on every push and pull request.
 # It is set to 'Monitoring Mode' (won't fail the build).
-# To enable 'Enforcement Mode', add fail-on: high_critical to the action inputs.
+# To enable 'Enforcement Mode', add fail-on: new_high_critical to the action inputs
+# (fails only on high/critical findings the PR adds).
 #
 # Features:
 # - Step summary: full results in workflow run's Summary tab (automatic)
@@ -37,7 +38,7 @@ jobs:
           format: html
           out: infrascan-report.html
           # Uncomment to enable Enforcement Mode:
-          # fail-on: high_critical
+          # fail-on: new_high_critical
             
       - name: Upload InfraScan Report
         uses: actions/upload-artifact@v4

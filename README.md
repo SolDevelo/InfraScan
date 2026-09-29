@@ -46,7 +46,7 @@ jobs:
           scanner: comprehensive
           format: html
           out: infrascan-report.html
-          fail-on: high_critical
+          fail-on: new_high_critical
 
       - name: Upload HTML Report
         uses: actions/upload-artifact@v4
@@ -149,7 +149,7 @@ infrascan --no-update
 - `-f`, `--include`: Select specific files or directories to scan. Can be used multiple times (e.g., `-f dir1 -f file2.tf`). This is useful in large repositories to avoid scanning redundant or test deployments.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--traffic-profile`: `auto`, `small`, `medium`, `large` (default: `auto`). Controls usage-based cost assumptions for NAT transfer, CloudWatch log ingestion, Lambda invocations, S3 storage, and API calls. `auto` detects the profile from infra size (EC2/NAT/Lambda/RDS counts). Profiles are defined in `reporter/traffic_profiles.json` and can be edited without code changes.
-- `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
+- `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria. `new_any` / `new_high_critical` / `new_critical` count only findings not in `--baseline` (in CI: added by the PR) and are skipped without one. Default: `never`.
 - `--no-update`: Does not update to the latest InfraScan version (does not pull the latest image)
 
 #### Selective Scanning (Partial Scans)

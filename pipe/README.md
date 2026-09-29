@@ -80,7 +80,7 @@ for the full copy-pasteable version with comments.
 | CONTAINER_IGNORE_IMAGES | Regex of images to skip, e.g. `-SNAPSHOT$` — see "Container scanning" below | _(none)_ |
 | GRYPE_DB_CACHE | Directory / cache name for Grype's DB — used only if you declared that cache | `infrascan-grype-db` |
 | MAX_ANNOTATIONS_PER_IMAGE | Maximum Code Insights annotations per container image, sorted by severity (`0` = no cap) — one noisy image's CVE list can't drown out other findings; doesn't affect grading/PR comment/report | `10` |
-| FAIL_ON | (optional) Exit-code-1 threshold | _(none)_ |
+| FAIL_ON | Exit-code-1 threshold. `new_high_critical` fails only on high/critical findings the PR adds | `never` |
 | BASELINE | Path read for cost/finding delta, if present. Missing file = "no baseline", safe by default | `infrascan-baseline/infrascan-baseline.json` |
 | BASELINE_OUT | Path this scan's result is written to as JSON — but only when this run is a push to `DEFAULT_BRANCH` that isn't a PR, auto-detected (see below) | `infrascan-baseline/infrascan-baseline.json` |
 | DEFAULT_BRANCH | Branch whose runs refresh the shared baseline | `main` |

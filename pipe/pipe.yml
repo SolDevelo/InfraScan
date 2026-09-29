@@ -82,8 +82,8 @@ variables:
     default: "10"
     description: Maximum Code Insights annotations per container image, sorted by severity ("0" = no cap). Keeps one noisy image's CVE list from drowning out every other finding; doesn't affect grading, the PR comment, or the report.
   - name: FAIL_ON
-    default: ""
-    description: "Optional exit-code-1 threshold: any, high_critical, grade_a-grade_f, priority_critical-priority_info."
+    default: never
+    description: "Exit-code-1 threshold: never (default), new_high_critical, new_critical, new_any (only findings the PR adds; skipped on the default branch), any, high_critical, grade_a-grade_f, priority_critical-priority_info."
   - name: BASELINE
     default: infrascan-baseline/infrascan-baseline.json
     description: Path (relative to the repository root) read for cost/finding delta, if present. Missing file is treated as "no baseline" -- safe by default, no setup required beyond declaring the cache (see docs/BITBUCKET_PIPELINE.md).

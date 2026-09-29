@@ -30,9 +30,9 @@ inputs:
     required: false
     default: 'false'
   fail-on:
-    description: 'Fail threshold (e.g., high_critical, any, grade_c)'
+    description: 'Fail threshold: never (default), new_high_critical, new_critical, new_any (only findings the PR adds), high_critical, any, grade_a-grade_f, priority_critical-priority_info'
     required: false
-    default: ''
+    default: 'never'
   slack-webhook-url:
     description: 'Slack Incoming Webhook URL for scan notifications (optional)'
     required: false

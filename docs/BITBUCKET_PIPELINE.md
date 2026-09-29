@@ -105,7 +105,7 @@ these (see [pipe/README.md](../pipe/README.md)):
 | `--format` | `text` | `text`, `json`, or `html` |
 | `--out` | _(none)_ | Output file path |
 | `--framework` | `smart` | `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible`, `all` |
-| `--fail-on` | _(off)_ | Exit-code-1 threshold: `any`, `high_critical`, `grade_a`–`grade_f`, `priority_critical`–`priority_info` |
+| `--fail-on` | `never` | Exit-code-1 threshold: `never` (default), `any`, `high_critical`, `grade_a`–`grade_f`, `priority_critical`–`priority_info`, `new_any`, `new_high_critical`, `new_critical`. `new_*` count only findings not in the baseline (i.e. added by the PR) and are skipped when there's none, e.g. on the default branch |
 | `--pr-comment` | `true` | Post/update a PR comment |
 | `--step-summary` | `true` | On Bitbucket this controls the Code Insights report (there's no literal "step summary" file) |
 | `--alert-on` | `any_new` | Severity threshold for PR comments and annotations: `critical`, `high`, `medium`, `low`, `any_new`, or `none` |

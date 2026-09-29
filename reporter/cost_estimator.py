@@ -2795,6 +2795,20 @@ def format_ci_summary_md(
     return "\n".join(lines)
 
 
+def finding_key(f: dict) -> tuple:
+    """Identity of a finding across scans: rule + file (not line -- lines move)."""
+    return (f.get("rule_id") or f.get("check_id", ""), f.get("file", ""))
+
+
+def baseline_finding_keys(baseline: dict) -> set:
+    """finding_key() of every finding in a baseline report."""
+    bf = (baseline or {}).get("findings", {})
+    return {
+        finding_key(f)
+        for f in list(bf.get("security", [])) + list(bf.get("container", [])) + list(bf.get("cost", []))
+    }
+
+
 def format_pr_comment_md(
     report_dict: dict,
     baseline: Optional[dict] = None,
@@ -2884,18 +2898,7 @@ def format_pr_comment_md(
     cost_delta_pct = round(cost_delta / base_cost * 100, 1) if base_cost else 0.0
 
     # Delta-aware new finding detection
-    baseline_findings: List[dict] = []
-    if baseline:
-        bf = baseline.get("findings", {})
-        baseline_findings = (
-            list(bf.get("security", [])) +
-            list(bf.get("container", [])) +
-            list(bf.get("cost", []))
-        )
-    base_keys = {
-        (f.get("rule_id") or f.get("check_id", ""), f.get("file", ""))
-        for f in baseline_findings
-    }
+    base_keys = baseline_finding_keys(baseline)
 
     # Filter to new findings in alert severity range (IaC + Container)
     new_findings = []
@@ -2905,8 +2908,7 @@ def format_pr_comment_md(
         sev = f.get("severity", "").lower()
         if sev not in alert_sevs:
             continue
-        fkey = (f.get("rule_id") or f.get("check_id",""), f.get("file",""))
-        if baseline and fkey in base_keys:
+        if baseline and finding_key(f) in base_keys:
             continue
         new_findings.append(f)
     
@@ -2915,8 +2917,7 @@ def format_pr_comment_md(
         sev = f.get("severity", "").lower()
         if sev not in alert_sevs:
             continue
-        fkey = (f.get("rule_id") or f.get("check_id",""), f.get("file",""))
-        if baseline and fkey in base_keys:
+        if baseline and finding_key(f) in base_keys:
             continue
         new_findings.append(f)
 

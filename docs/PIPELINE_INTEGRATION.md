@@ -29,6 +29,7 @@ infrascan --scanner comprehensive --format html --out infrascan-report.html
 In this mode, you define a "quality gate". If the scan results are worse than your threshold, the pipeline will **fail (exit code 1)**, preventing the deployment of problematic infrastructure.
 
 **Common Thresholds:**
+*   `--fail-on new_high_critical`: Stop a PR only for High or Critical findings it adds — existing findings don't block anyone. Needs a baseline (automatic in the GitHub Action and the Bitbucket pipe); without one it's skipped.
 *   `--fail-on high_critical`: Stop the build only for High or Critical security vulnerabilities.
 *   `--fail-on grade_c`: Fail if the overall grade is C or worse (allows only A and B).
 *   `--fail-on priority_medium`: Fail if any Medium, High, or Critical issues are detected.
@@ -101,7 +102,7 @@ jobs:
           scanner: comprehensive
           format: html
           out: infrascan-report.html
-          # Optional: fail-on: high_critical
+          # Optional: fail-on: new_high_critical
       
       - uses: actions/upload-artifact@v4
         if: always()

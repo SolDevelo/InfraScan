@@ -84,7 +84,7 @@ definitions:
               OUT: infrascan-report.html
               ALERT_ON: any_new
               DEFAULT_BRANCH: main
-              # Optional: FAIL_ON: high_critical
+              # Optional: FAIL_ON: new_high_critical
               # Optional: MIN_COST_DELTA: "5"
               # Optional: MAX_PR_FINDINGS: "10"
               # Optional: MAX_ANNOTATIONS_PER_IMAGE: "10"
