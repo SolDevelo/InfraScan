@@ -69,6 +69,8 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `docker-hub-username` / `docker-hub-password` | _(none)_ | Docker Hub login (pass the password/token as a secret). With it, container images are scanned with Docker Scout (fewer false positives); without it, Grype |
 | _(automatic)_ | | Grype's vulnerability DB is cached per day with `actions/cache` (~2.5 min download otherwise): the first run of the day downloads it, later runs that day reuse it. Nothing to configure |
 | `container-ignore-images` | _(none)_ | Regex of container images to skip, e.g. `-SNAPSHOT$` for images this repo builds itself and only publishes after merge |
+| `container-scan-timeout` | `300` | Per-image scan timeout in seconds (pull + analysis). Raise it for very large images; a timed-out image is reported as not scanned |
+| `container-env-files` | `.env,.env.example,.env.sample` | Env files for `${VAR}` in compose image names, highest priority first. Bare names are looked for next to each compose file and in parent directories; a path with `/` is relative to the scanned `directory` |
 | `download-external-modules` | `false` | Allow Checkov to download external Terraform modules |
 
 ## Outputs

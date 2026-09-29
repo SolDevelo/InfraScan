@@ -290,9 +290,15 @@ their registries by the pipe itself.
 
 - **Variables in image names** (`prom/prometheus:${PROMETHEUS_VERSION}`)
   are expanded like docker compose does — from the environment and a `.env`
-  — with the committed `.env.example` as a fallback, since `.env` is rarely
-  in the repo. Looked for next to the compose file and in parent directories.
-  An image whose variable can't be resolved is reported as not scanned.
+  — with the committed `.env.example` / `.env.sample` as fallbacks, since
+  `.env` is rarely in the repo. Looked for next to the compose file and in
+  parent directories; use `CONTAINER_ENV_FILES` for other names or a fixed
+  path (e.g. `deploy/versions.env`). An image whose variable can't be
+  resolved is reported as not scanned.
+- **Large images**: each image gets `CONTAINER_SCAN_TIMEOUT` seconds
+  (default 300) for pull and analysis — analysis dominates for images with
+  big binaries (e.g. Grafana: ~40 s pull, ~3 min analysis). A timed-out
+  image is reported as not scanned.
 - **Scanner**: Docker Scout when `DOCKER_HUB_USERNAME` and
   `DOCKER_HUB_PASSWORD` (a password or access token, as a secured variable)
   are set — it produces fewer false positives — and Grype otherwise, since

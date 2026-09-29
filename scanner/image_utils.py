@@ -83,8 +83,42 @@ def _image_line_loader():
     _Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
     return _Loader, image_lines
 
-_ENV_FILES = ('.env', '.env.example')
+DEFAULT_IMAGE_SCAN_TIMEOUT = 300
+DEFAULT_ENV_FILES = ('.env', '.env.example', '.env.sample')
 _env_file_cache: Dict[str, Dict[str, str]] = {}
+
+
+def image_scan_timeout() -> int:
+    """Per-image scan timeout in seconds: CONTAINER_SCAN_TIMEOUT, default 300.
+
+    Covers the pull *and* the analysis -- the latter dominates for large
+    images (e.g. grafana/grafana: ~40s pull, ~3 min in syft's binary
+    cataloger), so a tight limit throws away work that was nearly done.
+    """
+    raw = os.getenv('CONTAINER_SCAN_TIMEOUT', '').strip()
+    if not raw:
+        return DEFAULT_IMAGE_SCAN_TIMEOUT
+    try:
+        value = int(raw)
+        if value > 0:
+            return value
+    except ValueError:
+        pass
+    print(f"[warn] Ignoring CONTAINER_SCAN_TIMEOUT={raw!r}: not a positive number of seconds "
+          f"-- using {DEFAULT_IMAGE_SCAN_TIMEOUT}")
+    return DEFAULT_IMAGE_SCAN_TIMEOUT
+
+
+def compose_env_files() -> List[str]:
+    """Env files used to expand compose image variables, highest priority
+    first: CONTAINER_ENV_FILES (comma-separated), default .env,.env.example,
+    .env.sample. A bare name is looked for next to each compose file and in
+    its parent directories; an entry with a '/' is a path relative to the
+    scanned directory, used for every compose file."""
+    raw = os.getenv('CONTAINER_ENV_FILES', '').strip()
+    if not raw:
+        return list(DEFAULT_ENV_FILES)
+    return [e.strip() for e in raw.split(',') if e.strip()]
 
 
 def _read_env_file(path: str) -> Dict[str, str]:
@@ -121,11 +155,12 @@ def compose_variables(compose_file: str, root: Optional[str] = None) -> tuple:
     """Variables `docker compose` would interpolate into *compose_file*.
 
     Compose reads the environment plus the project's .env. In a checkout .env
-    is usually absent (it's gitignored), but .env.example -- the committed
-    template, typically holding the pinned image versions -- is there, so it
-    is used as the lowest-priority fallback. Files are looked for from the
-    compose file's directory up to *root*; nearer files win, and the
-    environment beats both. Returns (variables, [env files used]).
+    is usually absent (it's gitignored), but .env.example / .env.sample --
+    the committed template, typically holding the pinned image versions --
+    is there, so those are lower-priority fallbacks (see compose_env_files()).
+    Bare names are looked for from the compose file's directory up to
+    *root*, nearer files winning; the environment beats every file.
+    Returns (variables, [env files used]).
 
     These values are only ever used to expand image names -- never exported
     -- so a placeholder like SLACK_WEBHOOK_URL in .env.example has no effect.
@@ -141,11 +176,14 @@ def compose_variables(compose_file: str, root: Optional[str] = None) -> tuple:
         directory = os.path.dirname(directory)
     variables: Dict[str, str] = {}
     used: List[str] = []
-    # Lowest priority first: .env.example farthest -> nearest, then .env
-    # farthest -> nearest, then the environment on top.
-    for name in reversed(_ENV_FILES):
-        for d in reversed(chain):
-            path = os.path.join(d, name)
+    # Lowest priority first: the last listed file (farthest directory first,
+    # then nearer), up to the first listed, then the environment on top.
+    for name in reversed(compose_env_files()):
+        if '/' in name:
+            candidates = [name if os.path.isabs(name) else os.path.join(root, name)]
+        else:
+            candidates = [os.path.join(d, name) for d in reversed(chain)]
+        for path in candidates:
             if os.path.isfile(path):
                 values = _read_env_file(path)
                 if values:
@@ -201,8 +239,9 @@ def unresolved_image_reason(image: str) -> Optional[str]:
     if not names:
         return None
     listed = ', '.join('${%s}' % n for n in names)
-    return (f"unresolved {listed} -- set it in the environment, or in a .env / .env.example "
-            f"next to the compose file or in a parent directory")
+    return (f"unresolved {listed} -- set it in the environment or in one of "
+            f"{', '.join(compose_env_files())} next to the compose file or in a parent "
+            f"directory (CONTAINER_ENV_FILES)")
 
 
 def extract_images_from_compose(compose_file: str, root: Optional[str] = None) -> List[tuple]:

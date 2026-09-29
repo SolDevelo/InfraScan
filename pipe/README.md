@@ -78,6 +78,8 @@ for the full copy-pasteable version with comments.
 | DOCKER_HUB_USERNAME / DOCKER_HUB_PASSWORD | Docker Hub login (password or access token, as a secured variable). With it, container images are scanned with Docker Scout (fewer false positives); without it, Grype | _(none)_ |
 | CONTAINER_SCANNER | Force `grype` or `docker-scout`. Default: Scout when Docker Hub credentials are set, Grype otherwise | _(auto)_ |
 | CONTAINER_IGNORE_IMAGES | Regex of images to skip, e.g. `-SNAPSHOT$` — see "Container scanning" below | _(none)_ |
+| CONTAINER_SCAN_TIMEOUT | Per-image scan timeout in seconds (pull + analysis) | `300` |
+| CONTAINER_ENV_FILES | Env files for `${VAR}` in compose image names, highest priority first | `.env,.env.example,.env.sample` |
 | GRYPE_DB_CACHE | Directory / cache name for Grype's DB — used only if you declared that cache | `infrascan-grype-db` |
 | MAX_ANNOTATIONS_PER_IMAGE | Maximum Code Insights annotations per container image, sorted by severity (`0` = no cap) — one noisy image's CVE list can't drown out other findings; doesn't affect grading/PR comment/report | `10` |
 | FAIL_ON | Exit-code-1 threshold. `new_high_critical` fails only on high/critical findings the PR adds | `never` |
@@ -176,7 +178,8 @@ their registries by the pipe itself:
   are set, Grype otherwise.
 - **Variables in image names** (`${PROMETHEUS_VERSION}`) are expanded like
   docker compose does, from the environment, `.env`, or the committed
-  `.env.example` next to the compose file or in a parent directory.
+  `.env.example` / `.env.sample` next to the compose file or in a parent
+  directory. Other files: `CONTAINER_ENV_FILES`.
 - **Images that can't be pulled** (private registry unreachable from
   Bitbucket's runners, no credentials, tag doesn't exist) are listed in the
   build log, the PR comment and the Code Insights report — they are never

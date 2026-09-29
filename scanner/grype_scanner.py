@@ -24,9 +24,9 @@ from scanner.image_utils import (
     drop_ignored_images,
     image_registry,
     unresolved_image_reason,
+    image_scan_timeout,
 )
 
-IMAGE_SCAN_TIMEOUT = 240
 
 # Substrings of a failed scan's error that mean the *registry* is the
 # problem, not the one image -- the next image from it would fail the same
@@ -266,20 +266,19 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
     # No --quiet: with it grype prints nothing at all on a failed pull, so
     # there'd be no reason to report. stdout stays pure JSON either way.
     cmd = ["grype", image, "-o", "json"]
+    timeout = image_scan_timeout()
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            # 4 minutes: this covers grype's own image pull (not just DB
-            # lookup/matching) for images not already present locally --
-            # 120s was tight enough that large private-registry images
-            # (multi-GB Java app images, observed directly in a real CI
-            # pipeline) could time out on pull alone even with a warm DB.
-            timeout=IMAGE_SCAN_TIMEOUT
+            # Covers grype's image pull and analysis, not just DB matching
+            # -- see image_scan_timeout() for why the default is generous.
+            timeout=timeout
         )
     except subprocess.TimeoutExpired:
-        return [], f"timed out after {IMAGE_SCAN_TIMEOUT}s pulling/scanning the image"
+        return [], (f"timed out after {timeout}s pulling/scanning the image "
+                    f"(raise CONTAINER_SCAN_TIMEOUT for large images)")
 
     if result.returncode != 0 or not result.stdout.strip():
         return [], _failure_reason(result)

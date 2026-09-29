@@ -27,6 +27,7 @@ from scanner.image_utils import (
     filter_container_files,
     drop_ignored_images,
     unresolved_image_reason,
+    image_scan_timeout,
 )
 
 # ============================================================================
@@ -484,7 +485,7 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
             cmd,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=image_scan_timeout()
         )
         
         # 1. Detect Docker Hub login requirement specifically

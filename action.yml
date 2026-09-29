@@ -49,6 +49,14 @@ inputs:
     description: 'Regex of container images to skip, e.g. images this repo builds itself that are only published after merge'
     required: false
     default: ''
+  container-scan-timeout:
+    description: 'Per-image container scan timeout in seconds, pull and analysis (default 300)'
+    required: false
+    default: ''
+  container-env-files:
+    description: 'Comma-separated env files for expanding ${VAR} in compose image names, highest priority first (default .env,.env.example,.env.sample; a path with / is relative to the scanned directory)'
+    required: false
+    default: ''
   github-token:
     description: 'GitHub token for PR comments and annotations (defaults to the built-in token)'
     required: false
@@ -184,6 +192,12 @@ runs:
         if [ -n "${{ inputs.container-ignore-images }}" ]; then
           CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
         fi
+        if [ -n "${{ inputs.container-scan-timeout }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_SCAN_TIMEOUT="${{ inputs.container-scan-timeout }}")
+        fi
+        if [ -n "${{ inputs.container-env-files }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_ENV_FILES="${{ inputs.container-env-files }}")
+        fi
         # Shared Grype DB (see "Grype DB cache" above). The scan containers
         # run as other users than the runner and write the DB owner-only, so
         # open it up from a root container -- a host chmod can't touch files
@@ -227,6 +241,12 @@ runs:
         fi
         if [ -n "${{ inputs.container-ignore-images }}" ]; then
           CONTAINER_ENV+=(-e CONTAINER_IGNORE_IMAGES="${{ inputs.container-ignore-images }}")
+        fi
+        if [ -n "${{ inputs.container-scan-timeout }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_SCAN_TIMEOUT="${{ inputs.container-scan-timeout }}")
+        fi
+        if [ -n "${{ inputs.container-env-files }}" ]; then
+          CONTAINER_ENV+=(-e CONTAINER_ENV_FILES="${{ inputs.container-env-files }}")
         fi
         mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \

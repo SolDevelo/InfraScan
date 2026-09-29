@@ -295,13 +295,14 @@ infrascan --framework ansible -f playbooks/ -f roles/
 
 InfraScan supports advanced container scanning features:
 - **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
-- **Environment Variables**: You can use variables in your `docker-compose.yml` image names (e.g., `image: ${REGISTRY}/my-app:${TAG}`), with docker compose's syntax (`$VAR`, `${VAR}`, `${VAR:-default}`, `${VAR-default}`). Like compose, InfraScan reads them from the environment and from a `.env` file — and, since `.env` is usually gitignored, falls back to the committed `.env.example` — next to the compose file or in a parent directory up to the scanned directory. They're used only to expand image names, never exported. An image with a variable that can't be resolved is reported as not scanned, naming the variable.
+- **Environment Variables**: You can use variables in your `docker-compose.yml` image names (e.g., `image: ${REGISTRY}/my-app:${TAG}`), with docker compose's syntax (`$VAR`, `${VAR}`, `${VAR:-default}`, `${VAR-default}`). Like compose, InfraScan reads them from the environment and from a `.env` file — and, since `.env` is usually gitignored, falls back to the committed `.env.example` and `.env.sample` — next to the compose file or in a parent directory up to the scanned directory. `CONTAINER_ENV_FILES` (comma-separated, highest priority first) changes the list; an entry with a `/` is a fixed path relative to the scanned directory. They're used only to expand image names, never exported. An image with a variable that can't be resolved is reported as not scanned, naming the variable.
 - **Private Registries**:
   - **Docker Hub**: Set `DOCKER_HUB_USERNAME` and `DOCKER_HUB_PASSWORD` in your environment or `.env` file for automatic authentication.
   - **Amazon ECR**: InfraScan automatically detects ECR images and attempts authentication using `aws ecr get-login-password`. This requires the AWS CLI to be installed and configured with appropriate credentials in the environment.
   - **Scanner choice**: Docker Scout (fewer false positives) is used when Docker Hub credentials are available; otherwise InfraScan uses **Grype** directly, since Scout requires a Docker login. Force one with `CONTAINER_SCANNER=grype` or `CONTAINER_SCANNER=docker-scout`.
   - **Other Registries**: Pre-authenticate manually using `docker login` before running InfraScan, and it will use your existing local Docker credentials.
 - **Unscannable images are reported, not hidden**: an image that can't be pulled (unreachable registry, missing credentials, nonexistent tag) is listed with its reason in the console output, PR comment and CI report, rather than counted as clean.
+- **Large images**: `CONTAINER_SCAN_TIMEOUT` (seconds, default 300) limits pull + analysis per image; a timed-out image is reported as not scanned.
 - **Skipping images**: `CONTAINER_IGNORE_IMAGES` takes a regex of image references to skip — e.g. `-SNAPSHOT$` for images a repo builds itself and only publishes after merge.
 
 
