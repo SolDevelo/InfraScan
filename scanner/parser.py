@@ -361,7 +361,8 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         included_paths: Optional list of specific files or directories to scan
         scan_info: Optional dict filled with container-scan coverage --
             'unscanned_images' (list of {image, file, reason}) and
-            'container_images_total'. Kept out of the return tuple so
+            'container_images_total', plus 'container_images_scanned' (the
+            container grade's denominator) and 'cost_files_scanned'. Kept out of the return tuple so
             existing callers don't change.
     
     Returns:
@@ -459,6 +460,9 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                         full_path = os.path.join(root, file)
                         all_files.append(full_path)
 
+        if scan_info is not None:
+            scan_info['cost_files_scanned'] = len(all_files)
+
         def _is_cost_eligible_dir(dir_path: str) -> bool:
             """True when a directory should participate in COST-* scanning.
 
@@ -531,6 +535,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             if scan_info is not None:
                 scan_info['unscanned_images'] = result.unscanned_images
                 scan_info['container_images_total'] = result.images_total
+                scan_info['container_images_scanned'] = result.images_scanned
 
         # Scout gives fewer false positives, but needs a Docker Hub login
         # even on a free account -- without one every image fails auth, so
@@ -568,6 +573,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
                     else:
                         results.extend(scout_result.findings)
                         extra_recommendations.extend(scout_result.extra_recommendations)
+                        _record_coverage(scout_result)
                 except Exception as e:
                     print(f"Warning: Docker Scout scan failed: {e}")
             elif GRYPE_SCANNER.is_available():

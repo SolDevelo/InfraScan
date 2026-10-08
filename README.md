@@ -397,9 +397,19 @@ InfraScan provides four separate grades:
 - Max Score = resource_count × 4
 - Percentage calculation same as cost
 
+*Container Security Grade:*
+- Only the most severe finding per image is scored
+- Max Score = number of scanned images (clean ones included) × 4
+- Lower weights for Medium/Low, since nearly every image carries some (often unfixable) CVEs: Critical 4, High 3, Medium 0.5, Low 0.1, Info 0
+- Worst finding Medium on every image ≈ B, Low only ≈ A; High/Critical still pull the grade down hard
+- CVEs with no fix available are graded one level lower (Critical as High, High as Medium, ...); the report and `--fail-on` keep their real severity
+
 *Severity Caps:*
 - Critical findings cap grade at **C** (prevents misleading high grades)
 - High findings cap grade at **B**
+- Caps apply to each category and to the overall grade; the report says when a cap lowered a grade
+
+*Not applicable categories:* a category with nothing to check (no Terraform for cost, no IaC resources, no container images) is shown as N/A and left out of the overall grade instead of counting as a free A.
 
 The system is designed to be extensible for future enhancements like historical tracking and custom scoring rules.
 

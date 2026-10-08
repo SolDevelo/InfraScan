@@ -16,6 +16,9 @@ class ScanResult:
     # a failed pull otherwise looks exactly like a clean image.
     unscanned_images: List[Dict[str, str]] = field(default_factory=list)
     images_total: int = 0
+    # How many images were actually scanned (clean ones included) -- the
+    # container grade's denominator. None when the scanner doesn't track it.
+    images_scanned: Optional[int] = None
 
 
 class Scanner(ABC):

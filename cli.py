@@ -291,6 +291,8 @@ def print_text_report(report_dict, resource_count, scanner_type):
         ]
         br_str = f" [{' | '.join(counts)}]"
         print(f"{name:18}: {color}{Style.BRIGHT}{letter}{Style.RESET_ALL} ({percentage}%){br_str}")
+        if grade.get('cap_reason'):
+            print(f"{'':18}  {Style.DIM}{grade['cap_reason']}{Style.RESET_ALL}")
 
     print_grade_line("Overall Health", overall)
     
@@ -531,6 +533,8 @@ def main():
             extra_recommendations=recommendations,
             scan_path=target_path,
             traffic_profile=getattr(args, 'traffic_profile', 'auto'),
+            container_image_count=scan_info.get('container_images_scanned'),
+            cost_file_count=scan_info.get('cost_files_scanned'),
         )
         
         report_dict = report.to_dict()

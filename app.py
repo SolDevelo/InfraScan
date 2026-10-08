@@ -492,7 +492,9 @@ def scan_github():
             raise clone_error
         
         # Scan directory and get results with resource count
-        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
+        scan_info = {}
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart',
+                                                                  scan_info=scan_info)
         
         # Generate comprehensive report with grades
         report_generator = ReportGenerator()
@@ -501,7 +503,9 @@ def scan_github():
             resource_count=resource_count,
             scanner_type=scanner_type,
             extra_recommendations=recommendations,
-            scan_path=temp_dir
+            scan_path=temp_dir,
+            container_image_count=scan_info.get('container_images_scanned'),
+            cost_file_count=scan_info.get('cost_files_scanned'),
         )
         
         # Extract repository name from URL for display
@@ -618,14 +622,18 @@ def scan_repository(repo_url, branch='main', scanner_type='comprehensive', is_pr
         raise RuntimeError(f"Unable to clone repository: {e}")
 
     try:
-        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart')
+        scan_info = {}
+        results, resource_count, recommendations = scan_directory(temp_dir, scanner_type=scanner_type, framework='smart',
+                                                                  scan_info=scan_info)
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
             findings=results,
             resource_count=resource_count,
             scanner_type=scanner_type,
             extra_recommendations=recommendations,
-            scan_path=temp_dir
+            scan_path=temp_dir,
+            container_image_count=scan_info.get('container_images_scanned'),
+            cost_file_count=scan_info.get('cost_files_scanned'),
         )
 
         repo_name = repo_url.rstrip('/').split('/')[-1] if '/' in repo_url else repo_url

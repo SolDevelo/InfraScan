@@ -381,6 +381,7 @@ class DockerScoutScanner(Scanner):
         # referencing (file, line) pairs go on `also_in_files` instead,
         # purely for CI adapters that want a per-file marker (e.g.
         # Bitbucket annotations) without inflating the finding count.
+        images_scanned = 0
         for image, source_refs in all_images_map.items():
             compose_file, primary_line = source_refs[0]
             unresolved = unresolved_image_reason(image)
@@ -416,6 +417,7 @@ class DockerScoutScanner(Scanner):
                     # caller fall back to Grype instead of retrying N times.
                     auth_failed = True
                     break
+                images_scanned += 1
 
                 if image_findings:
                     print(f"  Found {len(image_findings)} vulnerabilities in {image}")
@@ -444,7 +446,8 @@ class DockerScoutScanner(Scanner):
                 except Exception as e:
                     print(f"Warning: Failed to cleanup image {image}: {e}")
 
-        return ScanResult(findings=findings, extra_recommendations=extra_recommendations, auth_failed=auth_failed)
+        return ScanResult(findings=findings, extra_recommendations=extra_recommendations,
+                          auth_failed=auth_failed, images_scanned=images_scanned)
 
 
 def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> Tuple[List[Dict[str, Any]], bool]:

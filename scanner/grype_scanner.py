@@ -199,7 +199,8 @@ class GrypeScanner(Scanner):
             print(f"[warn] Grype scanned {total - len(unscanned)} of {total} image(s); "
                   f"{len(unscanned)} could not be scanned -- their vulnerabilities are NOT in this report.")
 
-        return ScanResult(findings=findings, unscanned_images=unscanned, images_total=total)
+        return ScanResult(findings=findings, unscanned_images=unscanned, images_total=total,
+                          images_scanned=total - len(unscanned))
 
 
 def ensure_db_ready(timeout: int = 300) -> None:
@@ -374,6 +375,24 @@ def severity_to_number(severity: str) -> int:
     return severity_map.get(severity, 0)
 
 
+def _version_key(version: str) -> Tuple[int, ...]:
+    return tuple(int(n) for n in re.findall(r'\d+', version))
+
+
+def _pick_fix_version(installed: str, fix_versions: List[str]) -> str:
+    """Lowest fix version above the installed one.
+
+    Grype lists one fix per release line (e.g. Go stdlib: 1.25.13, 1.26.6,
+    1.27.0-rc.3), so taking the first would tell a go1.26.5 binary to
+    "update" to 1.25.13. Pre-releases only when nothing stable fits.
+    """
+    current = _version_key(installed)
+    newer = [v for v in fix_versions if _version_key(v) > current]
+    stable = [v for v in newer if not re.search(r'(?i)(rc|alpha|beta|pre)', v)]
+    candidates = stable or newer
+    return min(candidates, key=_version_key) if candidates else fix_versions[0]
+
+
 def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], image: str, compose_file: str, base_path: str, count: int = 1, line: int = 0) -> Dict[str, Any]:
     """
     Normalize a Grype vulnerability finding to match our internal format.
@@ -402,7 +421,7 @@ def normalize_grype_finding(vuln: Dict[str, Any], artifact: Dict[str, Any], imag
     # Get fix version if available
     fix_versions = vuln.get('fix', {}).get('versions', [])
     fix_available = 'Yes' if fix_versions else 'No'
-    fix_version = fix_versions[0] if fix_versions else 'N/A'
+    fix_version = _pick_fix_version(package_version, fix_versions) if fix_versions else 'N/A'
     
     # URLs
     urls = vuln.get('urls', [])

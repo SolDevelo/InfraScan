@@ -2651,6 +2651,8 @@ def format_ci_summary_md(
         if bd.get("high"):     parts.append(f"{bd['high']} high")
         if bd.get("medium"):   parts.append(f"{bd['medium']} medium")
         detail = ", ".join(parts) if parts else "clean"
+        if g.get("cap_reason"):
+            detail += f" · _{g['cap_reason']}_"
         grade_rows.append(f"| {name} | **{letter}** ({pct}%) | {detail} |")
 
     _grade_row("Overall",   overall)

@@ -21,23 +21,30 @@ IaC Security Grade:
 Container Security Grade:
   - Aggregated by container image - only worst severity per image is scored
   - Groups by 'image' field rather than 'file' for accurate per-container assessment
-  - Severity breakdown shows count of images at each severity level (not total vulnerabilities)
-  - Max Score = image_count × max_severity_weight
-  - Example: 3 images with 2 Critical and 1 Medium = 2×4 + 1×2 = 10 score, max = 3×4 = 12
+  - Uses CONTAINER_SEVERITY_WEIGHTS: Medium/Low weigh far less than for IaC, since
+    nearly every real image carries some Medium/Low CVEs (often with no fix available)
+  - CVEs with no fix available are graded one severity level lower (Critical as High,
+    High as Medium, ...) -- the report and --fail-on keep their real severity
+  - Severity breakdown shows total vulnerability counts (matches the findings table)
+  - Max Score = scanned_image_count × max_severity_weight (clean images included)
+  - Example: 3 images with 2 Critical and 1 Medium = 2×4 + 1×0.5 = 8.5 score, max = 3×4 = 12
   - Percentage calculation same as IaC security
   - Letter Grade = Based on percentage thresholds
 
 Severity Weights:
   - Critical: 4, High: 3, Medium: 2, Low: 1, Info: 0.5
+  - Containers: Critical: 4, High: 3, Medium: 0.5, Low: 0.1, Info: 0
 
 Severity Caps:
   - Critical findings cap grade at C
   - High findings cap grade at B
+  - Applied per category and to the overall grade; GradeInfo.cap_reason says when one kicked in
   - Ensures realistic grades even with high violation counts
 
 Overall Grade:
   - Weighted average: ~33% Cost + ~33% IaC Security + ~33% Container Security (when all scanners used)
-  - Falls back to present scanners when not all are used
+  - Categories with nothing to check (no Terraform for cost, no IaC resources, no images)
+    are not applicable: graded None and left out of the overall grade
 """
 
 from typing import List, Dict, Any, Optional
@@ -51,9 +58,47 @@ SEVERITY_WEIGHTS = {
     'info': 0.5,
 }
 
+# Container images almost always carry some Medium/Low CVEs (base-distro and
+# language-runtime packages, often without an upstream fix), so weighing them
+# like IaC misconfigurations made a B unreachable for any real stack. Critical
+# and High keep full weight; with these, an image whose worst finding is Medium
+# still lands around B, and Low-only images around A.
+CONTAINER_SEVERITY_WEIGHTS = {
+    'critical': 4,
+    'high': 3,
+    'medium': 0.5,
+    'low': 0.1,
+    'info': 0,
+}
+
 def normalize_severity(severity: str) -> str:
     """Normalize severity to lowercase."""
     return str(severity).lower() if severity else 'medium'
+
+SEVERITY_ONE_LEVEL_DOWN = {
+    'critical': 'high',
+    'high': 'medium',
+    'medium': 'low',
+    'low': 'info',
+    'info': 'info',
+}
+
+def container_grading_view(finding: Dict[str, Any]) -> Dict[str, Any]:
+    """The finding as the container grade sees it: one severity level lower
+    when no fix is available.
+
+    Nothing the user can upgrade to shouldn't weigh like something they can,
+    but it still counts -- an image full of unfixable Criticals is often an
+    abandoned or EOL base image worth replacing. Findings without a
+    'fix_version' key (fix status unknown) are left alone.
+    """
+    if 'fix_version' not in finding:
+        return finding
+    fix = str(finding.get('fix_version') or '').strip()
+    if fix and fix not in ('N/A', 'None', 'null'):
+        return finding
+    sev = normalize_severity(finding.get('severity'))
+    return {**finding, 'severity': SEVERITY_ONE_LEVEL_DOWN.get(sev, sev)}
 
 GRADE_THRESHOLDS = {
     'A': 95,
@@ -89,6 +134,8 @@ class GradeInfo:
     risk_level: str
     violations: int
     severity_breakdown: Dict[str, int]
+    # Set when a severity cap lowered the letter, e.g. "High-severity findings cap the grade at B"
+    cap_reason: Optional[str] = None
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
@@ -172,19 +219,24 @@ class GradeCalculator:
         self.severity_weights = severity_weights or SEVERITY_WEIGHTS
         self.grade_thresholds = grade_thresholds or GRADE_THRESHOLDS
     
-    def calculate_weighted_score(self, findings: List[Dict[str, Any]]) -> tuple:
+    def calculate_weighted_score(self, findings: List[Dict[str, Any]],
+                                 severity_weights: Dict[str, float] = None) -> tuple:
         """
         Calculate weighted score based on severity.
+
+        Args:
+            severity_weights: Overrides the calculator's weights (e.g. for containers)
         
         Returns:
             Tuple of (total_score, severity_breakdown_dict)
         """
+        weights = severity_weights or self.severity_weights
         total_score = 0
         severity_breakdown = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
         
         for finding in findings:
             sev = normalize_severity(finding.get('severity', 'medium'))
-            total_score += self.severity_weights.get(sev, 2)
+            total_score += weights.get(sev, 2)
             if sev in severity_breakdown:
                 severity_breakdown[sev] += 1
         
@@ -215,24 +267,30 @@ class GradeCalculator:
 
     def apply_severity_caps(self, findings: List[Dict[str, Any]],
                             percentage: float, letter_grade: str) -> tuple:
-        """Cap grades based on critical/high severity findings."""
+        """Cap grades based on critical/high severity findings.
+
+        Returns:
+            Tuple of (percentage, letter_grade, cap_reason) -- cap_reason is None
+            unless the cap actually lowered the grade.
+        """
         if not findings:
-            return percentage, letter_grade
+            return percentage, letter_grade, None
 
         severities = {normalize_severity(f.get('severity', '')) for f in findings}
         cap_letter = 'C' if 'critical' in severities else 'B' if 'high' in severities else None
         
         if not cap_letter:
-            return percentage, letter_grade
+            return percentage, letter_grade, None
 
         order = ['A', 'B', 'C', 'D', 'F']
-        if order.index(letter_grade) > order.index(cap_letter):
-            return percentage, letter_grade
+        if order.index(letter_grade) >= order.index(cap_letter):
+            return percentage, letter_grade, None
 
         # Clamp percentage to cap grade's upper bound
         cap_idx = order.index(cap_letter)
         max_pct = 100.0 if cap_idx == 0 else self.grade_thresholds[order[cap_idx - 1]] - 0.1
-        return min(percentage, max_pct), cap_letter
+        level = 'Critical' if cap_letter == 'C' else 'High'
+        return min(percentage, max_pct), cap_letter, f"{level}-severity findings cap the grade at {cap_letter}"
     
     def _build_grade_info(self, findings: List[Dict[str, Any]], 
                          weighted_score: int, max_score: int,
@@ -242,7 +300,7 @@ class GradeCalculator:
         """Build GradeInfo from calculated scores."""
         percentage = max(0, 100 - ((weighted_score / max_score) * 100))
         letter_grade = self.get_letter_grade(percentage)
-        percentage, letter_grade = self.apply_severity_caps(findings, percentage, letter_grade)
+        percentage, letter_grade, cap_reason = self.apply_severity_caps(findings, percentage, letter_grade)
         
         # If all_findings provided, use it for severity breakdown (for security/container grades)
         if all_findings is not None:
@@ -251,11 +309,12 @@ class GradeCalculator:
         return GradeInfo(
             letter=letter_grade,
             percentage=round(percentage, 1),
-            score=weighted_score,
+            score=round(weighted_score, 2),
             max_score=int(max_score),
             risk_level=RISK_LEVELS.get(letter_grade, 'Unknown'),
             violations=violations if violations is not None else len(findings),
-            severity_breakdown=severity_breakdown
+            severity_breakdown=severity_breakdown,
+            cap_reason=cap_reason
         )
     
     def calculate_grade(self, findings: List[Dict[str, Any]], 
@@ -278,12 +337,13 @@ class GradeCalculator:
         return self._build_grade_info(findings, weighted_score, max_score, severity_breakdown)
 
     def calculate_grade_with_max(self, findings: List[Dict[str, Any]], max_score: int, 
-                                violations: int = None, all_findings: List[Dict[str, Any]] = None) -> GradeInfo:
+                                violations: int = None, all_findings: List[Dict[str, Any]] = None,
+                                severity_weights: Dict[str, float] = None) -> GradeInfo:
         """Calculate grade with explicit max score."""
         if not findings:
             return GradeInfo.empty()
 
-        weighted_score, severity_breakdown = self.calculate_weighted_score(findings)
+        weighted_score, severity_breakdown = self.calculate_weighted_score(findings, severity_weights)
         return self._build_grade_info(findings, weighted_score, max(max_score, 1), 
                                      severity_breakdown, violations, all_findings)
 
@@ -306,7 +366,9 @@ class ReportGenerator:
                        scanner_type: str = 'comprehensive',
                        extra_recommendations: List[str] = None,
                        scan_path: str = None,
-                       traffic_profile: str = None) -> ScanReport:
+                       traffic_profile: str = None,
+                       container_image_count: int = None,
+                       cost_file_count: int = None) -> ScanReport:
         """
         Generate complete scan report.
         
@@ -315,6 +377,10 @@ class ReportGenerator:
             resource_count: Number of resources scanned
             scanner_type: Type of scanner used
             extra_recommendations: Additional recommendations to include
+            container_image_count: Number of images the container scanner actually
+                scanned, clean ones included (the container grade's denominator)
+            cost_file_count: Number of Terraform files the cost scanner looked at;
+                0 makes the cost grade not applicable
             
         Returns:
             Complete ScanReport object
@@ -339,8 +405,11 @@ class ReportGenerator:
         # For security and container, score only the most severe finding per resource
         security_scoring_findings = self._most_severe_per_resource(security_findings)
         
-        # For containers, group by image (not by file) for better aggregation
-        container_scoring_findings = self._most_severe_per_container_image(container_findings)
+        # For containers, group by image (not by file) for better aggregation.
+        # Grading (score, caps, recommendations) uses the no-fix-downgraded view;
+        # the report itself keeps container_findings with their real severity.
+        container_graded = [container_grading_view(f) for f in container_findings]
+        container_scoring_findings = self._most_severe_per_container_image(container_graded)
 
         # Calculate individual grades
         cost_grade = (
@@ -368,27 +437,45 @@ class ReportGenerator:
         # Container security grading (aggregated by image)
         # Use scoring_findings for the grade/score, but all container_findings
         # for the severity breakdown so the summary counts match the findings table.
-        container_resource_count = max(base_resource_count, len(container_scoring_findings), 1)
-        container_max_score = container_resource_count * max_severity_weight
+        # Denominator is the number of scanned images (not IaC resources) --
+        # falls back to the images that have findings when the scanner didn't
+        # report a count.
+        container_image_total = max(container_image_count or 0, len(container_scoring_findings), 1)
+        container_max_score = container_image_total * max_severity_weight
         container_grade = (
             self.calculator.calculate_grade_with_max(
                 container_scoring_findings,
                 container_max_score,
                 violations=len(container_findings),
-                all_findings=container_findings
+                all_findings=container_findings,
+                severity_weights=CONTAINER_SEVERITY_WEIGHTS
             )
             if 'container' in enabled_scanners
             else None
         )
+
+        # A category with nothing to check would otherwise score a free A and
+        # inflate the overall grade -- grade it None (not applicable) instead,
+        # unless that would leave no grade at all.
+        not_applicable = {
+            'cost': cost_file_count == 0 and not cost_findings,
+            'security': base_resource_count == 0 and not security_findings,
+            'container': container_image_count == 0 and not container_findings,
+        }
+        grades = {'cost': cost_grade, 'security': security_grade, 'container': container_grade}
+        if any(g and not not_applicable[k] for k, g in grades.items()):
+            cost_grade, security_grade, container_grade = (
+                None if not_applicable[k] else g for k, g in grades.items()
+            )
         
         # Calculate overall grade
         overall_grade = self._calculate_overall_grade(
-            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
+            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_graded
         )
         
         # Generate analysis
         recommendations = self._generate_recommendations(
-            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
+            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_graded
         )
         
         # Add extra recommendations if provided
@@ -549,6 +636,13 @@ class ReportGenerator:
             )
         
         letter = self.calculator.get_letter_grade(overall_percentage)
+        graded_findings = [
+            f for g, fs in ((cost_grade, cost_findings), (security_grade, security_findings),
+                            (container_grade, container_findings)) if g
+            for f in fs
+        ]
+        overall_percentage, letter, cap_reason = self.calculator.apply_severity_caps(
+            graded_findings, overall_percentage, letter)
         
         # Merge severity breakdowns
         grades = [g for g in [cost_grade, security_grade, container_grade] if g]
@@ -568,7 +662,8 @@ class ReportGenerator:
             max_score=max_combined,
             risk_level=RISK_LEVELS.get(letter, 'Unknown'),
             violations=sum(g.violations for g in grades),
-            severity_breakdown=combined_breakdown
+            severity_breakdown=combined_breakdown,
+            cap_reason=cap_reason
         )
     
     def _generate_recommendations(self, cost_grade: GradeInfo, 
@@ -600,15 +695,14 @@ class ReportGenerator:
                 f"IaC security {'issue' if iac_high == 1 else 'issues'} before deployment"
             )
         
-        # Container Security - show most critical issue only
-        container_critical = (
-            container_grade.severity_breakdown.get('critical', 0)
-            if container_grade else 0
-        )
-        container_high = (
-            container_grade.severity_breakdown.get('high', 0)
-            if container_grade else 0
-        )
+        # Container Security - show most critical issue only. Count images by
+        # their worst finding (severity_breakdown counts vulnerabilities).
+        worst_per_image = [
+            normalize_severity(f.get('severity'))
+            for f in self._most_severe_per_container_image(container_findings)
+        ] if container_grade else []
+        container_critical = worst_per_image.count('critical')
+        container_high = worst_per_image.count('high')
         if container_critical > 0:
             recommendations.append(
                 f"🔥 URGENT: Address {container_critical} {'image with' if container_critical == 1 else 'images with'} critical "

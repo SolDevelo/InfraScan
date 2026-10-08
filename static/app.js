@@ -1564,10 +1564,10 @@ function initApp() {
 
         const getGradeExplanation = (title) => {
             const explanations = {
-                'Overall Grade': 'Weighted average: ~33% Cost + ~33% IaC Security + ~33% Container Security.\nSeverity caps: Critical → max C, High → max B.\nSeverity breakdown aggregates: Cost findings + IaC resources + Container images.',
+                'Overall Grade': 'Weighted average: ~33% Cost + ~33% IaC Security + ~33% Container Security (categories with nothing to check are left out).\nSeverity caps: Critical → max C, High → max B.\nSeverity breakdown aggregates: Cost findings + IaC resources + Container images.',
                 'Cost Optimization': 'Formula: 100 - (Weighted Score / Max Score × 100)\nWeighted Score = Σ(severity × count)\nMax Score = (resources + rules) × 4\nSeverity weights: Critical=4, High=3, Medium=2, Low=1, Info=0.5',
                 'IaC Security': 'Only most severe finding per resource scored.\nFormula: 100 - (Weighted Score / Max Score × 100)\nMax Score = resource_count × 4\nSeverity weights: Critical=4, High=3, Medium=2, Low=1, Info=0.5',
-                'Container Security': 'Aggregated by container image - worst severity per image counted.\nFormula: 100 - (Σ severity_weight / image_count × 4 × 100)\nSeverity breakdown shows count of images at each level.\nSeverity weights: Critical=4, High=3, Medium=2, Low=1, Info=0.5'
+                'Container Security': 'Aggregated by container image - worst severity per image counted.\nFormula: 100 - (Σ severity_weight / scanned_images × 4 × 100)\nSeverity breakdown shows total vulnerability counts.\nSeverity weights: Critical=4, High=3, Medium=0.5, Low=0.1, Info=0\nCVEs with no fix available are graded one level lower.'
             };
             return explanations[title] || '';
         };
@@ -1578,7 +1578,7 @@ function initApp() {
             // Context-aware label for violations
             let violationsLabel = 'Violations:';
             if (title === 'Container Security') {
-                violationsLabel = 'Affected Images:';
+                violationsLabel = 'Vulnerabilities:';
             } else if (title === 'Overall Grade') {
                 violationsLabel = 'Total Issues:';
             }
@@ -1594,6 +1594,7 @@ function initApp() {
                         ${escapeHtml(grade.letter)}
                     </div>
                     <div class="grade-percentage">${grade.percentage}%</div>
+                    ${grade.cap_reason ? `<div class="grade-cap-reason" style="font-size:0.8em; color: var(--text-secondary);">${escapeHtml(grade.cap_reason)}</div>` : ''}
                     <div class="grade-details">
                         <div class="grade-detail-item">
                             <span class="grade-detail-label">${violationsLabel}</span>
