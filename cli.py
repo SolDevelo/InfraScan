@@ -236,6 +236,13 @@ def setup_args():
     )
 
     parser.add_argument(
+        "--no-tips",
+        action="store_true",
+        dest="no_tips",
+        help="Don't print the line about InfraScan Cloud at the end of the console summary."
+    )
+
+    parser.add_argument(
         "--list-patterns",
         action="store_true",
         dest="list_patterns",
@@ -409,6 +416,16 @@ def _print_savings_block(report_dict: dict) -> None:
             import os as _os
             fname = _os.path.basename(pf.get('file', ''))
             print(f"    • {pf.get('rule_id', '')}: {saving_str}/mo  ({fname}:{pf.get('line', '')})")
+
+
+CLOUD_URL = "https://infrascan.soldevelo.com/"
+
+
+def _print_cloud_tip() -> None:
+    """One dimmed line pointing at InfraScan Cloud. Turned off with --no-tips."""
+    source = {'github': 'github-action', 'bitbucket': 'bitbucket-pipe'}.get(detect_platform(), 'cli')
+    print(f"\n{Style.DIM}Scan your live AWS account too: InfraScan Cloud (free beta), "
+          f"{CLOUD_URL}?utm_source={source}&utm_campaign=beta{Style.RESET_ALL}")
 
 
 def should_fail(args, report_dict, results, baseline=None):
@@ -603,6 +620,8 @@ def main():
             _print_savings_block(report_dict)
             if args.out:
                  print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
+            if not args.no_tips:
+                _print_cloud_tip()
 
         # ── CI output (step summary/report + PR comment + annotations) ───────
         baseline_dict = load_baseline(getattr(args, 'baseline', ''))

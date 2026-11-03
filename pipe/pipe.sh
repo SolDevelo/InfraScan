@@ -38,6 +38,7 @@ CMD=(python /opt/infrascan/cli.py "${CLONE_DIR}/${DIRECTORY}"
   --max-annotations-per-image "${MAX_ANNOTATIONS_PER_IMAGE}")
 
 [ -n "${FAIL_ON}" ] && CMD+=(--fail-on "${FAIL_ON}")
+[ "${TIPS:-true}" = "false" ] && CMD+=(--no-tips)
 
 # Optional Grype DB cache (~2.5 min download otherwise). A pipe can't declare
 # caches itself, so it's opt-in: declare a cache named infrascan-grype-db at

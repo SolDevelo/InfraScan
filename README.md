@@ -19,6 +19,9 @@ InfraScan helps engineering teams detect cloud cost waste, security risks, and c
 
 Unlike closed SaaS scanners, InfraScan executes entirely in your environment, making it suitable for security-conscious and regulated organizations.
 
+> **New: InfraScan Cloud (free beta).** The CLI stays free and local. If you also want to scan a live AWS account, InfraScan Cloud connects through a read-only role and grades security, reliability and cost, with a monthly price on each piece of waste and a fix for every finding.
+> [See the demo](https://infrascan.soldevelo.com/cloud-demo/?utm_source=github&utm_campaign=beta) · [Get started](https://infrascan.soldevelo.com/?utm_source=github&utm_campaign=beta)
+
 ## 🚀 Quick Start: GitHub Action
 
 The fastest way to integrate InfraScan into your repository is using our official GitHub Action. Add this to `.github/workflows/infrascan.yml`:
@@ -151,6 +154,7 @@ infrascan --no-update
 - `--traffic-profile`: `auto`, `small`, `medium`, `large` (default: `auto`). Controls usage-based cost assumptions for NAT transfer, CloudWatch log ingestion, Lambda invocations, S3 storage, and API calls. `auto` detects the profile from infra size (EC2/NAT/Lambda/RDS counts). Profiles are defined in `reporter/traffic_profiles.json` and can be edited without code changes.
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria. `new_any` / `new_high_critical` / `new_critical` count only findings not in `--baseline` (in CI: added by the PR) and are skipped without one. Default: `never`.
 - `--no-update`: Does not update to the latest InfraScan version (does not pull the latest image)
+- `--no-tips`: Don't print the line about InfraScan Cloud at the end of the console summary
 
 #### Selective Scanning (Partial Scans)
 

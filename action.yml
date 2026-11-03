@@ -69,6 +69,10 @@ inputs:
     description: 'Write scan results to the GitHub Actions step summary (true|false)'
     required: false
     default: 'true'
+  tips:
+    description: 'Print one line about InfraScan Cloud at the end of the log summary (true|false)'
+    required: false
+    default: 'true'
   alert-on:
     description: 'Severity threshold for PR comments and annotations (critical|high|medium|low|any_new|none)'
     required: false
@@ -325,6 +329,10 @@ runs:
 
         if [ "${{ inputs.download-external-modules }}" = "true" ]; then
           CMD+=(--download-external-modules)
+        fi
+
+        if [ "${{ inputs.tips }}" = "false" ]; then
+          CMD+=(--no-tips)
         fi
 
         if [ -n "${{ inputs.fail-on }}" ]; then

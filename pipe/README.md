@@ -87,6 +87,7 @@ for the full copy-pasteable version with comments.
 | BASELINE_OUT | Path this scan's result is written to as JSON — but only when this run is a push to `DEFAULT_BRANCH` that isn't a PR, auto-detected (see below) | `infrascan-baseline/infrascan-baseline.json` |
 | DEFAULT_BRANCH | Branch whose runs refresh the shared baseline | `main` |
 | DOWNLOAD_EXTERNAL_MODULES | Allow Checkov to download external Terraform modules | `false` |
+| TIPS | One line about InfraScan Cloud at the end of the log summary; `false` turns it off | `true` |
 
 ## What you get automatically
 
