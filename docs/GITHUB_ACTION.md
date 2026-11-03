@@ -52,6 +52,7 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | Input | Default | Description |
 |---|---|---|
 | `directory` | `.` | Directory to scan (relative to repo root) |
+| `exclude` | _(none)_ | Comma-separated paths to leave out, e.g. `docs,tests,examples`. A name without a slash matches at any depth (like `.gitignore`), one with a slash is relative to `directory`; `*` and `?` work. Applies to the base-branch baseline scan too, so the delta compares like with like |
 | `scanner` | `comprehensive` | `regex`, `checkov`, `containers`, or `comprehensive` |
 | `format` | `text` | `text`, `json`, or `html` |
 | `out` | _(auto)_ | Output file path. Auto-set to `infrascan-report.html` / `.json` when `format` is `html`/`json` |

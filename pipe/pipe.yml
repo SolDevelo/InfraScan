@@ -42,6 +42,9 @@ variables:
   - name: DIRECTORY
     default: "."
     description: Directory to scan, relative to the repository root.
+  - name: EXCLUDE
+    default: ""
+    description: "Comma-separated paths to leave out of the scan, e.g. docs,tests,examples. A name without a slash matches at any depth, like .gitignore."
   - name: SCANNER
     default: comprehensive
     description: "Scanner to run: regex, checkov, containers, or comprehensive."

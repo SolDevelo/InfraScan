@@ -25,6 +25,10 @@ inputs:
     description: 'Framework (smart, auto, terraform, kubernetes, cloudformation, helm, ansible, all)'
     required: false
     default: 'smart'
+  exclude:
+    description: 'Comma-separated paths to leave out of the scan, e.g. docs,tests,examples (a name without a slash matches at any depth, like .gitignore)'
+    required: false
+    default: ''
   download-external-modules:
     description: 'Allow Checkov to download external modules'
     required: false
@@ -221,13 +225,18 @@ runs:
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
           "soldevelo/infrascan:latest" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
+        # Only when set, so an older image without --exclude keeps working
+        EXCLUDE_ARG=()
+        if [ -n "${{ inputs.exclude }}" ]; then
+          EXCLUDE_ARG=(--exclude "${{ inputs.exclude }}")
+        fi
         if docker run --rm \
           "${CONTAINER_ENV[@]}" \
           -v "$RUNNER_TEMP/base-worktree:/scan:ro" \
           -v "$RUNNER_TEMP/baseline-out:/output" \
           "soldevelo/infrascan:latest" \
           cli "/scan/${{ inputs.directory }}" --scanner "${{ inputs.scanner }}" --framework "${{ inputs.framework }}" \
-          --format json --out /output/infrascan-baseline.json \
+          "${EXCLUDE_ARG[@]}" --format json --out /output/infrascan-baseline.json \
           && [ -s "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" ]; then
           cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
           echo "scanned=true" >> "$GITHUB_OUTPUT"
@@ -328,6 +337,9 @@ runs:
         CMD+=(--scanner "${{ inputs.scanner }}")
         CMD+=(--format "${{ inputs.format }}")
         CMD+=(--framework "${{ inputs.framework }}")
+        if [ -n "${{ inputs.exclude }}" ]; then
+          CMD+=(--exclude "${{ inputs.exclude }}")
+        fi
         CMD+=(--alert-on "${{ inputs.alert-on }}")
         CMD+=(--pr-comment "${{ inputs.pr-comment }}")
         CMD+=(--step-summary "${{ inputs.step-summary }}")

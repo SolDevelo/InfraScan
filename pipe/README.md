@@ -68,6 +68,7 @@ for the full copy-pasteable version with comments.
 |---|---|---|
 | BITBUCKET_ACCESS_TOKEN | Needed only for the PR comment — the report and annotations work without it. See "Authentication" below | _(none)_ |
 | DIRECTORY | Directory to scan, relative to the repo root | `.` |
+| EXCLUDE | Comma-separated paths to leave out, e.g. `docs,tests,examples`. A name without a slash matches at any depth (like `.gitignore`), one with a slash is relative to `DIRECTORY`; `*` and `?` work | _(none)_ |
 | SCANNER | `regex`, `checkov`, `containers`, or `comprehensive` | `comprehensive` |
 | FORMAT | `text`, `json`, or `html` | `html` |
 | OUT | Output file path, relative to the repo root | `infrascan-report.html` |

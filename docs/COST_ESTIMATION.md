@@ -212,10 +212,12 @@ counted and falls back to 1.
   Shared module libraries (which only have `terraform { required_providers {} }`) are
   excluded from cost estimation. COST-* security rules are similarly suppressed for
   non-root-module directories to avoid phantom findings.
-- **Excluded directories** — the following directories are never scanned for cost:
-  `.git`, `.terraform`, `.terragrunt-cache`, `docs`, `doc`, `documentation`,
-  `test`, `tests`, `testing`, `examples`, `example`, `fixtures`, `fixture`,
-  `scripts`, `node_modules`. Security scanning is unaffected.
+- **Excluded directories** — hidden directories (`.git`, `.terraform`,
+  `.terragrunt-cache`, ...) and `scripts`, `node_modules` and `__pycache__` are never
+  scanned for cost. `docs`, `tests` and `examples` *are* scanned when they hold root
+  modules; leave them out with `--exclude docs,tests,examples` (the Action's
+  `exclude` input, the pipe's `EXCLUDE` variable), which applies to security
+  scanning too.
 - **Variable defaults vs actual values** — `variable {}` defaults are used when no
   tfvars override is present. Production deployments often override defaults with
   larger instance types, so estimates based on defaults may under-count real costs.

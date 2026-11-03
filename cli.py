@@ -16,6 +16,7 @@ except ImportError:
 
 from dotenv import load_dotenv
 from scanner.parser import scan_directory
+from scanner.paths import excluding, normalize_excludes
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
 from ci_adapters import detect_platform
@@ -138,7 +139,16 @@ def setup_args():
         dest="include",
         help="Select specific files or directories to scan. Can be used multiple times."
     )
-    
+
+    parser.add_argument(
+        "-x", "--exclude",
+        action="append",
+        dest="exclude",
+        help="Leave files or directories out of the scan, e.g. 'tests,docs' or 'modules/legacy'. "
+             "A name without a slash matches at any depth, like .gitignore; wildcards allowed. "
+             "Comma-separated or repeated."
+    )
+
     parser.add_argument(
         "--version",
         action="version",
@@ -532,27 +542,33 @@ def main():
             
         # Run Scanners
         scan_info = {}
-        results, resource_count, recommendations = scan_directory(
-            target_path, 
-            scanner_type=args.scanner,
-            framework=args.framework,
-            download_external_modules=args.download_external_modules,
-            included_paths=args.include,
-            scan_info=scan_info,
-        )
-        
-        # Generate Report
+        excludes = normalize_excludes(args.exclude)
+        if excludes and args.format == 'text':
+            print(f"Excluding: {', '.join(excludes)}")
+        with excluding(excludes):
+            results, resource_count, recommendations = scan_directory(
+                target_path,
+                scanner_type=args.scanner,
+                framework=args.framework,
+                download_external_modules=args.download_external_modules,
+                included_paths=args.include,
+                scan_info=scan_info,
+            )
+
+        # Generate Report (cost estimation walks the tree again, so it needs
+        # the excludes too)
         report_generator = ReportGenerator()
-        report = report_generator.generate_report(
-            findings=results,
-            resource_count=resource_count,
-            scanner_type=args.scanner,
-            extra_recommendations=recommendations,
-            scan_path=target_path,
-            traffic_profile=getattr(args, 'traffic_profile', 'auto'),
-            container_image_count=scan_info.get('container_images_scanned'),
-            cost_file_count=scan_info.get('cost_files_scanned'),
-        )
+        with excluding(excludes):
+            report = report_generator.generate_report(
+                findings=results,
+                resource_count=resource_count,
+                scanner_type=args.scanner,
+                extra_recommendations=recommendations,
+                scan_path=target_path,
+                traffic_profile=getattr(args, 'traffic_profile', 'auto'),
+                container_image_count=scan_info.get('container_images_scanned'),
+                cost_file_count=scan_info.get('cost_files_scanned'),
+            )
         
         report_dict = report.to_dict()
         report_dict['results'] = results

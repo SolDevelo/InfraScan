@@ -276,9 +276,10 @@ def extract_all_blocks(scan_path: str) -> Dict[str, List[dict]]:
     Returns a dict keyed by resource_type, each value being a list of blocks.
     """
     from scanner.parser import DEFAULT_EXCLUDED_DIRS, is_root_module
+    from scanner.paths import walk
 
     blocks: Dict[str, List[dict]] = {}
-    for root, dirs, files in os.walk(scan_path):
+    for root, dirs, files in walk(scan_path):
         dirs[:] = [d for d in dirs if d not in DEFAULT_EXCLUDED_DIRS and not d.startswith('.')]
         tf_files = [f for f in files if f.endswith(".tf")]
         if not tf_files:

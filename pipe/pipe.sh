@@ -12,6 +12,7 @@ set -e
 
 CLONE_DIR="${BITBUCKET_CLONE_DIR:-.}"
 DIRECTORY="${DIRECTORY:-.}"
+EXCLUDE="${EXCLUDE:-}"
 SCANNER="${SCANNER:-comprehensive}"
 FORMAT="${FORMAT:-html}"
 OUT="${OUT:-infrascan-report.html}"
@@ -32,6 +33,7 @@ CMD=(python /opt/infrascan/cli.py "${CLONE_DIR}/${DIRECTORY}"
   --format "${FORMAT}"
   --out "${CLONE_DIR}/${OUT}"
   --framework "${FRAMEWORK}"
+  --exclude "${EXCLUDE}"
   --alert-on "${ALERT_ON}"
   --min-cost-delta "${MIN_COST_DELTA}"
   --max-pr-findings "${MAX_PR_FINDINGS}"
@@ -211,7 +213,7 @@ if [ -n "${BITBUCKET_PR_ID}" ] && [ -n "${BASELINE}" ]; then
         # git archive only reads the repo -- worktree add would write under .git
         if git_at "${DEST_REPO}" archive --format=tar "${DEST_REV}" 2>/dev/null | tar -x -C "${FALLBACK_WORKTREE}" 2>/dev/null \
             && python /opt/infrascan/cli.py "${FALLBACK_WORKTREE}/${DIRECTORY}" \
-                --scanner "${SCANNER}" --framework "${FRAMEWORK}" --format text \
+                --scanner "${SCANNER}" --framework "${FRAMEWORK}" --exclude "${EXCLUDE}" --format text \
                 --baseline-out "${FALLBACK_OUT}" --pr-comment false --step-summary false \
                 >/dev/null 2>&1; then
             BASELINE_PATH="${FALLBACK_OUT}"

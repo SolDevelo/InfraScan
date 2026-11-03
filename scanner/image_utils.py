@@ -4,12 +4,14 @@ import re
 import subprocess
 from typing import List, Dict, Any, Optional
 
+from scanner.paths import walk
+
 def find_compose_files(directory_path: str) -> List[str]:
     """Find Docker Compose files in the directory."""
     compose_files = []
     compose_patterns = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml']
     
-    for root, dirs, files in os.walk(directory_path):
+    for root, dirs, files in walk(directory_path):
         for file in files:
             if file.endswith(('.yml', '.yaml')):
                 if file in compose_patterns or file.startswith('docker-compose') or file.startswith('compose'):
@@ -21,7 +23,7 @@ def find_kubernetes_files(directory_path: str) -> List[str]:
     """Find Kubernetes manifest files in the directory."""
     k8s_files = []
     
-    for root, dirs, files in os.walk(directory_path):
+    for root, dirs, files in walk(directory_path):
         for file in files:
             if file.endswith(('.yml', '.yaml')):
                 full_path = os.path.join(root, file)

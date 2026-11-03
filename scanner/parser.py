@@ -1,6 +1,7 @@
 import os
 import re
 from rules.definitions import check_rules
+from scanner.paths import excluding, is_excluded, walk
 
 DEFAULT_EXCLUDED_DIRS = {
     ".git", ".terraform", ".terragrunt-cache",
@@ -92,7 +93,7 @@ def detect_all_frameworks(path: str = None, files: list = None) -> list:
     if files:
         scan_files = files
     elif path:
-        for root, dirs, f_list in os.walk(path):
+        for root, dirs, f_list in walk(path):
             for file in f_list:
                 scan_files.append(os.path.join(root, file))
     
@@ -157,7 +158,7 @@ def detect_framework(path: str = None, files: list = None) -> str:
     if files:
         scan_files = files
     elif path:
-        for root, dirs, f_list in os.walk(path):
+        for root, dirs, f_list in walk(path):
             for file in f_list:
                 scan_files.append(os.path.join(root, file))
     
@@ -221,7 +222,7 @@ def count_resources(path=None, framework='terraform', files=None):
     if files:
         scan_files = files
     elif path:
-        for root, dirs, f_list in os.walk(path):
+        for root, dirs, f_list in walk(path):
             for file in f_list:
                 scan_files.append(os.path.join(root, file))
 
@@ -283,7 +284,7 @@ def count_resources(path=None, framework='terraform', files=None):
         if files:
             scan_files_ansible = [f for f in files if f.endswith(('.yml', '.yaml'))]
         else:
-            for root, dirs, f_list in os.walk(path):
+            for root, dirs, f_list in walk(path):
                 for file in f_list:
                     if file.endswith(('.yml', '.yaml')):
                         scan_files_ansible.append(os.path.join(root, file))
@@ -395,6 +396,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     resolved_files = None
     if included_paths:
         resolved_files = resolve_included_paths(path, included_paths)
+        resolved_files = [f for f in resolved_files if not is_excluded(os.path.relpath(f, path))]
         if not resolved_files:
             print(f"Warning: No valid files found in included paths: {included_paths}")
             return [], 0, []
@@ -454,7 +456,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         if resolved_files:
             all_files = [f for f in resolved_files if f.endswith(".tf")]
         else:
-            for root, dirs, files in os.walk(path):
+            for root, dirs, files in walk(path):
                 for file in files:
                     if file.endswith(".tf"):
                         full_path = os.path.join(root, file)
@@ -600,7 +602,12 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             except ValueError:
                 # Fallback if path is on a different drive or something
                 pass
-    
+
+    # The walks already skip excluded paths; this also catches findings a
+    # scanner reports for a file it reached some other way (e.g. a module
+    # Checkov followed into an excluded directory).
+    results = [r for r in results if not is_excluded(r.get('file', ''))]
+
     return results, resource_count, extra_recommendations
 
 def scan_file(filepath):

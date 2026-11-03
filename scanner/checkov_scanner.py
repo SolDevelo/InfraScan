@@ -10,6 +10,7 @@ import sys
 from typing import List, Dict, Any, Optional
 
 from scanner.base import Scanner, ScanResult
+from scanner.paths import checkov_skip_paths
 
 try:
     from checkov.main import Checkov
@@ -71,6 +72,8 @@ class CheckovScanner(Scanner):
                     cmd.extend(["-f", f])
             else:
                 cmd.extend(["-d", directory_path])
+                for skip in checkov_skip_paths():
+                    cmd.extend(["--skip-path", skip])
 
             cmd.extend([
                 "--framework", framework,
