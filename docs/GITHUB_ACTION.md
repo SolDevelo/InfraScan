@@ -66,6 +66,7 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `max-pr-findings` | `10` | Maximum total findings to show in PR comments (sorted by severity, most important first). Additional findings are aggregated |
 | `baseline` | _(none)_ | Path to a baseline JSON for cost/finding delta. Set automatically when using the baseline cache pattern below |
 | `skip-if-no-match` | `true` | Skip the scan on PRs when no files matching the scanner's trigger patterns were changed |
+| `image` | _(released image)_ | InfraScan image to run. By default the one released with this version of the action (`soldevelo/infrascan:<version>`), so pinning the action to a tag or SHA pins the scanner too. Set it for a mirror or a private registry |
 | `slack-webhook-url` | _(none)_ | Slack Incoming Webhook URL for scan notifications |
 | `docker-hub-username` / `docker-hub-password` | _(none)_ | Docker Hub login (pass the password/token as a secret). With it, container images are scanned with Docker Scout (fewer false positives); without it, Grype |
 | _(automatic)_ | | Grype's vulnerability DB is cached per day with `actions/cache` (~2.5 min download otherwise): the first run of the day downloads it, later runs that day reuse it. Nothing to configure |

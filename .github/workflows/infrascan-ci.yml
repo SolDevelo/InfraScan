@@ -16,15 +16,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # TODO: remove this step once the action is published to the marketplace and the image is available on Docker Hub
+      # action.yml runs the image released with it; a release bumps that tag
+      # together with __version__, so a mismatch means one was missed.
+      - name: Check the action's image matches the CLI version
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' cli.py)
+          if ! grep -q "'soldevelo/infrascan:${version}'" action.yml; then
+            echo "::error file=action.yml::action.yml doesn't default to soldevelo/infrascan:${version} (cli.py __version__)"
+            exit 1
+          fi
+
+      # Scan with the image built from this branch, not the released one
       - name: Build InfraScan image from current branch
-        run: docker build -t soldevelo/infrascan:latest .
+        run: docker build -t soldevelo/infrascan:ci .
 
       # ── Scan ─────────────────────────────────────────────────────────────────
       - name: Run InfraScan
-        # TODO: replace with `uses: soldevelo/infrascan@v1` once the action is published to the marketplace
         uses: ./
         with:
+          image: soldevelo/infrascan:ci
           scanner: comprehensive
           format: html
           out: infrascan-report.html

@@ -6,9 +6,10 @@ This document outlines the steps required to release a new version of InfraScan,
 
 - [ ] All tests pass on `main` branch.
 - [ ] Version bumped in `cli.py` (`__version__`).
+- [ ] Same version in `action.yml`'s default image (`soldevelo/infrascan:<version>` in the "Resolve InfraScan image" step). The action runs that image, so pinning the action pins the scanner; CI fails if it doesn't match `__version__`.
 - [ ] Version number updated in `README.md` (if applicable).
 - [ ] Version string updated in the web app footer (`templates/index.html`, `report.html`, `project_scans.html`, `supported_projects.html` — each has its own hardcoded `InfraScan vX.Y.Z` string, no shared partial; this has been missed on past releases).
-- [ ] Docker Hub image built and pushed (`latest` and `<version>`).
+- [ ] Docker Hub image built and pushed (`latest` and `<version>`). **Before** the git tag and the `v1` move: from then on the action pulls `<version>`, and every workflow breaks while that tag doesn't exist.
 - [ ] Git tag created and pushed.
 - [ ] Major version tag (e.g., `v1`) updated.
 - [ ] GitHub Release published to Marketplace.

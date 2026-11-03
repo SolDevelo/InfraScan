@@ -101,6 +101,10 @@ inputs:
     description: 'Skip scan if no files matching scanner patterns were changed (PRs only)'
     required: false
     default: 'true'
+  image:
+    description: 'InfraScan image to run (default: the one released with this version of the action, e.g. for a mirror or a private registry)'
+    required: false
+    default: ''
 outputs:
   triggered-by-paths:
     description: 'Newline-separated list of changed files that triggered this scan'
@@ -108,6 +112,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # The image released together with this version of the action, so pinning
+    # the action (tag or SHA) pins the scanner too. The release commit bumps it
+    # with __version__ in cli.py; CI checks they match.
+    - name: Resolve InfraScan image
+      id: image
+      shell: bash
+      run: echo "ref=${{ inputs.image || 'soldevelo/infrascan:1.2.4' }}" >> "$GITHUB_OUTPUT"
+
     - name: Check changed files
       id: check-files
       if: inputs.skip-if-no-match == 'true' && github.event_name == 'pull_request'
@@ -125,7 +137,7 @@ runs:
           exit 0
         fi
         # Query patterns from the scanner image; fall back to a safe hard-coded set
-        PATTERNS=$(docker run --rm "soldevelo/infrascan:latest" cli --list-patterns \
+        PATTERNS=$(docker run --rm "${{ steps.image.outputs.ref }}" cli --list-patterns \
           --scanner "${{ inputs.scanner }}" 2>/dev/null \
           | python3 -c "import json,sys; [print(p) for p in json.load(sys.stdin).get('patterns',[])]" \
           2>/dev/null || printf '\.tf$\n\.tfvars$\n\.hcl$\n\.ya?ml$\nDockerfile')
@@ -223,7 +235,7 @@ runs:
         # an earlier container created.
         mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
-          "soldevelo/infrascan:latest" -R a+rwX /grype-db
+          "${{ steps.image.outputs.ref }}" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
         # Only when set, so an older image without --exclude keeps working
         EXCLUDE_ARG=()
@@ -234,7 +246,7 @@ runs:
           "${CONTAINER_ENV[@]}" \
           -v "$RUNNER_TEMP/base-worktree:/scan:ro" \
           -v "$RUNNER_TEMP/baseline-out:/output" \
-          "soldevelo/infrascan:latest" \
+          "${{ steps.image.outputs.ref }}" \
           cli "/scan/${{ inputs.directory }}" --scanner "${{ inputs.scanner }}" --framework "${{ inputs.framework }}" \
           "${EXCLUDE_ARG[@]}" --format json --out /output/infrascan-baseline.json \
           && [ -s "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" ]; then
@@ -279,7 +291,7 @@ runs:
         fi
         mkdir -p "$RUNNER_TEMP/infrascan-grype-db"
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
-          "soldevelo/infrascan:latest" -R a+rwX /grype-db
+          "${{ steps.image.outputs.ref }}" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
 
         # Mount event file and a writable step-summary file into the container
@@ -330,7 +342,7 @@ runs:
           "${BASELINE_MOUNT[@]}"
           "${BASELINE_OUT_MOUNT[@]}"
           -v "${{ github.workspace }}:/scan"
-          "soldevelo/infrascan:latest"
+          "${{ steps.image.outputs.ref }}"
           cli "/scan/${{ inputs.directory }}"
         )
 
@@ -418,7 +430,7 @@ runs:
         # the save step's tar runs as the runner user and must read it.
         [ -d "$RUNNER_TEMP/infrascan-grype-db" ] || exit 0
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
-          "soldevelo/infrascan:latest" -R a+rwX /grype-db
+          "${{ steps.image.outputs.ref }}" -R a+rwX /grype-db
 
     - name: Save Grype DB cache
       if: always() && steps.grype-db-key.outputs.key != '' && steps.grype-db-cache.outputs.cache-hit != 'true'
