@@ -62,7 +62,7 @@ variables:
     description: "Severity threshold for PR comments and annotations: critical, high, medium, low, any_new, or none."
   - name: TIPS
     default: "true"
-    description: Print one line about InfraScan Cloud at the end of the log summary; "false" turns it off.
+    description: One line about InfraScan Cloud at the end of the log and in the HTML report footer (never in the PR comment or Code Insights report); "false" turns it off.
   - name: MIN_COST_DELTA
     default: "0"
     description: Minimum cost delta ($/month) to highlight in the PR comment.

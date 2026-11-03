@@ -19,6 +19,7 @@ from scanner.parser import scan_directory
 from scanner.paths import excluding, normalize_excludes
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
+from reporter.cloud_tip import TIP_LINK_TEXT, TIP_TEXT, cloud_url
 from ci_adapters import detect_platform
 from ci_adapters.github import (
     emit_annotations,
@@ -249,7 +250,7 @@ def setup_args():
         "--no-tips",
         action="store_true",
         dest="no_tips",
-        help="Don't print the line about InfraScan Cloud at the end of the console summary."
+        help="Leave out the line about InfraScan Cloud (console summary, GitHub step summary, HTML report footer)."
     )
 
     parser.add_argument(
@@ -428,14 +429,10 @@ def _print_savings_block(report_dict: dict) -> None:
             print(f"    • {pf.get('rule_id', '')}: {saving_str}/mo  ({fname}:{pf.get('line', '')})")
 
 
-CLOUD_URL = "https://infrascan.soldevelo.com/"
-
-
 def _print_cloud_tip() -> None:
     """One dimmed line pointing at InfraScan Cloud. Turned off with --no-tips."""
     source = {'github': 'github-action', 'bitbucket': 'bitbucket-pipe'}.get(detect_platform(), 'cli')
-    print(f"\n{Style.DIM}Scan your live AWS account too: InfraScan Cloud (free beta), "
-          f"{CLOUD_URL}?utm_source={source}&utm_campaign=beta{Style.RESET_ALL}")
+    print(f"\n{Style.DIM}{TIP_TEXT}: {TIP_LINK_TEXT}, {cloud_url(source)}{Style.RESET_ALL}")
 
 
 def should_fail(args, report_dict, results, baseline=None):
@@ -605,7 +602,7 @@ def main():
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
             elif args.format == 'html':
-                html_output = generate_standalone_html(report_dict)
+                html_output = generate_standalone_html(report_dict, tips=not args.no_tips)
                 with open(args.out, 'w', encoding='utf-8') as f:
                     f.write(html_output)
             else: # text format
@@ -628,7 +625,7 @@ def main():
         if args.format == 'json' and not args.out:
             print(json.dumps(report_dict, indent=2))
         elif args.format == 'html' and not args.out:
-            print(generate_standalone_html(report_dict))
+            print(generate_standalone_html(report_dict, tips=not args.no_tips))
         else:
             # If format is text OR if output is saved to record/html/json
             # always show the text summary in the console
@@ -659,6 +656,7 @@ def main():
                 ci_limits=ci_limits,
                 baseline=baseline_dict or None,
                 run_url=run_url,
+                tips=not args.no_tips,
             )
             write_gh_step_summary(summary_md)
         elif do_summary and platform == 'bitbucket':

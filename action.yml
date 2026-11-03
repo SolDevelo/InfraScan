@@ -74,7 +74,7 @@ inputs:
     required: false
     default: 'true'
   tips:
-    description: 'Print one line about InfraScan Cloud at the end of the log summary (true|false)'
+    description: 'Mention InfraScan Cloud in one line at the end of the log, the step summary and the HTML report footer (true|false)'
     required: false
     default: 'true'
   alert-on:

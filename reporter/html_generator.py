@@ -3,10 +3,11 @@ import json
 import base64
 import re
 
-def generate_standalone_html(report_dict):
+def generate_standalone_html(report_dict, tips=False):
     """
     Generate a standalone HTML report by embedding CSS, JS, and JSON data
-    into the existing index.html template.
+    into the existing index.html template. With *tips*, the footer also
+    points at InfraScan Cloud.
     """
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
@@ -93,5 +94,11 @@ def generate_standalone_html(report_dict):
     injected_script += "</script>"
     
     html_content = html_content.replace(js_placeholder, injected_script)
-    
+
+    if tips:
+        from reporter.cloud_tip import TIP_LINK_TEXT, TIP_TEXT, cloud_url
+        tip_html = (f'<p style="font-size: 0.9rem; opacity: 0.8; margin-top: 4px;">{TIP_TEXT}: '
+                    f'<a href="{cloud_url("html-report")}" target="_blank">{TIP_LINK_TEXT}</a></p>\n        ')
+        html_content = html_content.replace("</footer>", tip_html + "</footer>", 1)
+
     return html_content

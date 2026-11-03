@@ -2596,11 +2596,13 @@ def format_ci_summary_md(
     baseline: Optional[dict] = None,
     run_url: str = "",
     render_html_details: bool = True,
+    tips: bool = False,
 ) -> str:
     """
-    Return Markdown for the GitHub Actions step summary (or, with
-    render_html_details=False, a Bitbucket Code Insights report's `details`
-    field -- same content, just without collapsible sections).
+    Return Markdown for the GitHub Actions step summary (render_html_details=False
+    drops the collapsible sections, for renderers without raw HTML; Bitbucket
+    Code Insights doesn't render Markdown at all and has its own plain-text
+    _report_details_text). With *tips*, it ends with a line about InfraScan Cloud.
 
     Security-first layout:
       1. Grade overview (always visible)
@@ -2794,6 +2796,11 @@ def format_ci_summary_md(
             lines += [f"**Cost savings opportunities: {saving_str}/mo**", ""] + rows_md + [""]
 
     # no run_url link in step summary — you're already on the run page
+
+    # Off by default, so only callers that opt in (the CLI's step summary) show it
+    if tips:
+        from reporter.cloud_tip import TIP_LINK_TEXT, TIP_TEXT, cloud_url
+        lines += ["", f"<sub>{TIP_TEXT}: [{TIP_LINK_TEXT}]({cloud_url('github-summary')})</sub>"]
 
     return "\n".join(lines)
 

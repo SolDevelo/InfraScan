@@ -74,7 +74,7 @@ All other new behaviour (step summary, skip-on-no-match, annotations) is on by d
 | `container-scan-timeout` | `300` | Per-image scan timeout in seconds (pull + analysis). Raise it for very large images; a timed-out image is reported as not scanned |
 | `container-env-files` | `.env,.env.example,.env.sample` | Env files for `${VAR}` in compose image names, highest priority first. Bare names are looked for next to each compose file and in parent directories; a path with `/` is relative to the scanned `directory` |
 | `download-external-modules` | `false` | Allow Checkov to download external Terraform modules |
-| `tips` | `true` | Print one line about InfraScan Cloud at the end of the log summary; `false` turns it off |
+| `tips` | `true` | One line about InfraScan Cloud at the end of the log, the step summary and the HTML report footer (never in PR comments); `false` turns it off |
 
 ## Outputs
 
