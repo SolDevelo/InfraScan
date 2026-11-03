@@ -118,7 +118,7 @@ runs:
     - name: Resolve InfraScan image
       id: image
       shell: bash
-      run: echo "ref=${{ inputs.image || 'soldevelo/infrascan:1.2.4' }}" >> "$GITHUB_OUTPUT"
+      run: echo "ref=${{ inputs.image || 'soldevelo/infrascan:1.2.5' }}" >> "$GITHUB_OUTPUT"
 
     - name: Check changed files
       id: check-files

@@ -34,7 +34,7 @@ from ci_adapters.bitbucket import (
     build_bb_pipelines_context,
 )
 
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
