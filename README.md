@@ -133,7 +133,7 @@ infrascan --scanner comprehensive
 infrascan --framework kubernetes --scanner comprehensive
 
 # Use a specific infrascan version
-INFRASCAN_VERSION=1.2.3 infrascan
+INFRASCAN_VERSION=1.2.4 infrascan
 
 # Do not pull for updates
 infrascan --no-update
