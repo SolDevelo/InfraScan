@@ -198,7 +198,7 @@ Controls which findings appear in PR comments and inline annotations. Shows the 
 
 The action automatically manages the baseline — no extra steps needed. On every push to the default branch it saves that scan as the baseline for its commit (`infrascan-<branch>-<sha>`). On every PR it:
 1. Restores a cached baseline JSON keyed by **base branch name + base commit SHA** (`infrascan-<base_ref>-<base.sha>`)
-2. If the cache is cold (the default branch wasn't scanned at that commit, e.g. the workflow doesn't run on `push`), scans the base branch once to create the baseline
+2. If the cache is cold (the default branch wasn't scanned at that commit, e.g. the workflow doesn't run on `push`), scans the base branch once to create the baseline. If that's not possible (`directory` doesn't exist on the base branch, e.g. because an earlier step generates it, or the scan fails), the action logs a warning and the PR is scanned without a baseline instead of failing the job
 3. Runs the main scan with `--baseline` pointing at the cached result
 4. Saves a base-branch scan from step 2 to cache for later runs of the same PR — GitHub only lets a PR read caches saved by the default branch or by that PR itself, so running the workflow on `push` to the default branch is what lets every PR skip step 2
 

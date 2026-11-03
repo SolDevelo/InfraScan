@@ -179,8 +179,19 @@ runs:
       if: inputs.auto-baseline == 'true' && inputs.baseline == '' && github.event_name == 'pull_request' && steps.baseline-cache.outputs.cache-hit != 'true' && steps.check-files.outputs.skip != 'true'
       shell: bash
       run: |
+        # Never fails the job: without a baseline the PR scan still runs, it
+        # just has nothing to compare against (new_* fail-on is skipped).
         git fetch --depth=1 origin ${{ github.base_ref }} 2>/dev/null || true
-        git worktree add "$RUNNER_TEMP/base-worktree" origin/${{ github.base_ref }}
+        if ! git worktree add "$RUNNER_TEMP/base-worktree" origin/${{ github.base_ref }}; then
+          echo "::warning::InfraScan: couldn't check out ${{ github.base_ref }}, scanning without a baseline."
+          exit 0
+        fi
+        # The directory may not exist on the base branch, e.g. when an earlier
+        # workflow step generates it or this PR adds it.
+        if [ ! -d "$RUNNER_TEMP/base-worktree/${{ inputs.directory }}" ]; then
+          echo "::warning::InfraScan: '${{ inputs.directory }}' doesn't exist on ${{ github.base_ref }}, scanning without a baseline."
+          exit 0
+        fi
         mkdir -p "$RUNNER_TEMP/baseline-out"
         chmod 777 "$RUNNER_TEMP/baseline-out"
         # Same scanner settings as the PR scan below -- a baseline scanned
@@ -210,14 +221,19 @@ runs:
         docker run --rm --user root --entrypoint chmod -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db" \
           "soldevelo/infrascan:latest" -R a+rwX /grype-db
         CONTAINER_ENV+=(-e GRYPE_DB_CACHE_DIR=/grype-db -v "$RUNNER_TEMP/infrascan-grype-db:/grype-db")
-        docker run --rm \
+        if docker run --rm \
           "${CONTAINER_ENV[@]}" \
           -v "$RUNNER_TEMP/base-worktree:/scan:ro" \
           -v "$RUNNER_TEMP/baseline-out:/output" \
           "soldevelo/infrascan:latest" \
           cli "/scan/${{ inputs.directory }}" --scanner "${{ inputs.scanner }}" --framework "${{ inputs.framework }}" \
-          --format json --out /output/infrascan-baseline.json
-        cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
+          --format json --out /output/infrascan-baseline.json \
+          && [ -s "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" ]; then
+          cp "$RUNNER_TEMP/baseline-out/infrascan-baseline.json" "$RUNNER_TEMP/infrascan-baseline.json"
+          echo "scanned=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::InfraScan: the base branch scan failed, scanning without a baseline."
+        fi
 
     - name: Run InfraScan
       id: run-infrascan
@@ -364,7 +380,7 @@ runs:
     # branch — so later runs of this PR against the same base commit reuse it.
     # always(): a PR scan that fails via fail-on doesn't make the baseline bad.
     - name: Save baseline cache
-      if: always() && steps.baseline-scan.outcome == 'success'
+      if: always() && steps.baseline-scan.outputs.scanned == 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/infrascan-baseline.json
