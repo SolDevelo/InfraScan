@@ -1,38 +1,38 @@
 # Cost Estimation
 
-InfraScan estimates monthly AWS infrastructure cost directly from Terraform source files —
-no credentials, no network access, no external tools required.
+InfraScan estimates monthly AWS infrastructure cost from Terraform source files. It needs no
+cloud credentials, network access or external tools.
 
 Two things are calculated for each scan:
 
-- **Savings estimate** — how much could be saved by fixing the cost findings InfraScan flagged
-- **Total infrastructure cost** — a bottom-up monthly cost for every billable resource in the repo
+- **Savings estimate**: how much could be saved by fixing the cost findings InfraScan reported
+- **Total infrastructure cost**: a bottom-up monthly cost of every billable resource in the repository
 
 ---
 
 ## Savings estimate
 
 Each cost rule (`COST-001`, `COST-004`, etc.) fires on a specific Terraform resource. When it
-does, InfraScan calculates what that configuration decision costs versus the recommended
+does, InfraScan calculates what that configuration costs compared with the recommended
 alternative.
 
-The report shows a **range** — `$low – $high / month` — rather than a single number. For
-straightforward optimisations the two ends are equal (you know exactly what you'll save). For
-uncertain ones, `low = $0` to avoid overstating the benefit.
+The report shows a **range**, `$low – $high / month`, rather than a single number. For
+straightforward optimisations the two ends are equal. For uncertain ones, `low = $0` to avoid
+overstating the benefit.
 
 Rules where `low = $0`:
 
 | Rule | Why savings are uncertain |
 |---|---|
-| COST-005 — NAT Gateway exists | The gateway may be necessary; eliminating it requires replacing all internet-bound traffic with VPC endpoints, which may not be feasible |
-| COST-007 — DynamoDB provisioned capacity | Switching to on-demand billing can cost *more* under sustained load |
-| COST-027 — Missing VPC endpoints | The fraction of NAT traffic that goes to S3/DynamoDB is unknown from config alone |
+| COST-005: NAT Gateway exists | The gateway may be necessary; eliminating it requires replacing all internet-bound traffic with VPC endpoints, which may not be feasible |
+| COST-007: DynamoDB provisioned capacity | Switching to on-demand billing can cost *more* under sustained load |
+| COST-027: Missing VPC endpoints | The fraction of NAT traffic that goes to S3/DynamoDB is unknown from config alone |
 
-For rules that represent a fleet-wide change (COST-012 — EC2 Spot instances), the saving is
-counted once for the entire account, not multiplied per instance.
+For rules that represent a fleet-wide change (COST-012, EC2 Spot instances), the saving is
+counted once for the whole scan, not multiplied per instance.
 
 When multiple rules fire on the same resource, their combined savings are capped at that
-resource's estimated monthly cost — so you can never save more than the resource costs.
+resource's estimated monthly cost, so the saving never exceeds what the resource costs.
 
 ### Supported cost rules
 
@@ -45,6 +45,7 @@ resource's estimated monthly cost — so you can never save more than the resour
 | COST-007 | DynamoDB provisioned capacity (consider on-demand) | Low |
 | COST-008 | EC2 detailed monitoring enabled | High |
 | COST-009 | gp2 EBS volume (upgrade to gp3) | High |
+| COST-010 | S3 bucket without a lifecycle policy (assumes 200 GB stored) | Low |
 | COST-012 | No Spot instances in the fleet | Medium |
 | COST-014 | Unnecessary Route53 health checks | High |
 | COST-015 | CloudWatch Log group with no retention policy | Medium |
@@ -56,8 +57,11 @@ resource's estimated monthly cost — so you can never save more than the resour
 | COST-026 | Multiple NAT Gateways in the same VPC | High |
 | COST-027 | S3/DynamoDB traffic routed through NAT instead of VPC endpoints | Low |
 
-Rules COST-003, COST-010, COST-011, COST-017, and COST-023 are governance signals with no
-direct cost delta — they show `$0` in the savings column.
+Rules COST-003, COST-011, COST-017 and COST-023 are governance signals with no direct cost
+delta; they show `$0` in the savings column. COST-002 (expensive instance type), COST-013
+(premium storage), COST-016 (large root volume), COST-018 (high DynamoDB capacity) and
+COST-019 (load balancer for a single instance) are reported as findings but have no savings
+estimate.
 
 ---
 
@@ -66,19 +70,20 @@ direct cost delta — they show `$0` in the savings column.
 Every resource block in the Terraform files is matched against a list of supported resource
 types. For each one, InfraScan calculates two figures:
 
-- **Min cost** — fixed charges only, assuming zero traffic. This is the floor: what you pay
-  just for the resource existing.
-- **Expected cost** — fixed charges plus estimated usage at the detected traffic profile.
+- **Min cost**: fixed charges only, assuming zero traffic; what the resource costs just by
+  existing.
+- **Expected cost**: fixed charges plus estimated usage at the detected traffic profile.
 
 For resources that are purely pay-per-use (Lambda, CloudWatch Logs), min cost is `$0`.
 
 ### Traffic profiles
 
-Because usage-based charges — data transfer, invocations, storage GB — aren't visible in
-Terraform config, InfraScan uses defaults that scale with the apparent size of the
+Because usage-based charges (data transfer, invocations, storage GB) are not visible in
+Terraform configuration, InfraScan uses defaults that scale with the apparent size of the
 infrastructure.
 
-It auto-detects one of three profiles:
+It detects one of three profiles automatically; `--traffic-profile small|medium|large`
+overrides the detection:
 
 | Profile | Rough signal |
 |---|---|
@@ -142,8 +147,7 @@ counted as covered but contribute $0 to the total.
 
 ## Block parsing
 
-Terraform files are parsed with **python-hcl2** — the same HCL library used by Checkov.
-This replaces the previous regex-based block extractor and gives:
+Terraform files are parsed with **python-hcl2**, the HCL library Checkov also uses. This gives:
 
 - Correct block boundary detection (no false positives from comments or multi-line strings)
 - Structured attribute values (integers, booleans, dicts) rather than raw text
@@ -160,20 +164,21 @@ Attribute values that contain `${var.foo}` or `${local.foo}` expressions are res
 at parse time, before any cost function sees them.  Resolution sources (highest to lowest
 precedence):
 
-1. **`terraform.tfvars` and `*.auto.tfvars`** — auto-loaded var files in Terraform's own
-   precedence order: `*.auto.tfvars` → `*.auto.tfvars.json` → `terraform.tfvars` →
-   `terraform.tfvars.json`.
-2. **`variable {}` defaults** — `default` values from every `variable` block in the
-   directory's `.tf` files.  tfvars override these (matching real Terraform behaviour).
-3. **`locals {}` blocks** — assignments resolved transitively up to depth 5.
+1. **`terraform.tfvars` and `*.auto.tfvars`**: auto-loaded variable files, read in this order,
+   later files overriding earlier ones: `*.auto.tfvars`, `*.auto.tfvars.json`,
+   `terraform.tfvars`, `terraform.tfvars.json`.
+2. **`variable {}` defaults**: `default` values from every `variable` block in the
+   directory's `.tf` files. tfvars values override them.
+3. **`locals {}` blocks**: assignments resolved transitively up to depth 5.
    For ternary expressions (`condition ? a : b`), the else branch is used as the
    conservative fallback.
-4. **Adjacent JSON data files** — any `*.json` file in the directory.
-   For nested structures like `accounts[env].ec2_instance_type`, InfraScan tries the
-   account key `production` (or `prod`, `preproduction`) as the environment fallback.
+4. **Adjacent JSON data files**: any `*.json` file in the directory.
+   For nested structures like `accounts[env].ec2_instance_type`, InfraScan uses the
+   environment key matching the directory name, then `production`, `prod`, `preproduction`,
+   `preprod`, `staging`, `sandbox`, and finally the first key.
 
-Once an expression is resolved to a concrete string or number, the content seen by the cost
-function contains the literal value so existing attribute regex patterns still match.
+Once an expression is resolved to a concrete string or number, the cost function sees the
+literal value, so the attribute patterns match it.
 
 When a value is found by resolution (not a literal in the source), confidence is `medium`.
 When nothing resolves, a floor of **$50/mo** per EC2 instance and **$100/mo** per RDS
@@ -185,13 +190,13 @@ instance is used and confidence is `low`.
 
 Resource cardinality is derived in priority order:
 
-1. **`for_each` literal dict/set** — `for_each = {"a" = …, "b" = …}` → 2 instances.
+1. **`for_each` literal dict/set**: `for_each = {"a" = …, "b" = …}` → 2 instances.
    `for_each = toset(["dev", "staging", "prod"])` → 3 instances.
    Both are detected from the hcl2-parsed structure with `confidence = "high"`.
-2. **`count` integer** — literal `count = 3` from hcl2 attrs → 3 instances, `"high"`.
-3. **`count` variable reference** — `count = var.replica_count` → InfraScan resolves
+2. **`count` integer**: literal `count = 3` from hcl2 attrs → 3 instances, `"high"`.
+3. **`count` variable reference**: `count = var.replica_count` → InfraScan resolves
    via tfvars / variable defaults; if resolved, `confidence = "medium"`.
-4. **Default** — 1 instance.
+4. **Default**: 1 instance.
 
 The assumption `count=N` is appended to the resource's assumption list whenever `N > 1`.
 `for_each` with a variable reference (`for_each = var.environments`) cannot be statically
@@ -201,24 +206,24 @@ counted and falls back to 1.
 
 ## Limitations
 
-- **Complex chained expressions** — attribute values like
+- **Complex chained expressions**: attribute values like
   `local.data.accounts[local.env].instance_type` are not resolved. InfraScan
   handles simple `${var.foo}` and `${local.foo}` substitutions only. Resources
   using such expressions fall back to the price floor.
-- **`for_each` with variable references** — `for_each = var.environments` cannot
+- **`for_each` with variable references**: `for_each = var.environments` cannot
   be counted statically; the resource is costed as a single instance.
-- **Root module detection** — cost scanning is restricted to *root modules*: directories
+- **Root module detection**: cost scanning is restricted to *root modules*: directories
   that contain a `provider "..." { }` block or a `terraform { backend "..." { } }` block.
   Shared module libraries (which only have `terraform { required_providers {} }`) are
-  excluded from cost estimation. COST-* security rules are similarly suppressed for
-  non-root-module directories to avoid phantom findings.
-- **Excluded directories** — hidden directories (`.git`, `.terraform`,
+  excluded from cost estimation. COST-* rule findings are likewise suppressed in
+  non-root-module directories.
+- **Excluded directories**: hidden directories (`.git`, `.terraform`,
   `.terragrunt-cache`, ...) and `scripts`, `node_modules` and `__pycache__` are never
   scanned for cost. `docs`, `tests` and `examples` *are* scanned when they hold root
   modules; leave them out with `--exclude docs,tests,examples` (the Action's
   `exclude` input, the pipe's `EXCLUDE` variable), which applies to security
   scanning too.
-- **Variable defaults vs actual values** — `variable {}` defaults are used when no
+- **Variable defaults vs actual values**: `variable {}` defaults are used when no
   tfvars override is present. Production deployments often override defaults with
   larger instance types, so estimates based on defaults may under-count real costs.
 - Prices are for `us-east-1` on-demand Linux. Other regions and purchasing options

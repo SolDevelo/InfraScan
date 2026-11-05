@@ -1,84 +1,83 @@
 # CI/CD Pipeline Integration Guide
 
-This guide explains how to integrate InfraScan into your CI/CD pipelines to improve your infrastructure's cost efficiency and security without disrupting your development workflow. InfraScan supports **Terraform**, **Kubernetes**, **CloudFormation**, and **Helm** projects.
+This guide covers adding InfraScan to a CI/CD pipeline. InfraScan scans **Terraform**, **Kubernetes**, **CloudFormation**, **Helm** and **Ansible** for security issues, Terraform (AWS) for cost, and container images referenced in Dockerfiles, docker-compose and Kubernetes files for CVEs.
 
-> 💡 **Ready-to-use Templates**: You can find pre-configured pipeline files in the [examples/pipelines](../examples/pipelines) directory. You can copy these directly into your project to get started in seconds.
+Ready-to-use pipeline files are in [examples/pipelines](../examples/pipelines).
 
-## 🚀 Integration Strategies
+## Integration modes
 
-InfraScan is designed to be flexible. You can choose between two primary integration modes depending on your project's maturity.
+### 1. Monitoring (non-blocking)
 
-### 1. Monitoring Mode (Advisory / Non-blocking)
-**Use Case:** Best for initial rollout or when you want InfraScan to act as a "second pair of eyes" without stopping the pipeline.
+Suited to an initial rollout, or when InfraScan should report without stopping the pipeline.
 
-In this mode, InfraScan will:
-*   Scan your code and print a summary to the console logs.
-*   Generate detailed HTML/JSON reports.
-*   **Always exit with code 0**, ensuring the pipeline continues even if issues are found.
+In this mode InfraScan:
+*   Scans the code and prints a summary to the console log.
+*   Writes an HTML or JSON report.
+*   Exits with code 0 regardless of findings (`--fail-on` defaults to `never`). A scan error still exits with code 1.
 
-**CLI Command:**
+**CLI command:**
 ```bash
 infrascan --scanner comprehensive --format html --out infrascan-report.html
 ```
 
 ---
 
-### 2. Enforcement Mode (Gatekeeper / Blocking)
-**Use Case:** Best for production environments or teams with established security standards.
+### 2. Enforcement (blocking)
 
-In this mode, you define a "quality gate". If the scan results are worse than your threshold, the pipeline will **fail (exit code 1)**, preventing the deployment of problematic infrastructure.
+Suited to teams with established security standards. You set a threshold; if the scan results reach it, InfraScan exits with code 1 and the pipeline fails.
 
-**Common Thresholds:**
-*   `--fail-on new_high_critical`: Stop a PR only for High or Critical findings it adds — existing findings don't block anyone. Needs a baseline (automatic in the GitHub Action and the Bitbucket pipe); without one it's skipped.
-*   `--fail-on high_critical`: Stop the build only for High or Critical security vulnerabilities.
-*   `--fail-on grade_c`: Fail if the overall grade is C or worse (allows only A and B).
-*   `--fail-on priority_medium`: Fail if any Medium, High, or Critical issues are detected.
+**Common thresholds:**
+*   `--fail-on new_high_critical`: fail a PR only for High or Critical findings it adds; existing findings do not block it. Needs a baseline (automatic in the GitHub Action and the Bitbucket pipe); without one the check is skipped.
+*   `--fail-on high_critical`: fail on any High or Critical finding (security, cost or container).
+*   `--fail-on grade_c`: fail if the overall grade is C or worse (only A and B pass).
+*   `--fail-on priority_medium`: fail on any Medium, High or Critical finding.
 
-**CLI Command Example:**
+**CLI command example:**
 ```bash
 infrascan --fail-on high_critical --format html --out report.html
 ```
 
 ---
 
-## 📈 Recommended Rollout (The "Soft Intro")
+## Suggested rollout
 
-To avoid "alert fatigue" and developer frustration, we recommend this 3-step rollout:
+To avoid alert fatigue, introduce enforcement gradually:
 
-1.  **Week 1-2: Observation**
-    Integrate InfraScan in **Monitoring Mode**. Review the reports to understand your baseline. Don't force any changes yet.
-2.  **Week 3: Critical Only**
-    Switch to **Enforcement Mode** with `--fail-on grade_f`. This ensures that only the most severely broken configurations (Critical risks) block the pipeline.
-3.  **Ongoing: Continuous Improvement**
-    As your infrastructure improves, tighten the gate to `--fail-on grade_d` or `--fail-on high_critical`.
+1.  **Weeks 1-2: observation.**
+    Run InfraScan in monitoring mode. Review the reports to understand the current state without requiring changes.
+2.  **Week 3: worst cases only.**
+    Switch to enforcement with `--fail-on grade_f`, so the pipeline fails only when the overall grade is F.
+3.  **Ongoing: tighten the gate.**
+    As the infrastructure improves, move to `--fail-on grade_d` or `--fail-on high_critical`. On pull requests, `--fail-on new_high_critical` blocks only regressions.
 
 ---
 
-## 🛠️ Pipeline Examples
+## Pipeline examples
 
 ### Bitbucket Pipelines
-Always use `artifacts` and `when: always` to ensure you can see the results even when the scan fails.
+
+Use the InfraScan pipe and declare the report as an artifact so it can be downloaded from the pipeline run. This minimal version has no baseline cache; the full setup with caches is in [BITBUCKET_PIPELINE.md](BITBUCKET_PIPELINE.md).
 
 ```yaml
 pipelines:
-  default:
-    - step:
-        name: InfraScan Audit
-        script:
-          - docker run --rm 
-              -v $BITBUCKET_CLONE_DIR:/scan 
-              soldevelo/infrascan:latest 
-              --scanner comprehensive 
-              --format html 
-              --out /scan/infrascan-report.html
-              # Add --fail-on here when ready to enforce
-        artifacts:
-          - infrascan-report.html
+  branches:
+    main:
+      - step:
+          name: InfraScan Audit
+          script:
+            - pipe: docker://soldevelo/infrascan:latest
+              variables:
+                SCANNER: comprehensive
+                FORMAT: html
+                OUT: infrascan-report.html
+                # FAIL_ON: new_high_critical   # when ready to enforce
+          artifacts:
+            - infrascan-report.html
 ```
 
 ### GitHub Actions
 
-Step summary, PR comments, auto-baseline, and smart PR skipping are all enabled by default.
+The step summary, PR comments, automatic baseline and skipping of PRs with no relevant changes are on by default.
 
 ```yaml
 name: InfraScan
@@ -96,14 +95,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: soldevelo/infrascan@v1
         with:
           scanner: comprehensive
           format: html
           out: infrascan-report.html
           # Optional: fail-on: new_high_critical
-      
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -111,56 +110,53 @@ jobs:
           path: infrascan-report.html
 ```
 
-**What you get automatically:**
-- 📊 **Step summary** — full scan results in the workflow run's Summary tab
-- 💬 **PR comment** — grade table, cost estimate, and new CRITICAL/HIGH findings on every PR
-- 📈 **Cost delta** — automatic baseline management shows infrastructure cost changes
-- ⏭️ **Smart skipping** — skips scan when no matching files changed in PRs
-- 🔔 **Inline annotations** — `::error` and `::warning` markers in PR diff view
+**Enabled by default:**
+- **Step summary**: scan results in the workflow run's Summary tab
+- **PR comment**: grade table, cost estimate and new findings on every PR
+- **Cost delta**: automatic baseline management shows infrastructure cost changes
+- **PR skipping**: the scan is skipped on PRs that change no matching files
+- **Inline annotations**: `::error`, `::warning` and `::notice` annotations in the PR diff view
 
-See [GITHUB_ACTION.md](GITHUB_ACTION.md) for full documentation of all inputs and features.
-
----
-
-## 💡 Pro Tips
-*   **Console Visibility:** InfraScan v1.0.4+ prints a colored summary directly to the terminal. You don't always need to download the HTML report to see what's wrong.
-*   **Selective Scanning:** For large monorepos, use `-f` or `--include` to scan only the modified directories or files. This speeds up the scan and reduces noise from unrelated projects.
-*   **Selective Scanners:** If you only care about costs, use `--scanner regex`. If you only care about security, use `--scanner checkov`.
-*   **Kubernetes Projects:** InfraScan auto-detects Kubernetes manifests. If your repo contains K8s YAML files alongside Terraform, you can force the framework with `--framework kubernetes`.
-*   **Ignore False Positives:** Use standard Checkov inline comments (e.g., `#checkov:skip=CKV_AWS_1:Reason`) to skip specific security checks that are intentional in your environment.
+See [GITHUB_ACTION.md](GITHUB_ACTION.md) for all inputs and features.
 
 ---
 
-## ☸️ Kubernetes-Specific Integration
+## Tips
+*   **Console output:** InfraScan prints a colored summary to the log, so the HTML report is not always needed to see what is wrong.
+*   **Selective scanning:** in large monorepos, use `-f` / `--include` to scan only specific files or directories, or `-x` / `--exclude` (the Action's `exclude` input, the pipe's `EXCLUDE` variable) to leave paths out.
+*   **Selecting scanners:** for cost only, use `--scanner regex`; for IaC security only, `--scanner checkov`; for container images only, `--scanner containers`. Several can be combined with commas, e.g. `--scanner regex,containers`.
+*   **Kubernetes projects:** the default `--framework smart` detects Kubernetes manifests and scans every framework it finds. To restrict the security scan to Kubernetes in a repository that also contains Terraform, use `--framework kubernetes`.
+*   **Suppressing false positives:** use Checkov inline comments (e.g. `#checkov:skip=CKV_AWS_1:Reason`) to skip specific security checks that are intentional in your environment.
 
-For projects using **Kubernetes manifests** (Deployments, StatefulSets, Services, etc.) instead of Docker Compose:
+---
 
-### What InfraScan scans in K8s projects:
-1. **Security misconfigurations** (via Checkov): running as root, missing resource limits, missing probes, network policies, etc.
-2. **Container vulnerabilities** (via Docker Scout/Grype): all `image:` references from your manifests are extracted and scanned for CVEs.
+## Kubernetes projects
 
-### Example — Bitbucket Pipeline for Kubernetes project
+For projects using **Kubernetes manifests** (Deployments, StatefulSets, Services, etc.) rather than Docker Compose.
+
+### What InfraScan scans
+1. **Security misconfigurations** (Checkov): containers running as root, missing resource limits, missing probes, network policies, etc.
+2. **Container vulnerabilities** (Docker Scout or Grype): every `image:` reference in the manifests is extracted and scanned for CVEs.
+
+### Example: Bitbucket Pipelines
 ```yaml
 pipelines:
-  default:
-    - step:
-        name: InfraScan K8s Audit
-        services:
-          - docker
-        script:
-          - mkdir -p infrascan-reports && chmod 777 infrascan-reports
-          - docker run --rm
-              -v $(pwd):/scan
-              soldevelo/infrascan:latest
-              --framework kubernetes
-              --scanner comprehensive
-              --format html
-              --out /scan/infrascan-reports/report.html
-        artifacts:
-          - infrascan-reports/**
+  branches:
+    main:
+      - step:
+          name: InfraScan K8s Audit
+          script:
+            - pipe: docker://soldevelo/infrascan:latest
+              variables:
+                FRAMEWORK: kubernetes
+                SCANNER: comprehensive
+                FORMAT: html
+                OUT: infrascan-report.html
+          artifacts:
+            - infrascan-report.html
 ```
 
-### Example — GitHub Actions for Kubernetes project
+### Example: GitHub Actions
 ```yaml
 name: InfraScan K8s Audit
 on:
@@ -177,14 +173,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: soldevelo/infrascan@v1
         with:
           framework: kubernetes
           scanner: comprehensive
           format: html
           out: infrascan-report.html
-      
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
