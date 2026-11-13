@@ -12,12 +12,14 @@ side are dictated by what Bitbucket Cloud actually offers:
   repo, workspace and commit directly as env vars.
 """
 import json
+import logging
 import os
 import re
-import sys
 from typing import Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.bitbucket.org/2.0"
 COMMENT_MARKER = "infrascan-report"
@@ -49,7 +51,7 @@ def _auth_headers() -> Optional[dict]:
     token = access_token or step_token
     if token:
         source = 'BITBUCKET_ACCESS_TOKEN' if access_token else 'BITBUCKET_STEP_OAUTH_TOKEN'
-        print(f"[info] Bitbucket API auth: using {source}", file=sys.stderr)
+        logger.info(f"Bitbucket API auth: using {source}")
     if not token:
         return None
     return {'Authorization': f'Bearer {token}'}
@@ -135,9 +137,8 @@ def _check_response(resp, what: str) -> None:
     fails silently with zero trace in the pipeline log.
     """
     if not (200 <= resp.status_code < 300):
-        print(
-            f"[warn] Bitbucket {what} failed: HTTP {resp.status_code} {resp.text[:300]}",
-            file=sys.stderr,
+        logger.warning(
+            f"Bitbucket {what} failed: HTTP {resp.status_code} {resp.text[:300]}"
         )
 
 
@@ -155,19 +156,18 @@ def post_bb_pr_comment(body: str) -> None:
     ctx     = _repo_context()
     pr_id   = os.getenv('BITBUCKET_PR_ID', '').strip()
     if not headers:
-        print(
-            "[warn] Skipping Bitbucket PR comment: no BITBUCKET_ACCESS_TOKEN set. "
+        logger.warning(
+            "Skipping Bitbucket PR comment: no BITBUCKET_ACCESS_TOKEN set. "
             "To enable it: Repository settings -> Access tokens -> create one with "
             "pullrequest:write scope, add it as a secured Pipelines repository "
             "variable, then pass it to the pipe as BITBUCKET_ACCESS_TOKEN "
-            "(see docs/BITBUCKET_PIPELINE.md Authentication).",
-            file=sys.stderr,
+            "(see docs/BITBUCKET_PIPELINE.md Authentication)."
         )
         return
     if not (ctx and pr_id):
         missing = [n for n, v in (('BITBUCKET_WORKSPACE/BITBUCKET_REPO_SLUG', ctx),
                                    ('BITBUCKET_PR_ID', pr_id)) if not v]
-        print(f"[warn] Skipping Bitbucket PR comment: missing {', '.join(missing)}", file=sys.stderr)
+        logger.warning(f"Skipping Bitbucket PR comment: missing {', '.join(missing)}")
         return
     try:
         full_body = f"{body}\n\n---\n_InfraScan · updates this comment in place ({COMMENT_MARKER})_"
@@ -197,7 +197,7 @@ def post_bb_pr_comment(body: str) -> None:
         )
         _check_response(post_resp, "PR comment create")
     except Exception as e:
-        print(f"Bitbucket PR comment error: {e}", file=sys.stderr)
+        logger.warning(f"Bitbucket PR comment error: {e}")
 
 
 def _report_data_fields(report_dict: dict) -> list:
@@ -339,7 +339,7 @@ def upsert_bb_report(report_dict: dict, baseline: Optional[dict] = None, run_url
     if not (ctx and commit):
         missing = [n for n, v in (('BITBUCKET_WORKSPACE/BITBUCKET_REPO_SLUG', ctx),
                                    ('BITBUCKET_COMMIT', commit)) if not v]
-        print(f"[warn] Skipping Bitbucket Code Insights report: missing {', '.join(missing)}", file=sys.stderr)
+        logger.warning(f"Skipping Bitbucket Code Insights report: missing {', '.join(missing)}")
         return
     try:
         overall = report_dict.get('overall', {})
@@ -358,14 +358,14 @@ def upsert_bb_report(report_dict: dict, baseline: Optional[dict] = None, run_url
             body['link'] = run_url
         resp = _reports_api_call('PUT', path, json_body=body)
         if resp is None:
-            print(
-                "[warn] Skipping Bitbucket Code Insights report: no local auth "
-                "proxy reachable and no BITBUCKET_ACCESS_TOKEN set", file=sys.stderr,
+            logger.warning(
+                "Skipping Bitbucket Code Insights report: no local auth "
+                "proxy reachable and no BITBUCKET_ACCESS_TOKEN set"
             )
             return
         _check_response(resp, "Code Insights report upsert")
     except Exception as e:
-        print(f"Bitbucket Code Insights report error: {e}", file=sys.stderr)
+        logger.warning(f"Bitbucket Code Insights report error: {e}")
 
 
 _EXTERNAL_ID_RE = re.compile(r'[^A-Za-z0-9_.-]+')
@@ -401,7 +401,7 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str, max_pe
     if not (ctx and commit):
         missing = [n for n, v in (('BITBUCKET_WORKSPACE/BITBUCKET_REPO_SLUG', ctx),
                                    ('BITBUCKET_COMMIT', commit)) if not v]
-        print(f"[warn] Skipping Bitbucket annotations: missing {', '.join(missing)}", file=sys.stderr)
+        logger.warning(f"Skipping Bitbucket annotations: missing {', '.join(missing)}")
         return
 
     findings = report_dict.get('findings', {})
@@ -511,17 +511,15 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str, max_pe
 
     if skipped_by_image:
         details = ', '.join(f"{img}: {n} more" for img, n in skipped_by_image.items())
-        print(
-            f"[info] Capped container annotations at {max_per_image} per image -- "
-            f"skipped ({details}); still counted in grading/PR comment/report.",
-            file=sys.stderr,
+        logger.info(
+            f"Capped container annotations at {max_per_image} per image -- "
+            f"skipped ({details}); still counted in grading/PR comment/report."
         )
 
     if not annotations:
-        print(
-            f"[warn] No Bitbucket annotations to send: {len(all_findings)} finding(s), "
-            f"alert_on={alert_on!r} (severities {sorted(alert_sevs) or 'none'})",
-            file=sys.stderr,
+        logger.warning(
+            f"No Bitbucket annotations to send: {len(all_findings)} finding(s), "
+            f"alert_on={alert_on!r} (severities {sorted(alert_sevs) or 'none'})"
         )
         return
 
@@ -534,11 +532,11 @@ def emit_bb_annotations(report_dict: dict, baseline: dict, alert_on: str, max_pe
             chunk = annotations[i:i + 100]
             resp = _reports_api_call('POST', path, json_body=chunk)
             if resp is None:
-                print(
-                    "[warn] Skipping Bitbucket annotations: no local auth proxy "
-                    "reachable and no BITBUCKET_ACCESS_TOKEN set", file=sys.stderr,
+                logger.warning(
+                    "Skipping Bitbucket annotations: no local auth proxy "
+                    "reachable and no BITBUCKET_ACCESS_TOKEN set"
                 )
                 return
             _check_response(resp, "annotations upload")
     except Exception as e:
-        print(f"Bitbucket annotations error: {e}", file=sys.stderr)
+        logger.warning(f"Bitbucket annotations error: {e}")

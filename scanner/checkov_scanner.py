@@ -4,6 +4,7 @@ This module wraps Checkov to provide comprehensive IaC analysis.
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -11,6 +12,8 @@ from typing import List, Dict, Any, Optional
 
 from scanner.base import Scanner, ScanResult
 from scanner.paths import checkov_skip_paths
+
+logger = logging.getLogger(__name__)
 
 try:
     from checkov.main import Checkov
@@ -110,12 +113,10 @@ class CheckovScanner(Scanner):
                                 continue
 
             if result.stderr and "error" in result.stderr.lower():
-                print(f"Checkov stderr: {result.stderr}")
+                logger.warning(f"Checkov stderr: {result.stderr}")
 
         except Exception as e:
-            print(f"Error running Checkov: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error running Checkov: {e}", exc_info=True)
             return ScanResult()
 
         return ScanResult(findings=findings)
@@ -167,9 +168,7 @@ def parse_checkov_json_output(report_data: Dict[str, Any], base_path: str) -> Li
                                 findings.append(normalize_checkov_finding(check, base_path))
         
     except Exception as e:
-        print(f"Error parsing Checkov JSON output: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error parsing Checkov JSON output: {e}", exc_info=True)
     
     return findings
 
@@ -202,7 +201,7 @@ def parse_checkov_output(report_data: Any, base_path: str) -> List[Dict[str, Any
                             findings.append(normalize_checkov_finding(check, base_path))
         
     except Exception as e:
-        print(f"Error parsing Checkov output: {e}")
+        logger.error(f"Error parsing Checkov output: {e}")
     
     return findings
 
@@ -368,5 +367,5 @@ def run_checkov_with_filters(
         return []
         
     except Exception as e:
-        print(f"Error running Checkov with filters: {e}")
+        logger.error(f"Error running Checkov with filters: {e}")
         return []

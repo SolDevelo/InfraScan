@@ -4,6 +4,7 @@ import sys
 import argparse
 import json
 import logging
+import time
 import requests
 try:
     from colorama import Fore, Style, init
@@ -15,6 +16,7 @@ except ImportError:
     def init(*args, **kwargs): pass
 
 from dotenv import load_dotenv
+from scanner.logs import format_duration, setup_logging, timed
 from scanner.parser import scan_directory
 from scanner.paths import excluding, normalize_excludes
 from reporter.grading import ReportGenerator
@@ -36,8 +38,9 @@ from ci_adapters.bitbucket import (
 
 __version__ = "1.2.5"
 
-# Setup basic logging
-logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
+# Progress and problems go to stderr with timestamps (set up in main());
+# stdout is reserved for the report itself.
+logger = logging.getLogger("cli")
 
 def load_baseline(path: str) -> dict:
     """Load a baseline report JSON; return empty dict if path is blank or missing."""
@@ -47,7 +50,7 @@ def load_baseline(path: str) -> dict:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print(f"[warn] Could not load baseline {path}: {e}", file=sys.stderr)
+        logger.warning(f"Could not load baseline {path}: {e}")
         return {}
 
 
@@ -78,9 +81,9 @@ def send_slack_notification(message: str) -> None:
     try:
         response = requests.post(webhook_url, json={'text': message}, timeout=5)
         if response.status_code >= 400:
-            print(f"Slack notification failed: {response.status_code} - {response.text}", file=sys.stderr)
+            logger.warning(f"Slack notification failed: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"Slack notification error: {e}", file=sys.stderr)
+        logger.warning(f"Slack notification error: {e}")
 
 def setup_args():
     parser = argparse.ArgumentParser(
@@ -445,9 +448,8 @@ def should_fail(args, report_dict, results, baseline=None):
     # against, so don't fail rather than treat every existing finding as new.
     if args.fail_on.startswith('new_'):
         if not baseline:
-            print(f"\n[i] --fail-on={args.fail_on} not evaluated: no baseline to compare against "
-                  "(expected on the default branch; on a PR it means the base branch couldn't be scanned).",
-                  file=sys.stderr)
+            logger.info(f"--fail-on={args.fail_on} not evaluated: no baseline to compare against "
+                        "(expected on the default branch; on a PR it means the base branch couldn't be scanned).")
             return False
         from reporter.cost_estimator import finding_key, baseline_finding_keys
         base_keys = baseline_finding_keys(baseline)
@@ -457,19 +459,18 @@ def should_fail(args, report_dict, results, baseline=None):
         elif args.fail_on == 'new_critical':
             new = [r for r in new if r.get('severity', '').lower() == 'critical']
         if new:
-            print(f"\n[ERROR] Build failed: {len(new)} new finding(s) not in the baseline and --fail-on={args.fail_on} specified.",
-                  file=sys.stderr)
+            logger.error(f"Build failed: {len(new)} new finding(s) not in the baseline and --fail-on={args.fail_on} specified.")
             return True
         return False
 
     if args.fail_on == 'any' and len(results) > 0:
-        print("\n[ERROR] Build failed: Findings detected and --fail-on=any specified.", file=sys.stderr)
+        logger.error("Build failed: Findings detected and --fail-on=any specified.")
         return True
         
     if args.fail_on == 'high_critical':
         critical_high_count = sum(1 for r in results if r.get('severity', '').lower() in ['critical', 'high'])
         if critical_high_count > 0:
-            print(f"\n[ERROR] Build failed: {critical_high_count} high/critical findings detected and --fail-on=high_critical specified.", file=sys.stderr)
+            logger.error(f"Build failed: {critical_high_count} high/critical findings detected and --fail-on=high_critical specified.")
             return True
             
     if args.fail_on.startswith('grade_'):
@@ -482,7 +483,7 @@ def should_fail(args, report_dict, results, baseline=None):
             current_idx = grade_order.index(overall_letter)
             
             if current_idx >= fail_idx:
-                print(f"\n[ERROR] Build failed: Overall grade is {overall_letter} and --fail-on={args.fail_on} specified (threshold: {fail_grade} or worse).", file=sys.stderr)
+                logger.error(f"Build failed: Overall grade is {overall_letter} and --fail-on={args.fail_on} specified (threshold: {fail_grade} or worse).")
                 return True
         except ValueError:
             pass # Should not happen due to argparse choices
@@ -498,10 +499,17 @@ def should_fail(args, report_dict, results, baseline=None):
         ]
         
         if findings_at_or_above:
-            print(f"\n[ERROR] Build failed: {len(findings_at_or_above)} findings with priority {fail_priority} or higher detected and --fail-on={args.fail_on} specified.", file=sys.stderr)
+            logger.error(f"Build failed: {len(findings_at_or_above)} findings with priority {fail_priority} or higher detected and --fail-on={args.fail_on} specified.")
             return True
             
     return False
+
+
+def _finish(started: float, code: int) -> None:
+    """Log the total run time (the line CI users look for) and exit."""
+    logger.info(f"InfraScan finished in {format_duration(time.monotonic() - started)} (exit code {code})")
+    sys.exit(code)
+
 
 def main():
     load_dotenv()
@@ -527,21 +535,22 @@ def main():
         print(json.dumps({'scanner': args.scanner, 'patterns': sorted(set(patterns))}))
         sys.exit(0)
 
+    setup_logging()
+    started = time.monotonic()
     target_path = os.path.abspath(args.path)
     
     if not os.path.exists(target_path):
-        print(f"Error: Path '{target_path}' does not exist.", file=sys.stderr)
+        logger.error(f"Path '{target_path}' does not exist.")
         sys.exit(1)
         
     try:
-        if args.format == 'text':
-            print(f"Analyzing {target_path} with '{args.scanner}' scanner...")
+        logger.info(f"InfraScan v{__version__}: analyzing {target_path} with '{args.scanner}' scanner")
             
         # Run Scanners
         scan_info = {}
         excludes = normalize_excludes(args.exclude)
-        if excludes and args.format == 'text':
-            print(f"Excluding: {', '.join(excludes)}")
+        if excludes:
+            logger.info(f"Excluding: {', '.join(excludes)}")
         with excluding(excludes):
             results, resource_count, recommendations = scan_directory(
                 target_path,
@@ -555,7 +564,7 @@ def main():
         # Generate Report (cost estimation walks the tree again, so it needs
         # the excludes too)
         report_generator = ReportGenerator()
-        with excluding(excludes):
+        with timed(logger, "Report (grading, cost estimate)"), excluding(excludes):
             report = report_generator.generate_report(
                 findings=results,
                 resource_count=resource_count,
@@ -619,7 +628,7 @@ def main():
                 with open(args.baseline_out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
             except OSError as e:
-                print(f"[warn] Could not write baseline {args.baseline_out}: {e}", file=sys.stderr)
+                logger.warning(f"Could not write baseline {args.baseline_out}: {e}")
 
         # Handle console output
         if args.format == 'json' and not args.out:
@@ -644,6 +653,7 @@ def main():
         force_comment = getattr(args, 'force_comment', False)
 
         platform = detect_platform()
+        ci_started = time.monotonic()
         gh_ctx   = build_gh_actions_context()
         bb_ctx   = build_bb_pipelines_context()
         run_url  = gh_ctx.get('run_url', '') or bb_ctx.get('run_url', '')
@@ -694,7 +704,11 @@ def main():
 
         max_annotations_per_image = getattr(args, 'max_annotations_per_image', 10)
         emit_annotations(report_dict, baseline_dict, alert_on)
-        emit_bb_annotations(report_dict, baseline_dict, alert_on, max_annotations_per_image)
+        if platform == 'bitbucket':
+            emit_bb_annotations(report_dict, baseline_dict, alert_on, max_annotations_per_image)
+        if platform != 'none':
+            logger.info(f"CI output (summary, PR comment, annotations) finished in "
+                        f"{format_duration(time.monotonic() - ci_started)}")
 
         # ── Slack notification ────────────────────────────────────────────────
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
@@ -747,20 +761,18 @@ def main():
             if ctx['run_url']:
                 lines.append(f"<{ctx['run_url']}|View run>")
 
-            send_slack_notification(" | ".join(lines))
+            with timed(logger, "Slack notification"):
+                send_slack_notification(" | ".join(lines))
 
         # Determine Exit Code
         if should_fail(args, report_dict, results, baseline_dict):
-            sys.exit(1)
+            _finish(started, 1)
             
-        sys.exit(0)
+        _finish(started, 0)
         
     except Exception as e:
-        print(f"An error occurred during scanning: {e}", file=sys.stderr)
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            import traceback
-            traceback.print_exc()
-        sys.exit(1)
+        logger.error(f"An error occurred during scanning: {e}", exc_info=logger.isEnabledFor(logging.DEBUG))
+        _finish(started, 1)
 
 if __name__ == "__main__":
     main()

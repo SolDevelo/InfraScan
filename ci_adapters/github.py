@@ -4,10 +4,12 @@ Moved out of cli.py so the
 GitHub and Bitbucket adapters sit side by side behind the same call shape.
 """
 import json
+import logging
 import os
-import sys
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 _GH_ANNOTATION_LIMIT = 10  # GitHub Actions' own hard cap: 10 errors, 10 warnings,
@@ -159,7 +161,7 @@ def post_pr_comment(body: str) -> None:
                     return
         requests.post(api_url, json={'body': full_body}, headers=headers, timeout=10)
     except Exception as e:
-        print(f"PR comment error: {e}", file=sys.stderr)
+        logger.warning(f"PR comment error: {e}")
 
 
 def write_gh_step_summary(content: str) -> None:
@@ -171,7 +173,7 @@ def write_gh_step_summary(content: str) -> None:
         with open(summary_path, 'a', encoding='utf-8') as f:
             f.write(content + '\n')
     except Exception as e:
-        print(f"Step summary write error: {e}", file=sys.stderr)
+        logger.warning(f"Step summary write error: {e}")
 
 
 def build_gh_actions_context() -> dict:

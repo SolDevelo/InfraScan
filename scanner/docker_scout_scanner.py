@@ -15,9 +15,12 @@ import json
 import os
 import re
 import subprocess
+import logging
+import time
 from typing import List, Dict, Any, Tuple, Optional
 
 from scanner.base import Scanner, ScanResult
+from scanner.logs import format_duration
 from scanner.image_utils import (
     find_compose_files, 
     extract_images_from_compose, 
@@ -29,6 +32,8 @@ from scanner.image_utils import (
     unresolved_image_reason,
     image_scan_timeout,
 )
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Utility Functions
@@ -265,14 +270,14 @@ def check_image_exists(image: str) -> bool:
 def cleanup_image(image: str) -> None:
     """Remove a Docker image from local cache."""
     try:
-        print(f"  Removing image: {image}")
+        logger.info(f"Removing image: {image}")
         result = run_command(["docker", "rmi", "-f", image], timeout=30)
         if result.returncode == 0:
-            print(f"  ✓ Removed {image}")
+            logger.info(f"Removed {image}")
         else:
-            print(f"  Warning: Could not remove {image}: {result.stderr[:100]}")
+            logger.warning(f"Could not remove {image}: {result.stderr[:100]}")
     except Exception as e:
-        print(f"  Warning: Failed to remove {image}: {e}")
+        logger.warning(f"Failed to remove {image}: {e}")
 
 
 # ============================================================================
@@ -340,14 +345,14 @@ class DockerScoutScanner(Scanner):
             return ScanResult()
 
         if compose_files:
-            print("[INFO] Found Docker Compose files:")
+            logger.info("Found Docker Compose files:")
             for file in compose_files:
-                print(f"  - {os.path.relpath(file, directory_path)}")
+                logger.info(f"  - {os.path.relpath(file, directory_path)}")
 
         if k8s_files:
-            print("[INFO] Found Kubernetes files:")
+            logger.info("Found Kubernetes files:")
             for file in k8s_files:
-                print(f"  - {os.path.relpath(file, directory_path)}")
+                logger.info(f"  - {os.path.relpath(file, directory_path)}")
 
         # Collect ALL images from ALL files first. Track every (file, line)
         # that references each image (not just the first) -- the same image
@@ -382,25 +387,24 @@ class DockerScoutScanner(Scanner):
         # purely for CI adapters that want a per-file marker (e.g.
         # Bitbucket annotations) without inflating the finding count.
         images_scanned = 0
-        for image, source_refs in all_images_map.items():
+        for index, (image, source_refs) in enumerate(all_images_map.items(), start=1):
             compose_file, primary_line = source_refs[0]
             unresolved = unresolved_image_reason(image)
             if unresolved:
-                print(f"[warn] Skipping image {image} ({os.path.relpath(compose_file, directory_path)}): {unresolved}")
+                logger.warning(f"Skipping image {image} ({os.path.relpath(compose_file, directory_path)}): {unresolved}")
                 continue
             # Check if image exists locally before scanning
             image_existed_before = check_image_exists(image)
 
             relative_file = os.path.relpath(compose_file, directory_path)
 
-            print(
-                f"[INFO] Scanning image '{image}' "
-                f"from file: {os.path.relpath(compose_file, directory_path)}"
-            )
-            print(f"  Source file: {relative_file}")
+            logger.info(f"Scanning image with Docker Scout ({index}/{len(all_images_map)}): "
+                        f"{image} ({relative_file})")
+            image_started = time.monotonic()
 
             try:
                 image_findings, image_auth_failed = scan_image(image, compose_file, directory_path, primary_line)
+                took = format_duration(time.monotonic() - image_started)
                 if len(source_refs) > 1:
                     also_in = [
                         {'file': os.path.relpath(f, directory_path), 'line': ln}
@@ -420,31 +424,31 @@ class DockerScoutScanner(Scanner):
                 images_scanned += 1
 
                 if image_findings:
-                    print(f"  Found {len(image_findings)} vulnerabilities in {image}")
+                    logger.info(f"Scanned {image} in {took}: {len(image_findings)} vulnerabilities")
                 elif not image_auth_failed:
-                    print(f"  No vulnerabilities found or image unavailable: {image}")
+                    logger.info(f"Scanned {image} in {took}: no vulnerabilities found or image unavailable")
 
                 recommendation = get_image_recommendation(image)
                 if recommendation and recommendation not in extra_recommendations:
                     extra_recommendations.append(recommendation)
-                    print(f"  Added recommendation for Bitnami image: {image}")
+                    logger.info(f"Added recommendation for Bitnami image: {image}")
 
                 # Track for cleanup if image was pulled during scan and cleanup is enabled
                 if cleanup_enabled and not image_existed_before and check_image_exists(image):
                     images_to_cleanup.add(image)
 
             except Exception as e:
-                print(f"Warning: Failed to scan image {image}: {e}")
+                logger.warning(f"Failed to scan image {image}: {e}")
                 continue
 
         # Cleanup images that were pulled during scan
         if cleanup_enabled and images_to_cleanup:
-            print(f"\nCleaning up {len(images_to_cleanup)} image(s) pulled during scan...")
+            logger.info(f"Cleaning up {len(images_to_cleanup)} image(s) pulled during scan...")
             for image in images_to_cleanup:
                 try:
                     cleanup_image(image)
                 except Exception as e:
-                    print(f"Warning: Failed to cleanup image {image}: {e}")
+                    logger.warning(f"Failed to cleanup image {image}: {e}")
 
         return ScanResult(findings=findings, extra_recommendations=extra_recommendations,
                           auth_failed=auth_failed, images_scanned=images_scanned)
@@ -493,27 +497,25 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
         
         # 1. Detect Docker Hub login requirement specifically
         if result.returncode != 0 and ("Log in with your Docker ID" in result.stderr or "authentication required" in result.stderr.lower()):
-            print(f"\n[!] Docker Scout Error: Authentication required to access vulnerability database.")
-            print(f"    To fix this, either:")
-            print(f"    a) Set DOCKER_HUB_USERNAME and DOCKER_HUB_PASSWORD environment variables")
-            print(f"    b) Use CONTAINER_SCANNER=grype to use the alternative scanner that doesn't require login")
-            print(f"    Skipping Docker Scout scan for: {image}")
+            logger.warning("Docker Scout needs a Docker Hub login to access its vulnerability database. "
+                           "Set DOCKER_HUB_USERNAME and DOCKER_HUB_PASSWORD, or use CONTAINER_SCANNER=grype "
+                           f"(no login needed). Skipping Docker Scout scan for: {image}")
             return findings, True
 
         # 2. Check for other errors in output (missing image, pull failures, etc.)
         if result.stdout.strip().startswith('ERROR') or 'MANIFEST_UNKNOWN' in result.stdout:
             error_msg = result.stdout.split('\n')[0] if '\n' in result.stdout else result.stdout[:200]
-            print(f"Docker Scout error for image {image}: {error_msg}")
+            logger.warning(f"Docker Scout error for image {image}: {error_msg}")
             return findings, False
         
         # 3. Handle non-zero exit code (with --exit-code, it means findings or real error)
         if result.returncode != 0 and not result.stdout.strip():
             # If stdout is empty and return code is non-zero, it's likely a real failure
-            print(f"Docker Scout failed for image {image} (exit code {result.returncode})")
+            message = f"Docker Scout failed for image {image} (exit code {result.returncode})"
             if result.stderr:
                 # Truncate stderr for cleaner output but keep the important part
-                clean_stderr = result.stderr.strip().split('\n')[0]
-                print(f"  Error: {clean_stderr}")
+                message += f": {result.stderr.strip().split(chr(10))[0]}"
+            logger.warning(message)
             return findings, False
         
         # 4. Parse successful output
@@ -524,19 +526,19 @@ def scan_image(image: str, compose_file: str, base_path: str, line: int = 0) -> 
             except json.JSONDecodeError as e:
                 # Fallback check for text output
                 if "Analyzing image" in result.stdout or "Target" in result.stdout:
-                    print(f"  Docker Scout returned text instead of JSON for {image}. Trying fallback parser...")
+                    logger.info(f"Docker Scout returned text instead of JSON for {image}. Trying fallback parser...")
                     findings = parse_text_output(result.stdout, image, compose_file, base_path, line)
                 else:
-                    print(f"  Failed to parse Docker Scout output for {image}: {e}")
+                    logger.warning(f"Failed to parse Docker Scout output for {image}: {e}")
         
         if result.stderr and ("error" in result.stderr.lower() and "Available version" not in result.stderr):
             # Log real errors from stderr that aren't just update notifications
-            print(f"  Docker Scout stderr: {result.stderr.strip()}")
+            logger.warning(f"Docker Scout stderr: {result.stderr.strip()}")
     
     except subprocess.TimeoutExpired:
-        print(f"Timeout scanning image: {image}")
+        logger.warning(f"Timeout scanning image: {image}")
     except Exception as e:
-        print(f"Error scanning image {image}: {e}")
+        logger.warning(f"Error scanning image {image}: {e}")
     
     return findings, False
 
@@ -609,9 +611,7 @@ def parse_sarif_format(sarif_data: Dict[str, Any], image: str, compose_file: str
                 ))
     
     except Exception as e:
-        print(f"Error parsing SARIF format: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error parsing SARIF format: {e}", exc_info=True)
     
     return findings
 
@@ -693,9 +693,7 @@ def parse_docker_scout_output(scout_data: Dict[str, Any], image: str, compose_fi
             findings.append(finding)
     
     except Exception as e:
-        print(f"Error parsing Docker Scout output: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error parsing Docker Scout output: {e}", exc_info=True)
     
     return findings
 
@@ -789,7 +787,7 @@ def parse_text_output(text_output: str, image: str, compose_file: str, base_path
     findings = []
     
     # This is a minimal fallback - just create a summary finding
-    print("Warning: Using fallback text parser. Install latest Docker Scout for JSON output.")
+    logger.warning("Using fallback text parser. Install latest Docker Scout for JSON output.")
     
     # Make file path relative
     file_path = os.path.relpath(compose_file, base_path) if compose_file and base_path else compose_file

@@ -14,10 +14,13 @@ from scanner.parser import scan_directory, get_container_scanner, is_container_s
 from scanner.checkov_scanner import CheckovScanner
 from scanner.docker_scout_scanner import DockerScoutScanner
 from scanner.grype_scanner import GrypeScanner
+from scanner.logs import setup_logging
 from reporter.grading import ReportGenerator
 import traceback
 
 load_dotenv()
+# Scanner progress (timestamped) to stderr, which gunicorn shows like stdout
+setup_logging()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()

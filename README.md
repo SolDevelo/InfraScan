@@ -153,7 +153,7 @@ Scanners can be combined with a comma, e.g. `--scanner regex,containers`.
 | *(positional)* | Directory to scan. Defaults to the current directory (`/scan` inside the container). |
 | `--scanner` | `regex`, `checkov`, `containers`, `comprehensive` or a comma-separated combination. Default: `comprehensive`. |
 | `--format` | `text`, `json` or `html` (standalone interactive report). Default: `text`. |
-| `--out` | Output file path, e.g. `/scan/report.html`. Without it, JSON and HTML are printed to stdout. With `--format text`, the file is written as JSON. |
+| `--out` | Output file path, e.g. `/scan/report.html`. Without it, JSON and HTML are printed to stdout. With `--format text`, the file is written as JSON. Progress messages are timestamped and say how long each stage took; they go to stderr, so stdout holds only the report. |
 | `--framework` | `smart`, `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm`, `ansible` or `all`. Default: `smart`. See below. |
 | `-f`, `--include` | Scan only the given files or directories. Repeatable. |
 | `-x`, `--exclude` | Leave files or directories out of the scan, e.g. `-x docs,tests,examples` or `-x modules/legacy`. A name without a slash matches at any depth, like `.gitignore`; a name with a slash is relative to the scanned directory. `*` and `?` are supported. Comma-separated or repeatable; combines with `--include`. |

@@ -8,12 +8,15 @@ CONTAINER_SCANNER=grype to always use Grype.
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
+import time
 from typing import List, Dict, Any, Optional, Tuple
 
 from scanner.base import Scanner, ScanResult
+from scanner.logs import format_duration
 from scanner.image_utils import (
     find_compose_files,
     extract_images_from_compose,
@@ -26,6 +29,8 @@ from scanner.image_utils import (
     unresolved_image_reason,
     image_scan_timeout,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Substrings of a failed scan's error that mean the *registry* is the
@@ -157,33 +162,36 @@ class GrypeScanner(Scanner):
         unscanned: List[Dict[str, str]] = []
         blocked_registries: Dict[str, str] = {}  # registry -> first failure reason
         reachable_registries: set = set()
-        for image, source_refs in all_images_map.items():
+        for index, (image, source_refs) in enumerate(all_images_map.items(), start=1):
             primary_file, primary_line = source_refs[0]
             rel_file = os.path.relpath(primary_file, directory_path)
             unresolved = unresolved_image_reason(image)
             if unresolved:
-                print(f"[warn] Could not scan image {image} ({rel_file}): {unresolved}")
+                logger.warning(f"Could not scan image {image} ({rel_file}): {unresolved}")
                 unscanned.append({'image': image, 'file': rel_file, 'reason': unresolved})
                 continue
             registry = image_registry(image)
             if registry in blocked_registries:
                 reason = f"not attempted: {registry} already failed for an earlier image"
-                print(f"[warn] Skipping image {image}: {reason}")
+                logger.warning(f"Skipping image {image}: {reason}")
                 unscanned.append({'image': image, 'file': rel_file, 'reason': reason})
                 continue
-            print(f"Scanning image with Grype: {image}")
+            logger.info(f"Scanning image with Grype ({index}/{len(all_images_map)}): {image} ({rel_file})")
+            image_started = time.monotonic()
             try:
                 image_findings, error = scan_image(image, primary_file, directory_path, primary_line)
             except Exception as e:
                 image_findings, error = [], str(e)
+            took = format_duration(time.monotonic() - image_started)
             if error:
-                print(f"[warn] Could not scan image {image} ({rel_file}): {error}")
+                logger.warning(f"Could not scan image {image} ({rel_file}) after {took}: {error}")
                 unscanned.append({'image': image, 'file': rel_file, 'reason': error})
                 if _registry_blocked(error, registry, reachable_registries):
                     blocked_registries[registry] = error
-                    print(f"[warn] Skipping remaining images from {registry} -- "
-                          f"unreachable or rejecting credentials from this runner.")
+                    logger.warning(f"Skipping remaining images from {registry} -- "
+                                   f"unreachable or rejecting credentials from this runner.")
                 continue
+            logger.info(f"Scanned {image} in {took}: {len(image_findings)} vulnerabilities")
             reachable_registries.add(registry)
             if len(source_refs) > 1:
                 also_in = [
@@ -196,8 +204,8 @@ class GrypeScanner(Scanner):
 
         total = len(all_images_map)
         if unscanned:
-            print(f"[warn] Grype scanned {total - len(unscanned)} of {total} image(s); "
-                  f"{len(unscanned)} could not be scanned -- their vulnerabilities are NOT in this report.")
+            logger.warning(f"Grype scanned {total - len(unscanned)} of {total} image(s); "
+                           f"{len(unscanned)} could not be scanned -- their vulnerabilities are NOT in this report.")
 
         return ScanResult(findings=findings, unscanned_images=unscanned, images_total=total,
                           images_scanned=total - len(unscanned))
@@ -224,13 +232,16 @@ def ensure_db_ready(timeout: int = 300) -> None:
             return
     except Exception:
         pass
-    print("Grype vulnerability DB not found or stale, downloading (first run only)...")
+    logger.info("Grype vulnerability DB not found or stale, downloading (first run only)...")
+    started = time.monotonic()
     try:
         result = subprocess.run(["grype", "db", "update"], capture_output=True, text=True, timeout=timeout)
         if result.returncode != 0:
-            print(f"Warning: grype db update failed: {result.stderr[-300:]}")
+            logger.warning(f"grype db update failed: {result.stderr[-300:]}")
+        else:
+            logger.info(f"Grype vulnerability DB downloaded in {format_duration(time.monotonic() - started)}")
     except subprocess.TimeoutExpired:
-        print(f"Warning: grype db update did not finish within {timeout}s")
+        logger.warning(f"grype db update did not finish within {timeout}s")
 
 
 def _failure_reason(result: subprocess.CompletedProcess) -> str:
@@ -355,9 +366,7 @@ def parse_grype_output(grype_data: Dict[str, Any], image: str, compose_file: str
             findings.append(finding)
     
     except Exception as e:
-        print(f"Error parsing Grype output: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error parsing Grype output: {e}", exc_info=True)
     
     return findings
 

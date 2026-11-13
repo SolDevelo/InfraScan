@@ -2,9 +2,12 @@ import json
 import os
 import re
 import subprocess
+import logging
 from typing import List, Dict, Any, Optional
 
 from scanner.paths import walk
+
+logger = logging.getLogger(__name__)
 
 def find_compose_files(directory_path: str) -> List[str]:
     """Find Docker Compose files in the directory."""
@@ -106,8 +109,8 @@ def image_scan_timeout() -> int:
             return value
     except ValueError:
         pass
-    print(f"[warn] Ignoring CONTAINER_SCAN_TIMEOUT={raw!r}: not a positive number of seconds "
-          f"-- using {DEFAULT_IMAGE_SCAN_TIMEOUT}")
+    logger.warning(f"Ignoring CONTAINER_SCAN_TIMEOUT={raw!r}: not a positive number of seconds "
+                   f"-- using {DEFAULT_IMAGE_SCAN_TIMEOUT}")
     return DEFAULT_IMAGE_SCAN_TIMEOUT
 
 
@@ -276,10 +279,10 @@ def extract_images_from_compose(compose_file: str, root: Optional[str] = None) -
                     images.append((image_name, line_no))
             if used_files:
                 base = root or os.path.dirname(compose_file)
-                print(f"[i] {os.path.relpath(compose_file, base)}: image variables from "
-                      + ', '.join(os.path.relpath(p, base) for p in used_files))
+                logger.info(f"{os.path.relpath(compose_file, base)}: image variables from "
+                            + ', '.join(os.path.relpath(p, base) for p in used_files))
     except Exception as e:
-        print(f"Warning: Could not parse {compose_file}: {e}")
+        logger.warning(f"Could not parse {compose_file}: {e}")
 
     return images
 
@@ -314,7 +317,7 @@ def extract_images_from_kubernetes(k8s_file: str) -> List[tuple]:
 
                 find_images(doc)
     except Exception as e:
-        print(f"Warning: Could not parse {k8s_file}: {e}")
+        logger.warning(f"Could not parse {k8s_file}: {e}")
 
     return images
 
@@ -333,14 +336,14 @@ def ecr_login(image_name: str) -> bool:
     registry_url = match.group(1)
     region = match.group(2)
     
-    print(f"  Detected ECR image, attempting login to {registry_url} in {region}...")
+    logger.info(f"Detected ECR image, attempting login to {registry_url} in {region}...")
     
     try:
         # Check if 'aws' command is available
         try:
             subprocess.run(["aws", "--version"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print("  Warning: AWS CLI not found. Please install 'aws' or pre-authenticate manually.")
+            logger.warning("AWS CLI not found. Please install 'aws' or pre-authenticate manually.")
             return False
             
         # Perform login using aws ecr get-login-password
@@ -348,14 +351,14 @@ def ecr_login(image_name: str) -> bool:
         result = subprocess.run(login_cmd, shell=True, capture_output=True, text=True)
         
         if result.returncode == 0:
-            print(f"  ✓ Successfully authenticated with ECR: {registry_url}")
+            logger.info(f"Successfully authenticated with ECR: {registry_url}")
             return True
         else:
-            print(f"  Warning: ECR authentication failed: {result.stderr.strip()}")
+            logger.warning(f"ECR authentication failed: {result.stderr.strip()}")
             return False
             
     except Exception as e:
-        print(f"  Warning: Error during ECR login: {e}")
+        logger.warning(f"Error during ECR login: {e}")
         return False
 
 def image_registry(image: str) -> str:
@@ -382,11 +385,11 @@ def drop_ignored_images(all_images_map: dict) -> dict:
     try:
         pattern = re.compile(raw)
     except re.error as e:
-        print(f"[warn] Ignoring invalid CONTAINER_IGNORE_IMAGES regex {raw!r}: {e}")
+        logger.warning(f"Ignoring invalid CONTAINER_IGNORE_IMAGES regex {raw!r}: {e}")
         return all_images_map
     skipped = [img for img in all_images_map if pattern.search(img)]
     if skipped:
-        print(f"[i] Skipping {len(skipped)} image(s) matching CONTAINER_IGNORE_IMAGES={raw!r}: {', '.join(skipped)}")
+        logger.info(f"Skipping {len(skipped)} image(s) matching CONTAINER_IGNORE_IMAGES={raw!r}: {', '.join(skipped)}")
     return {img: refs for img, refs in all_images_map.items() if img not in skipped}
 
 
@@ -430,13 +433,13 @@ def docker_hub_login() -> bool:
         )
         
         if result.returncode == 0:
-            print("✓ Docker Hub authentication successful")
+            logger.info("Docker Hub authentication successful")
             return True
         else:
-            print(f"Warning: Docker Hub login failed: {result.stderr[:200]}")
+            logger.warning(f"Docker Hub login failed: {result.stderr[:200]}")
             return False
     except Exception as e:
-        print(f"Warning: Docker Hub login error: {e}")
+        logger.warning(f"Docker Hub login error: {e}")
         return False
 
 def perform_all_logins(images: List[str]):
