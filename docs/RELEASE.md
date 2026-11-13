@@ -10,7 +10,7 @@ Steps to release a new version of InfraScan: the Docker Hub image, the git tags 
 - [ ] Version number updated in `README.md` (if applicable).
 - [ ] Version string updated in the web app footer: `templates/index.html`, `report.html`, `project_scans.html` and `supported_projects.html` each contain their own hardcoded `InfraScan vX.Y.Z` string (there is no shared partial, and this has been missed in past releases).
 - [ ] Release notes added as `docs/RELEASE_NOTES_<version>.md`.
-- [ ] Docker Hub image built and pushed (`latest` and `<version>`). Do this **before** pushing the git tag and moving `v1`: from then on the action pulls `<version>`, and every workflow using it fails until that tag exists.
+- [ ] Docker Hub image built and pushed (`latest` and `<version>`) by running the **Publish Docker image** workflow on `main`. Do this **before** pushing the git tag and moving `v1`: from then on the action pulls `<version>`, and every workflow using it fails until that tag exists.
 - [ ] Git tag created and pushed.
 - [ ] Major version tag (e.g. `v1`) updated.
 - [ ] GitHub Release published to the Marketplace.
@@ -21,13 +21,23 @@ Steps to release a new version of InfraScan: the Docker Hub image, the git tags 
 
 The `soldevelo/infrascan` image contains both the web app and the CLI.
 
-### Log in
-You need push access to the `soldevelo` organization.
+### Publish with GitHub Actions
+Once the version bump is on `main`, open **Actions → Publish Docker image → Run workflow** and run it on `main`. The workflow (`.github/workflows/publish-image.yml`):
+
+1. Refuses to run on any branch other than `main`.
+2. Reads the version from `cli.py` and checks that `action.yml` uses the same one.
+3. Stops if `soldevelo/infrascan:<version>` is already on Docker Hub, so a released tag isn't replaced by accident. Tick **overwrite** to replace it on purpose.
+4. Builds the image and checks it: `--version` reports `<version>`, Grype, Docker Scout and the AWS CLI are installed, and a regex scan of the repo returns valid JSON.
+5. Pushes `<version>` and `latest`. The run summary shows the digest and the next release steps.
+
+It needs the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`: a Docker Hub access token with push access to `soldevelo/infrascan`.
+
+### Publish by hand
+If the workflow can't be used, build and push from a clean checkout of `main`. You need push access to the `soldevelo` organization.
 ```bash
 docker login
 ```
 
-### Build and push
 Replace `<version>` with the new version (e.g. `1.1.0`).
 ```bash
 # Build

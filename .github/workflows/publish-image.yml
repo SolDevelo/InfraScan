@@ -1,0 +1,112 @@
+name: Publish Docker image
+
+# Run by hand from the Actions tab, on main, as the Docker Hub step of
+# docs/RELEASE.md: after the version bump is on main, before the git tag.
+# Builds the image, checks it, then pushes soldevelo/infrascan:<version>
+# (from __version__ in cli.py) and :latest.
+on:
+  workflow_dispatch:
+    inputs:
+      overwrite:
+        description: "Replace soldevelo/infrascan:<version> if it's already on Docker Hub"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-image
+  cancel-in-progress: false
+
+env:
+  IMAGE: soldevelo/infrascan
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only publish from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow on main, not ${GITHUB_REF}"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read the version
+        id: version
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' cli.py)
+          if [ -z "$version" ]; then
+            echo "::error file=cli.py::__version__ not found"
+            exit 1
+          fi
+          if ! grep -q "'${IMAGE}:${version}'" action.yml; then
+            echo "::error file=action.yml::action.yml doesn't default to ${IMAGE}:${version} (cli.py __version__)"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # A released version tag is what pinned users (and the action) run, so
+      # don't replace it by accident: bump the version or tick "overwrite".
+      - name: Check the version isn't on Docker Hub yet
+        if: ${{ !inputs.overwrite }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/namespaces/soldevelo/repositories/infrascan/tags/${VERSION}")
+          case "$status" in
+            404) echo "${IMAGE}:${VERSION} is new" ;;
+            200)
+              echo "::error::${IMAGE}:${VERSION} is already on Docker Hub. Bump __version__ in cli.py and action.yml, or rerun with 'overwrite' ticked to replace it."
+              exit 1 ;;
+            *)
+              echo "::error::Couldn't check Docker Hub for ${IMAGE}:${VERSION} (HTTP ${status})"
+              exit 1 ;;
+          esac
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build the image
+        run: docker build --pull -t "${IMAGE}:candidate" .
+
+      # The scanners are installed from upstream install scripts at build
+      # time, so check they actually made it into the image.
+      - name: Check the image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -o pipefail
+          reported=$(docker run --rm "${IMAGE}:candidate" cli --version)
+          if [ "$reported" != "InfraScan v${VERSION}" ]; then
+            echo "::error::The image reports '${reported}', expected 'InfraScan v${VERSION}'"
+            exit 1
+          fi
+          docker run --rm "${IMAGE}:candidate" sh -c 'grype version && docker-scout version && aws --version'
+          docker run --rm -v "$PWD":/scan:ro "${IMAGE}:candidate" cli /scan \
+            --scanner regex --format json --no-tips > scan.json
+          python3 -c 'import json; r = json.load(open("scan.json")); print("Regex scan OK:", len(r["results"]), "finding(s)")'
+
+      - name: Push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker tag "${IMAGE}:candidate" "${IMAGE}:${VERSION}"
+          docker tag "${IMAGE}:candidate" "${IMAGE}:latest"
+          docker push "${IMAGE}:${VERSION}"
+          docker push "${IMAGE}:latest"
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "${IMAGE}:${VERSION}")
+          {
+            echo "### Pushed ${IMAGE}:${VERSION} and :latest"
+            echo
+            echo "Commit \`${GITHUB_SHA::7}\`, digest \`${digest#*@}\`."
+            echo
+            echo "Next in docs/RELEASE.md: push the git tag \`v${VERSION}\`, move \`v1\`, publish the GitHub Release."
+          } >> "$GITHUB_STEP_SUMMARY"
