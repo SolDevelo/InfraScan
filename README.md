@@ -461,6 +461,47 @@ Contributions are welcome, particularly in these areas:
 
 Please open an issue to discuss larger changes before submitting a pull request.
 
+
+### Running tests locally
+
+InfraScan uses pytest for its unit test suite. The tests cover grading,
+cost estimation, detection rules, scanner output parsing, CLI behavior,
+report generation, and CI adapters.
+
+Python 3.9 is the target version for CI.
+
+To set up a development environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt -r requirements-dev.txt
+```
+
+Run the complete test suite from the repository root:
+
+```bash
+python -m pytest tests/ -q
+```
+
+Run a specific test file:
+
+```bash
+python -m pytest tests/test_grading.py -v
+```
+
+The unit tests use temporary files, recorded fixtures, and mocks.
+They must not require Docker, network access, or installed scanner executables.
+
+### Before submitting a pull request
+
+- Add or update tests for the behavior you change.
+- Run the complete pytest suite.
+- Make sure the tests pass on Python 3.9.
+- Keep unit tests independent of external services.
+- Report unrelated bugs in separate GitHub issues.
+
+
 ## Support and community
 
 Questions and feedback are welcome in the [InfraScan Slack community](https://join.slack.com/t/infrascancommunity/shared_invite/zt-3rcl6w3wg-gCN1AKW1sXjYT080efVmlQ) or on [GitHub Issues](https://github.com/soldevelo/infrascan/issues).

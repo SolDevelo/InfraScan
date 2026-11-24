@@ -4,6 +4,7 @@ Steps to release a new version of InfraScan: the Docker Hub image, the git tags 
 
 ## Release checklist
 
+- [ ] Unit tests pass on Python 3.9 (`python -m pytest tests/ -q`).
 - [ ] CI on `main` passes (`.github/workflows/infrascan-ci.yml`, which also runs the version check below).
 - [ ] Version bumped in `cli.py` (`__version__`).
 - [ ] Same version in `action.yml`'s default image (`soldevelo/infrascan:<version>` in the "Resolve InfraScan image" step). The action runs that image, so pinning the action pins the scanner; CI fails if it does not match `__version__`.

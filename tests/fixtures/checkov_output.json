@@ -1,0 +1,17 @@
+
+{
+  "check_type": "terraform",
+  "results": {
+    "failed_checks": [
+      {
+        "check_id": "CKV_AWS_19",
+        "check_name": "Ensure EBS volumes are encrypted",
+        "severity": "HIGH",
+        "file_path": "/main.tf",
+        "file_line_range": [3, 8],
+        "resource": "aws_ebs_volume.data",
+        "guideline": "Enable EBS encryption"
+      }
+    ]
+  }
+}

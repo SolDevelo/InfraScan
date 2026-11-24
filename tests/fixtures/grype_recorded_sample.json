@@ -1,0 +1,2957 @@
+{
+  "matches": [
+    {
+      "vulnerability": {
+        "id": "CVE-2025-15467",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-15467",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Critical",
+        "urls": [],
+        "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with maliciously crafted AEAD parameters can trigger a stack buffer overflow.  Impact summary: A stack buffer overflow may lead to a crash, causing Denial of Service, or potentially remote code execution.  When parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as AES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is copied into a fixed-size stack buffer without verifying that its length fits the destination. An attacker can supply a crafted CMS message with an oversized IV, causing a stack-based out-of-bounds write before any authentication or tag verification occurs.  Applications and services that parse untrusted CMS or PKCS#7 content using AEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable. Because the overflow occurs prior to authentication, no valid key material is required to trigger it. While exploitability to remote code execution depends on platform and toolchain mitigations, the stack-based write primitive represents a severe risk.  The FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this issue, as the CMS implementation is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.  OpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 9.8,
+              "exploitabilityScore": 3.9,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-15467",
+            "epss": 0.74793,
+            "percentile": 0.99513,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-120",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-27",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6113-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6113-1"
+          }
+        ],
+        "risk": 70.30542000000001
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-15467",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-15467",
+          "namespace": "nvd:cpe",
+          "severity": "Critical",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/2c8f0e5fa9b6ee5508a0349e4572ddb74db5a703",
+            "https://github.com/openssl/openssl/commit/5f26d4202f5b89664c5c3f3c62086276026ba9a9",
+            "https://github.com/openssl/openssl/commit/6ced0fe6b10faa560e410e3ee8d6c82f06c65ea3",
+            "https://github.com/openssl/openssl/commit/ce39170276daec87f55c39dad1f629b56344429e",
+            "https://github.com/openssl/openssl/commit/d0071a0799f20cc8101730145349ed4487c268dc",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "http://www.openwall.com/lists/oss-security/2026/01/27/10",
+            "http://www.openwall.com/lists/oss-security/2026/02/25/6",
+            "https://access.redhat.com/errata/RHSA-2026:1472",
+            "https://access.redhat.com/errata/RHSA-2026:1473",
+            "https://access.redhat.com/errata/RHSA-2026:1496",
+            "https://access.redhat.com/errata/RHSA-2026:1503",
+            "https://access.redhat.com/errata/RHSA-2026:1519",
+            "https://access.redhat.com/errata/RHSA-2026:1594",
+            "https://access.redhat.com/errata/RHSA-2026:1733",
+            "https://access.redhat.com/errata/RHSA-2026:1736",
+            "https://access.redhat.com/errata/RHSA-2026:2072",
+            "https://access.redhat.com/errata/RHSA-2026:2077",
+            "https://access.redhat.com/errata/RHSA-2026:2485",
+            "https://access.redhat.com/errata/RHSA-2026:2563",
+            "https://access.redhat.com/errata/RHSA-2026:2633",
+            "https://access.redhat.com/errata/RHSA-2026:2659",
+            "https://access.redhat.com/errata/RHSA-2026:2671",
+            "https://access.redhat.com/errata/RHSA-2026:2844",
+            "https://access.redhat.com/errata/RHSA-2026:2974",
+            "https://access.redhat.com/errata/RHSA-2026:2995",
+            "https://access.redhat.com/errata/RHSA-2026:3228",
+            "https://access.redhat.com/errata/RHSA-2026:3415",
+            "https://access.redhat.com/errata/RHSA-2026:3461",
+            "https://access.redhat.com/errata/RHSA-2026:3462",
+            "https://access.redhat.com/errata/RHSA-2026:4419",
+            "https://access.redhat.com/errata/RHSA-2026:4943",
+            "https://access.redhat.com/errata/RHSA-2026:6481",
+            "https://access.redhat.com/errata/RHSA-2026:7261",
+            "https://access.redhat.com/security/cve/CVE-2025-15467",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2430376",
+            "https://cert-portal.siemens.com/productcert/html/ssa-434797.html",
+            "https://cert-portal.siemens.com/productcert/html/ssa-734552.html",
+            "https://github.com/guiimoraes/CVE-2025-15467",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2025/cve-2025-15467.json"
+          ],
+          "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with\nmaliciously crafted AEAD parameters can trigger a stack buffer overflow.\n\nImpact summary: A stack buffer overflow may lead to a crash, causing Denial\nof Service, or potentially remote code execution.\n\nWhen parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as\nAES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is\ncopied into a fixed-size stack buffer without verifying that its length fits\nthe destination. An attacker can supply a crafted CMS message with an\noversized IV, causing a stack-based out-of-bounds write before any\nauthentication or tag verification occurs.\n\nApplications and services that parse untrusted CMS or PKCS#7 content using\nAEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable.\nBecause the overflow occurs prior to authentication, no valid key material\nis required to trigger it. While exploitability to remote code execution\ndepends on platform and toolchain mitigations, the stack-based write\nprimitive represents a severe risk.\n\nThe FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this\nissue, as the CMS implementation is outside the OpenSSL FIPS module\nboundary.\n\nOpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.\n\nOpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 9.8,
+                "exploitabilityScore": 3.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-15467",
+              "epss": 0.74793,
+              "percentile": 0.99513,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-120",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-15467",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "cf134a9a6df777ae",
+        "name": "libssl3t64",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/libssl3t64/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/libssl3t64/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:libssl3t64:libssl3t64:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/libssl3t64@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2025-15467",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-15467",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Critical",
+        "urls": [],
+        "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with maliciously crafted AEAD parameters can trigger a stack buffer overflow.  Impact summary: A stack buffer overflow may lead to a crash, causing Denial of Service, or potentially remote code execution.  When parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as AES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is copied into a fixed-size stack buffer without verifying that its length fits the destination. An attacker can supply a crafted CMS message with an oversized IV, causing a stack-based out-of-bounds write before any authentication or tag verification occurs.  Applications and services that parse untrusted CMS or PKCS#7 content using AEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable. Because the overflow occurs prior to authentication, no valid key material is required to trigger it. While exploitability to remote code execution depends on platform and toolchain mitigations, the stack-based write primitive represents a severe risk.  The FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this issue, as the CMS implementation is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.  OpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 9.8,
+              "exploitabilityScore": 3.9,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-15467",
+            "epss": 0.74793,
+            "percentile": 0.99513,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-120",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-27",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6113-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6113-1"
+          }
+        ],
+        "risk": 70.30542000000001
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-15467",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-15467",
+          "namespace": "nvd:cpe",
+          "severity": "Critical",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/2c8f0e5fa9b6ee5508a0349e4572ddb74db5a703",
+            "https://github.com/openssl/openssl/commit/5f26d4202f5b89664c5c3f3c62086276026ba9a9",
+            "https://github.com/openssl/openssl/commit/6ced0fe6b10faa560e410e3ee8d6c82f06c65ea3",
+            "https://github.com/openssl/openssl/commit/ce39170276daec87f55c39dad1f629b56344429e",
+            "https://github.com/openssl/openssl/commit/d0071a0799f20cc8101730145349ed4487c268dc",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "http://www.openwall.com/lists/oss-security/2026/01/27/10",
+            "http://www.openwall.com/lists/oss-security/2026/02/25/6",
+            "https://access.redhat.com/errata/RHSA-2026:1472",
+            "https://access.redhat.com/errata/RHSA-2026:1473",
+            "https://access.redhat.com/errata/RHSA-2026:1496",
+            "https://access.redhat.com/errata/RHSA-2026:1503",
+            "https://access.redhat.com/errata/RHSA-2026:1519",
+            "https://access.redhat.com/errata/RHSA-2026:1594",
+            "https://access.redhat.com/errata/RHSA-2026:1733",
+            "https://access.redhat.com/errata/RHSA-2026:1736",
+            "https://access.redhat.com/errata/RHSA-2026:2072",
+            "https://access.redhat.com/errata/RHSA-2026:2077",
+            "https://access.redhat.com/errata/RHSA-2026:2485",
+            "https://access.redhat.com/errata/RHSA-2026:2563",
+            "https://access.redhat.com/errata/RHSA-2026:2633",
+            "https://access.redhat.com/errata/RHSA-2026:2659",
+            "https://access.redhat.com/errata/RHSA-2026:2671",
+            "https://access.redhat.com/errata/RHSA-2026:2844",
+            "https://access.redhat.com/errata/RHSA-2026:2974",
+            "https://access.redhat.com/errata/RHSA-2026:2995",
+            "https://access.redhat.com/errata/RHSA-2026:3228",
+            "https://access.redhat.com/errata/RHSA-2026:3415",
+            "https://access.redhat.com/errata/RHSA-2026:3461",
+            "https://access.redhat.com/errata/RHSA-2026:3462",
+            "https://access.redhat.com/errata/RHSA-2026:4419",
+            "https://access.redhat.com/errata/RHSA-2026:4943",
+            "https://access.redhat.com/errata/RHSA-2026:6481",
+            "https://access.redhat.com/errata/RHSA-2026:7261",
+            "https://access.redhat.com/security/cve/CVE-2025-15467",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2430376",
+            "https://cert-portal.siemens.com/productcert/html/ssa-434797.html",
+            "https://cert-portal.siemens.com/productcert/html/ssa-734552.html",
+            "https://github.com/guiimoraes/CVE-2025-15467",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2025/cve-2025-15467.json"
+          ],
+          "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with\nmaliciously crafted AEAD parameters can trigger a stack buffer overflow.\n\nImpact summary: A stack buffer overflow may lead to a crash, causing Denial\nof Service, or potentially remote code execution.\n\nWhen parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as\nAES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is\ncopied into a fixed-size stack buffer without verifying that its length fits\nthe destination. An attacker can supply a crafted CMS message with an\noversized IV, causing a stack-based out-of-bounds write before any\nauthentication or tag verification occurs.\n\nApplications and services that parse untrusted CMS or PKCS#7 content using\nAEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable.\nBecause the overflow occurs prior to authentication, no valid key material\nis required to trigger it. While exploitability to remote code execution\ndepends on platform and toolchain mitigations, the stack-based write\nprimitive represents a severe risk.\n\nThe FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this\nissue, as the CMS implementation is outside the OpenSSL FIPS module\nboundary.\n\nOpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.\n\nOpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 9.8,
+                "exploitabilityScore": 3.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-15467",
+              "epss": 0.74793,
+              "percentile": 0.99513,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-120",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-15467",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "f72f3ab0ac4376bd",
+        "name": "openssl",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl/copyright",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/usr/share/doc/openssl/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.conffiles",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.conffiles",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.md5sums",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.list",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.list"
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.postinst",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.postinst"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl:openssl:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1",
+        "upstreams": []
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2025-15467",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-15467",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Critical",
+        "urls": [],
+        "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with maliciously crafted AEAD parameters can trigger a stack buffer overflow.  Impact summary: A stack buffer overflow may lead to a crash, causing Denial of Service, or potentially remote code execution.  When parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as AES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is copied into a fixed-size stack buffer without verifying that its length fits the destination. An attacker can supply a crafted CMS message with an oversized IV, causing a stack-based out-of-bounds write before any authentication or tag verification occurs.  Applications and services that parse untrusted CMS or PKCS#7 content using AEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable. Because the overflow occurs prior to authentication, no valid key material is required to trigger it. While exploitability to remote code execution depends on platform and toolchain mitigations, the stack-based write primitive represents a severe risk.  The FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this issue, as the CMS implementation is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.  OpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 9.8,
+              "exploitabilityScore": 3.9,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-15467",
+            "epss": 0.74793,
+            "percentile": 0.99513,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-15467",
+            "cwe": "CWE-120",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-27",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6113-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6113-1"
+          }
+        ],
+        "risk": 70.30542000000001
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-15467",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-15467",
+          "namespace": "nvd:cpe",
+          "severity": "Critical",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/2c8f0e5fa9b6ee5508a0349e4572ddb74db5a703",
+            "https://github.com/openssl/openssl/commit/5f26d4202f5b89664c5c3f3c62086276026ba9a9",
+            "https://github.com/openssl/openssl/commit/6ced0fe6b10faa560e410e3ee8d6c82f06c65ea3",
+            "https://github.com/openssl/openssl/commit/ce39170276daec87f55c39dad1f629b56344429e",
+            "https://github.com/openssl/openssl/commit/d0071a0799f20cc8101730145349ed4487c268dc",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "http://www.openwall.com/lists/oss-security/2026/01/27/10",
+            "http://www.openwall.com/lists/oss-security/2026/02/25/6",
+            "https://access.redhat.com/errata/RHSA-2026:1472",
+            "https://access.redhat.com/errata/RHSA-2026:1473",
+            "https://access.redhat.com/errata/RHSA-2026:1496",
+            "https://access.redhat.com/errata/RHSA-2026:1503",
+            "https://access.redhat.com/errata/RHSA-2026:1519",
+            "https://access.redhat.com/errata/RHSA-2026:1594",
+            "https://access.redhat.com/errata/RHSA-2026:1733",
+            "https://access.redhat.com/errata/RHSA-2026:1736",
+            "https://access.redhat.com/errata/RHSA-2026:2072",
+            "https://access.redhat.com/errata/RHSA-2026:2077",
+            "https://access.redhat.com/errata/RHSA-2026:2485",
+            "https://access.redhat.com/errata/RHSA-2026:2563",
+            "https://access.redhat.com/errata/RHSA-2026:2633",
+            "https://access.redhat.com/errata/RHSA-2026:2659",
+            "https://access.redhat.com/errata/RHSA-2026:2671",
+            "https://access.redhat.com/errata/RHSA-2026:2844",
+            "https://access.redhat.com/errata/RHSA-2026:2974",
+            "https://access.redhat.com/errata/RHSA-2026:2995",
+            "https://access.redhat.com/errata/RHSA-2026:3228",
+            "https://access.redhat.com/errata/RHSA-2026:3415",
+            "https://access.redhat.com/errata/RHSA-2026:3461",
+            "https://access.redhat.com/errata/RHSA-2026:3462",
+            "https://access.redhat.com/errata/RHSA-2026:4419",
+            "https://access.redhat.com/errata/RHSA-2026:4943",
+            "https://access.redhat.com/errata/RHSA-2026:6481",
+            "https://access.redhat.com/errata/RHSA-2026:7261",
+            "https://access.redhat.com/security/cve/CVE-2025-15467",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2430376",
+            "https://cert-portal.siemens.com/productcert/html/ssa-434797.html",
+            "https://cert-portal.siemens.com/productcert/html/ssa-734552.html",
+            "https://github.com/guiimoraes/CVE-2025-15467",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2025/cve-2025-15467.json"
+          ],
+          "description": "Issue summary: Parsing CMS AuthEnvelopedData or EnvelopedData message with\nmaliciously crafted AEAD parameters can trigger a stack buffer overflow.\n\nImpact summary: A stack buffer overflow may lead to a crash, causing Denial\nof Service, or potentially remote code execution.\n\nWhen parsing CMS (Auth)EnvelopedData structures that use AEAD ciphers such as\nAES-GCM, the IV (Initialization Vector) encoded in the ASN.1 parameters is\ncopied into a fixed-size stack buffer without verifying that its length fits\nthe destination. An attacker can supply a crafted CMS message with an\noversized IV, causing a stack-based out-of-bounds write before any\nauthentication or tag verification occurs.\n\nApplications and services that parse untrusted CMS or PKCS#7 content using\nAEAD ciphers (e.g., S/MIME (Auth)EnvelopedData with AES-GCM) are vulnerable.\nBecause the overflow occurs prior to authentication, no valid key material\nis required to trigger it. While exploitability to remote code execution\ndepends on platform and toolchain mitigations, the stack-based write\nprimitive represents a severe risk.\n\nThe FIPS modules in 3.6, 3.5, 3.4, 3.3 and 3.0 are not affected by this\nissue, as the CMS implementation is outside the OpenSSL FIPS module\nboundary.\n\nOpenSSL 3.6, 3.5, 3.4, 3.3 and 3.0 are vulnerable to this issue.\n\nOpenSSL 1.1.1 and 1.0.2 are not affected by this issue.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 9.8,
+                "exploitabilityScore": 3.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-15467",
+              "epss": 0.74793,
+              "percentile": 0.99513,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-15467",
+              "cwe": "CWE-120",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-15467",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "7ad51bf71f0987bd",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.list",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.list"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl-provider-legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider-legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl-provider-legacy@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-45447",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-45447",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could trigger a use-after-free during PKCS#7 signature verification.  Impact summary: A use-after-free may result in process crashes, heap corruption, or potentially remote code execution.  When processing a PKCS#7 or S/MIME signed message, if the SignedData digestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may incorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent use of the BIO by the calling application results in a use-after-free condition.  In the common case this occurs when the application later calls BIO_free() on the BIO originally passed to PKCS7_verify(). Depending on allocator behavior and application-specific BIO usage patterns, this may result in a crash or other memory corruption. In some application contexts this may potentially be exploitable for remote code execution.  Applications that process PKCS#7 or S/MIME signed messages using OpenSSL PKCS#7 APIs may be affected. Applications using the CMS APIs for this processing are not affected.  The FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this issue, as the affected code is outside the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 8.1,
+              "exploitabilityScore": 2.3,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-45447",
+            "epss": 0.04002,
+            "percentile": 0.90795,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-416",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-825",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.6-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.6-1~deb13u2",
+              "date": "2026-06-09",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6335-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6335-1"
+          }
+        ],
+        "risk": 3.12156
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-45447",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-45447",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/3aad5eb7af4de4ee0633c30a8541a54d9bbde63c",
+            "https://github.com/openssl/openssl/commit/7d4a980c62258c5910cc883936e0c8dbab4d75a8",
+            "https://github.com/openssl/openssl/commit/9dfd688ad2290fc5075cacbc9bf0c9a93eefed54",
+            "https://github.com/openssl/openssl/commit/a541ae8bfe849a30cc885e8780715c0f488e496c",
+            "https://github.com/openssl/openssl/commit/c505d7559da5d5f9f2c3913c6883a5562ce7273e",
+            "https://openssl-library.org/news/secadv/20260609.txt",
+            "https://access.redhat.com/errata/RHSA-2026:25237",
+            "https://access.redhat.com/errata/RHSA-2026:25239",
+            "https://access.redhat.com/errata/RHSA-2026:26275",
+            "https://access.redhat.com/errata/RHSA-2026:26319",
+            "https://access.redhat.com/errata/RHSA-2026:29197",
+            "https://access.redhat.com/errata/RHSA-2026:34102",
+            "https://access.redhat.com/errata/RHSA-2026:35869",
+            "https://access.redhat.com/errata/RHSA-2026:36215",
+            "https://access.redhat.com/errata/RHSA-2026:36217",
+            "https://access.redhat.com/errata/RHSA-2026:39009",
+            "https://access.redhat.com/errata/RHSA-2026:39012",
+            "https://access.redhat.com/errata/RHSA-2026:39981",
+            "https://access.redhat.com/errata/RHSA-2026:44438",
+            "https://access.redhat.com/errata/RHSA-2026:47735",
+            "https://access.redhat.com/errata/RHSA-2026:47737",
+            "https://access.redhat.com/errata/RHSA-2026:58563",
+            "https://access.redhat.com/errata/RHSA-2026:58981",
+            "https://access.redhat.com/errata/RHSA-2026:59831",
+            "https://access.redhat.com/errata/RHSA-2026:66524",
+            "https://access.redhat.com/security/cve/CVE-2026-45447",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2481898",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2026/cve-2026-45447.json"
+          ],
+          "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could\ntrigger a use-after-free during PKCS#7 signature verification.\n\nImpact summary: A use-after-free may result in process crashes, heap\ncorruption, or potentially remote code execution.\n\nWhen processing a PKCS#7 or S/MIME signed message, if the SignedData\ndigestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may\nincorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent\nuse of the BIO by the calling application results in a use-after-free\ncondition.\n\nIn the common case this occurs when the application later calls\nBIO_free() on the BIO originally passed to PKCS7_verify(). Depending\non allocator behavior and application-specific BIO usage patterns, this\nmay result in a crash or other memory corruption. In some application\ncontexts this may potentially be exploitable for remote code execution.\n\nApplications that process PKCS#7 or S/MIME signed messages using OpenSSL\nPKCS#7 APIs may be affected. Applications using the CMS APIs for this\nprocessing are not affected.\n\nThe FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this\nissue, as the affected code is outside the OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.1,
+                "exploitabilityScore": 2.3,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-45447",
+              "epss": 0.04002,
+              "percentile": 0.90795,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-416",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-825",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-45447",
+            "versionConstraint": "< 3.5.6-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.6-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "cf134a9a6df777ae",
+        "name": "libssl3t64",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/libssl3t64/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/libssl3t64/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:libssl3t64:libssl3t64:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/libssl3t64@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-45447",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-45447",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could trigger a use-after-free during PKCS#7 signature verification.  Impact summary: A use-after-free may result in process crashes, heap corruption, or potentially remote code execution.  When processing a PKCS#7 or S/MIME signed message, if the SignedData digestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may incorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent use of the BIO by the calling application results in a use-after-free condition.  In the common case this occurs when the application later calls BIO_free() on the BIO originally passed to PKCS7_verify(). Depending on allocator behavior and application-specific BIO usage patterns, this may result in a crash or other memory corruption. In some application contexts this may potentially be exploitable for remote code execution.  Applications that process PKCS#7 or S/MIME signed messages using OpenSSL PKCS#7 APIs may be affected. Applications using the CMS APIs for this processing are not affected.  The FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this issue, as the affected code is outside the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 8.1,
+              "exploitabilityScore": 2.3,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-45447",
+            "epss": 0.04002,
+            "percentile": 0.90795,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-416",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-825",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.6-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.6-1~deb13u2",
+              "date": "2026-06-09",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6335-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6335-1"
+          }
+        ],
+        "risk": 3.12156
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-45447",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-45447",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/3aad5eb7af4de4ee0633c30a8541a54d9bbde63c",
+            "https://github.com/openssl/openssl/commit/7d4a980c62258c5910cc883936e0c8dbab4d75a8",
+            "https://github.com/openssl/openssl/commit/9dfd688ad2290fc5075cacbc9bf0c9a93eefed54",
+            "https://github.com/openssl/openssl/commit/a541ae8bfe849a30cc885e8780715c0f488e496c",
+            "https://github.com/openssl/openssl/commit/c505d7559da5d5f9f2c3913c6883a5562ce7273e",
+            "https://openssl-library.org/news/secadv/20260609.txt",
+            "https://access.redhat.com/errata/RHSA-2026:25237",
+            "https://access.redhat.com/errata/RHSA-2026:25239",
+            "https://access.redhat.com/errata/RHSA-2026:26275",
+            "https://access.redhat.com/errata/RHSA-2026:26319",
+            "https://access.redhat.com/errata/RHSA-2026:29197",
+            "https://access.redhat.com/errata/RHSA-2026:34102",
+            "https://access.redhat.com/errata/RHSA-2026:35869",
+            "https://access.redhat.com/errata/RHSA-2026:36215",
+            "https://access.redhat.com/errata/RHSA-2026:36217",
+            "https://access.redhat.com/errata/RHSA-2026:39009",
+            "https://access.redhat.com/errata/RHSA-2026:39012",
+            "https://access.redhat.com/errata/RHSA-2026:39981",
+            "https://access.redhat.com/errata/RHSA-2026:44438",
+            "https://access.redhat.com/errata/RHSA-2026:47735",
+            "https://access.redhat.com/errata/RHSA-2026:47737",
+            "https://access.redhat.com/errata/RHSA-2026:58563",
+            "https://access.redhat.com/errata/RHSA-2026:58981",
+            "https://access.redhat.com/errata/RHSA-2026:59831",
+            "https://access.redhat.com/errata/RHSA-2026:66524",
+            "https://access.redhat.com/security/cve/CVE-2026-45447",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2481898",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2026/cve-2026-45447.json"
+          ],
+          "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could\ntrigger a use-after-free during PKCS#7 signature verification.\n\nImpact summary: A use-after-free may result in process crashes, heap\ncorruption, or potentially remote code execution.\n\nWhen processing a PKCS#7 or S/MIME signed message, if the SignedData\ndigestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may\nincorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent\nuse of the BIO by the calling application results in a use-after-free\ncondition.\n\nIn the common case this occurs when the application later calls\nBIO_free() on the BIO originally passed to PKCS7_verify(). Depending\non allocator behavior and application-specific BIO usage patterns, this\nmay result in a crash or other memory corruption. In some application\ncontexts this may potentially be exploitable for remote code execution.\n\nApplications that process PKCS#7 or S/MIME signed messages using OpenSSL\nPKCS#7 APIs may be affected. Applications using the CMS APIs for this\nprocessing are not affected.\n\nThe FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this\nissue, as the affected code is outside the OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.1,
+                "exploitabilityScore": 2.3,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-45447",
+              "epss": 0.04002,
+              "percentile": 0.90795,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-416",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-825",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-45447",
+            "versionConstraint": "< 3.5.6-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.6-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "f72f3ab0ac4376bd",
+        "name": "openssl",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl/copyright",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/usr/share/doc/openssl/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.conffiles",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.conffiles",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.md5sums",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.list",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.list"
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.postinst",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.postinst"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl:openssl:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1",
+        "upstreams": []
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-45447",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-45447",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could trigger a use-after-free during PKCS#7 signature verification.  Impact summary: A use-after-free may result in process crashes, heap corruption, or potentially remote code execution.  When processing a PKCS#7 or S/MIME signed message, if the SignedData digestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may incorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent use of the BIO by the calling application results in a use-after-free condition.  In the common case this occurs when the application later calls BIO_free() on the BIO originally passed to PKCS7_verify(). Depending on allocator behavior and application-specific BIO usage patterns, this may result in a crash or other memory corruption. In some application contexts this may potentially be exploitable for remote code execution.  Applications that process PKCS#7 or S/MIME signed messages using OpenSSL PKCS#7 APIs may be affected. Applications using the CMS APIs for this processing are not affected.  The FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this issue, as the affected code is outside the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "metrics": {
+              "baseScore": 8.1,
+              "exploitabilityScore": 2.3,
+              "impactScore": 5.9
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-45447",
+            "epss": 0.04002,
+            "percentile": 0.90795,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-416",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2026-45447",
+            "cwe": "CWE-825",
+            "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.6-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.6-1~deb13u2",
+              "date": "2026-06-09",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6335-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6335-1"
+          }
+        ],
+        "risk": 3.12156
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-45447",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-45447",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/3aad5eb7af4de4ee0633c30a8541a54d9bbde63c",
+            "https://github.com/openssl/openssl/commit/7d4a980c62258c5910cc883936e0c8dbab4d75a8",
+            "https://github.com/openssl/openssl/commit/9dfd688ad2290fc5075cacbc9bf0c9a93eefed54",
+            "https://github.com/openssl/openssl/commit/a541ae8bfe849a30cc885e8780715c0f488e496c",
+            "https://github.com/openssl/openssl/commit/c505d7559da5d5f9f2c3913c6883a5562ce7273e",
+            "https://openssl-library.org/news/secadv/20260609.txt",
+            "https://access.redhat.com/errata/RHSA-2026:25237",
+            "https://access.redhat.com/errata/RHSA-2026:25239",
+            "https://access.redhat.com/errata/RHSA-2026:26275",
+            "https://access.redhat.com/errata/RHSA-2026:26319",
+            "https://access.redhat.com/errata/RHSA-2026:29197",
+            "https://access.redhat.com/errata/RHSA-2026:34102",
+            "https://access.redhat.com/errata/RHSA-2026:35869",
+            "https://access.redhat.com/errata/RHSA-2026:36215",
+            "https://access.redhat.com/errata/RHSA-2026:36217",
+            "https://access.redhat.com/errata/RHSA-2026:39009",
+            "https://access.redhat.com/errata/RHSA-2026:39012",
+            "https://access.redhat.com/errata/RHSA-2026:39981",
+            "https://access.redhat.com/errata/RHSA-2026:44438",
+            "https://access.redhat.com/errata/RHSA-2026:47735",
+            "https://access.redhat.com/errata/RHSA-2026:47737",
+            "https://access.redhat.com/errata/RHSA-2026:58563",
+            "https://access.redhat.com/errata/RHSA-2026:58981",
+            "https://access.redhat.com/errata/RHSA-2026:59831",
+            "https://access.redhat.com/errata/RHSA-2026:66524",
+            "https://access.redhat.com/security/cve/CVE-2026-45447",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2481898",
+            "https://security.access.redhat.com/data/csaf/v2/vex/2026/cve-2026-45447.json"
+          ],
+          "description": "Issue summary: A specially crafted PKCS#7 or S/MIME signed message could\ntrigger a use-after-free during PKCS#7 signature verification.\n\nImpact summary: A use-after-free may result in process crashes, heap\ncorruption, or potentially remote code execution.\n\nWhen processing a PKCS#7 or S/MIME signed message, if the SignedData\ndigestAlgorithms field is present as an empty ASN.1 SET, OpenSSL may\nincorrectly free a caller-owned BIO during PKCS7_verify(). A subsequent\nuse of the BIO by the calling application results in a use-after-free\ncondition.\n\nIn the common case this occurs when the application later calls\nBIO_free() on the BIO originally passed to PKCS7_verify(). Depending\non allocator behavior and application-specific BIO usage patterns, this\nmay result in a crash or other memory corruption. In some application\ncontexts this may potentially be exploitable for remote code execution.\n\nApplications that process PKCS#7 or S/MIME signed messages using OpenSSL\nPKCS#7 APIs may be affected. Applications using the CMS APIs for this\nprocessing are not affected.\n\nThe FIPS modules in 4.0, 3.6, 3.5, 3.4, and 3.0 are not affected by this\nissue, as the affected code is outside the OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.1,
+                "exploitabilityScore": 2.3,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+              "metrics": {
+                "baseScore": 8.8,
+                "exploitabilityScore": 2.9,
+                "impactScore": 5.9
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-45447",
+              "epss": 0.04002,
+              "percentile": 0.90795,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-416",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2026-45447",
+              "cwe": "CWE-825",
+              "source": "0b0ca135-0b70-47e7-9f44-1890c2a1c46c",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-45447",
+            "versionConstraint": "< 3.5.6-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.6-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "7ad51bf71f0987bd",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.list",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.list"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl-provider-legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider-legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl-provider-legacy@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2025-11187",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-11187",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Medium",
+        "urls": [],
+        "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation which can trigger a stack-based buffer overflow, invalid pointer or NULL pointer dereference during MAC verification.  Impact summary: The stack buffer overflow or NULL pointer dereference may cause a crash leading to Denial of Service for an application that parses untrusted PKCS#12 files. The buffer overflow may also potentially enable code execution depending on platform mitigations.  When verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2 salt and keylength parameters from the file are used without validation. If the value of keylength exceeds the size of the fixed stack buffer used for the derived key (64 bytes), the key derivation will overflow the buffer. The overflow length is attacker-controlled. Also, if the salt parameter is not an OCTET STRING type this can lead to invalid or NULL pointer dereference.  Exploiting this issue requires a user or application to process a maliciously crafted PKCS#12 file. It is uncommon to accept untrusted PKCS#12 files in applications as they are usually used to store private keys which are trusted by definition. For this reason the issue was assessed as Moderate severity.  The FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as PKCS#12 processing is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.  OpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do not support PBMAC1 in PKCS#12.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+            "metrics": {
+              "baseScore": 6.1,
+              "exploitabilityScore": 1.4,
+              "impactScore": 4.8
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-11187",
+            "epss": 0.05234,
+            "percentile": 0.92727,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-476",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-28",
+              "kind": "first-observed"
+            }
+          ]
+        },
+        "advisories": [],
+        "risk": 2.90487
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-11187",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-11187",
+          "namespace": "nvd:cpe",
+          "severity": "Medium",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/205e3a55e16e4bd08c12fdbd3416ab829c0f6206",
+            "https://github.com/openssl/openssl/commit/8caf359d6e46fb413e8f5f0df765d2e8a51df4e8",
+            "https://github.com/openssl/openssl/commit/e1079bc17ed93ff16f6b86f33a2fe3336e78817e",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "https://github.com/metadust/CVE-2025-11187"
+          ],
+          "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation\nwhich can trigger a stack-based buffer overflow, invalid pointer or NULL\npointer dereference during MAC verification.\n\nImpact summary: The stack buffer overflow or NULL pointer dereference may\ncause a crash leading to Denial of Service for an application that parses\nuntrusted PKCS#12 files. The buffer overflow may also potentially enable\ncode execution depending on platform mitigations.\n\nWhen verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2\nsalt and keylength parameters from the file are used without validation.\nIf the value of keylength exceeds the size of the fixed stack buffer used\nfor the derived key (64 bytes), the key derivation will overflow the buffer.\nThe overflow length is attacker-controlled. Also, if the salt parameter is\nnot an OCTET STRING type this can lead to invalid or NULL pointer\ndereference.\n\nExploiting this issue requires a user or application to process\na maliciously crafted PKCS#12 file. It is uncommon to accept untrusted\nPKCS#12 files in applications as they are usually used to store private\nkeys which are trusted by definition. For this reason the issue was assessed\nas Moderate severity.\n\nThe FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as\nPKCS#12 processing is outside the OpenSSL FIPS module boundary.\n\nOpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.\n\nOpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do\nnot support PBMAC1 in PKCS#12.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+              "metrics": {
+                "baseScore": 6.1,
+                "exploitabilityScore": 1.4,
+                "impactScore": 4.8
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-11187",
+              "epss": 0.05234,
+              "percentile": 0.92727,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-476",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-11187",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "cf134a9a6df777ae",
+        "name": "libssl3t64",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/libssl3t64/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/libssl3t64/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:libssl3t64:libssl3t64:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/libssl3t64@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2025-11187",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-11187",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Medium",
+        "urls": [],
+        "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation which can trigger a stack-based buffer overflow, invalid pointer or NULL pointer dereference during MAC verification.  Impact summary: The stack buffer overflow or NULL pointer dereference may cause a crash leading to Denial of Service for an application that parses untrusted PKCS#12 files. The buffer overflow may also potentially enable code execution depending on platform mitigations.  When verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2 salt and keylength parameters from the file are used without validation. If the value of keylength exceeds the size of the fixed stack buffer used for the derived key (64 bytes), the key derivation will overflow the buffer. The overflow length is attacker-controlled. Also, if the salt parameter is not an OCTET STRING type this can lead to invalid or NULL pointer dereference.  Exploiting this issue requires a user or application to process a maliciously crafted PKCS#12 file. It is uncommon to accept untrusted PKCS#12 files in applications as they are usually used to store private keys which are trusted by definition. For this reason the issue was assessed as Moderate severity.  The FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as PKCS#12 processing is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.  OpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do not support PBMAC1 in PKCS#12.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+            "metrics": {
+              "baseScore": 6.1,
+              "exploitabilityScore": 1.4,
+              "impactScore": 4.8
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-11187",
+            "epss": 0.05234,
+            "percentile": 0.92727,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-476",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-28",
+              "kind": "first-observed"
+            }
+          ]
+        },
+        "advisories": [],
+        "risk": 2.90487
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-11187",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-11187",
+          "namespace": "nvd:cpe",
+          "severity": "Medium",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/205e3a55e16e4bd08c12fdbd3416ab829c0f6206",
+            "https://github.com/openssl/openssl/commit/8caf359d6e46fb413e8f5f0df765d2e8a51df4e8",
+            "https://github.com/openssl/openssl/commit/e1079bc17ed93ff16f6b86f33a2fe3336e78817e",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "https://github.com/metadust/CVE-2025-11187"
+          ],
+          "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation\nwhich can trigger a stack-based buffer overflow, invalid pointer or NULL\npointer dereference during MAC verification.\n\nImpact summary: The stack buffer overflow or NULL pointer dereference may\ncause a crash leading to Denial of Service for an application that parses\nuntrusted PKCS#12 files. The buffer overflow may also potentially enable\ncode execution depending on platform mitigations.\n\nWhen verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2\nsalt and keylength parameters from the file are used without validation.\nIf the value of keylength exceeds the size of the fixed stack buffer used\nfor the derived key (64 bytes), the key derivation will overflow the buffer.\nThe overflow length is attacker-controlled. Also, if the salt parameter is\nnot an OCTET STRING type this can lead to invalid or NULL pointer\ndereference.\n\nExploiting this issue requires a user or application to process\na maliciously crafted PKCS#12 file. It is uncommon to accept untrusted\nPKCS#12 files in applications as they are usually used to store private\nkeys which are trusted by definition. For this reason the issue was assessed\nas Moderate severity.\n\nThe FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as\nPKCS#12 processing is outside the OpenSSL FIPS module boundary.\n\nOpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.\n\nOpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do\nnot support PBMAC1 in PKCS#12.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+              "metrics": {
+                "baseScore": 6.1,
+                "exploitabilityScore": 1.4,
+                "impactScore": 4.8
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-11187",
+              "epss": 0.05234,
+              "percentile": 0.92727,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-476",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-11187",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "f72f3ab0ac4376bd",
+        "name": "openssl",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl/copyright",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/usr/share/doc/openssl/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.conffiles",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.conffiles",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.md5sums",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.list",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.list"
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.postinst",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.postinst"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl:openssl:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1",
+        "upstreams": []
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2025-11187",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2025-11187",
+        "namespace": "debian:distro:debian:13",
+        "severity": "Medium",
+        "urls": [],
+        "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation which can trigger a stack-based buffer overflow, invalid pointer or NULL pointer dereference during MAC verification.  Impact summary: The stack buffer overflow or NULL pointer dereference may cause a crash leading to Denial of Service for an application that parses untrusted PKCS#12 files. The buffer overflow may also potentially enable code execution depending on platform mitigations.  When verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2 salt and keylength parameters from the file are used without validation. If the value of keylength exceeds the size of the fixed stack buffer used for the derived key (64 bytes), the key derivation will overflow the buffer. The overflow length is attacker-controlled. Also, if the salt parameter is not an OCTET STRING type this can lead to invalid or NULL pointer dereference.  Exploiting this issue requires a user or application to process a maliciously crafted PKCS#12 file. It is uncommon to accept untrusted PKCS#12 files in applications as they are usually used to store private keys which are trusted by definition. For this reason the issue was assessed as Moderate severity.  The FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as PKCS#12 processing is outside the OpenSSL FIPS module boundary.  OpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.  OpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do not support PBMAC1 in PKCS#12.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+            "metrics": {
+              "baseScore": 6.1,
+              "exploitabilityScore": 1.4,
+              "impactScore": 4.8
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2025-11187",
+            "epss": 0.05234,
+            "percentile": 0.92727,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-476",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          },
+          {
+            "cve": "CVE-2025-11187",
+            "cwe": "CWE-787",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.4-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.4-1~deb13u2",
+              "date": "2026-01-28",
+              "kind": "first-observed"
+            }
+          ]
+        },
+        "advisories": [],
+        "risk": 2.90487
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2025-11187",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2025-11187",
+          "namespace": "nvd:cpe",
+          "severity": "Medium",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/205e3a55e16e4bd08c12fdbd3416ab829c0f6206",
+            "https://github.com/openssl/openssl/commit/8caf359d6e46fb413e8f5f0df765d2e8a51df4e8",
+            "https://github.com/openssl/openssl/commit/e1079bc17ed93ff16f6b86f33a2fe3336e78817e",
+            "https://openssl-library.org/news/secadv/20260127.txt",
+            "https://github.com/metadust/CVE-2025-11187"
+          ],
+          "description": "Issue summary: PBMAC1 parameters in PKCS#12 files are missing validation\nwhich can trigger a stack-based buffer overflow, invalid pointer or NULL\npointer dereference during MAC verification.\n\nImpact summary: The stack buffer overflow or NULL pointer dereference may\ncause a crash leading to Denial of Service for an application that parses\nuntrusted PKCS#12 files. The buffer overflow may also potentially enable\ncode execution depending on platform mitigations.\n\nWhen verifying a PKCS#12 file that uses PBMAC1 for the MAC, the PBKDF2\nsalt and keylength parameters from the file are used without validation.\nIf the value of keylength exceeds the size of the fixed stack buffer used\nfor the derived key (64 bytes), the key derivation will overflow the buffer.\nThe overflow length is attacker-controlled. Also, if the salt parameter is\nnot an OCTET STRING type this can lead to invalid or NULL pointer\ndereference.\n\nExploiting this issue requires a user or application to process\na maliciously crafted PKCS#12 file. It is uncommon to accept untrusted\nPKCS#12 files in applications as they are usually used to store private\nkeys which are trusted by definition. For this reason the issue was assessed\nas Moderate severity.\n\nThe FIPS modules in 3.6, 3.5 and 3.4 are not affected by this issue, as\nPKCS#12 processing is outside the OpenSSL FIPS module boundary.\n\nOpenSSL 3.6, 3.5 and 3.4 are vulnerable to this issue.\n\nOpenSSL 3.3, 3.0, 1.1.1 and 1.0.2 are not affected by this issue as they do\nnot support PBMAC1 in PKCS#12.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:H",
+              "metrics": {
+                "baseScore": 6.1,
+                "exploitabilityScore": 1.4,
+                "impactScore": 4.8
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2025-11187",
+              "epss": 0.05234,
+              "percentile": 0.92727,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-476",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            },
+            {
+              "cve": "CVE-2025-11187",
+              "cwe": "CWE-787",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2025-11187",
+            "versionConstraint": "< 3.5.4-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.4-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "7ad51bf71f0987bd",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.list",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.list"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl-provider-legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider-legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl-provider-legacy@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-18798",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-18798",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object when channel creation fails for initial packet.  Impact summary: Double free leads to heap corruption, which typically results in  termination of QUIC server process, leading to Denial of Service. There is so far no evidence that this double free is exploitable for remote code execution, thus it is considered highly improbable.  CWE: CWE-415: Double Free  Description: In order to validate initial packet, OpenSSL QUIC stack default packet handler (port_default_packet_handler()) creates a so-called QRX object. If the initial packet validates successfully with QRX object, the default packet handler proceeds to channel (connection object) creation. The QRX object used for packet validation is passed to port_bind_channel(), so it becomes part of the newly created connection. If port_bind_channel() fails, then it also frees the QRX object. Once port_bind_channel() returns, the port_default_packet_handler() detects the failure and proceeds to the error branch, where the same QRX object is freed for the second time.  The failure in port_bind_channel() function can be induced with a relatively low effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet carries DCID (destination connection ID) which is shorter than 8 bytes, then port_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid() detects that the DCID has invalid length.  FIPS impact: no The FIPS module is not affected, as the QUIC implementation is outside of the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "metrics": {
+              "baseScore": 7.5,
+              "exploitabilityScore": 3.9,
+              "impactScore": 3.6
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-18798",
+            "epss": 0.01731,
+            "percentile": 0.78211,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-18798",
+            "cwe": "CWE-415",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.7-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.7-1~deb13u2",
+              "date": "2026-08-25",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6465-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6465-1"
+          }
+        ],
+        "risk": 1.29825
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-18798",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-18798",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/70cebd74d3592f5272945501b58a60374c4e13af",
+            "https://github.com/openssl/openssl/commit/967582d5037f01a26b6d19beae19af62a1b15c3c",
+            "https://github.com/openssl/openssl/commit/a14a1deac403522fbeafabcb198503cf6caa7dc4",
+            "https://openssl-library.org/news/secadv/20260825.txt"
+          ],
+          "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object\nwhen channel creation fails for initial packet.\n\nImpact summary: Double free leads to heap corruption, which typically results in \ntermination of QUIC server process, leading to Denial of Service. There is so\nfar no evidence that this double free is exploitable for remote code execution,\nthus it is considered highly improbable.\n\nCWE: CWE-415: Double Free\n\nDescription: In order to validate initial packet, OpenSSL QUIC stack default\npacket handler (port_default_packet_handler()) creates a so-called QRX object.\nIf the initial packet validates successfully with QRX object, the default packet\nhandler proceeds to channel (connection object) creation. The QRX object used\nfor packet validation is passed to port_bind_channel(), so it becomes part of\nthe newly created connection. If port_bind_channel() fails, then it also frees\nthe QRX object. Once port_bind_channel() returns, the port_default_packet_handler()\ndetects the failure and proceeds to the error branch, where the same QRX object is\nfreed for the second time.\n\nThe failure in port_bind_channel() function can be induced with a relatively\nlow effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet\ncarries DCID (destination connection ID) which is shorter than 8 bytes, then\nport_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid()\ndetects that the DCID has invalid length.\n\nFIPS impact: no\nThe FIPS module is not affected, as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "metrics": {
+                "baseScore": 7.5,
+                "exploitabilityScore": 3.9,
+                "impactScore": 3.6
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-18798",
+              "epss": 0.01731,
+              "percentile": 0.78211,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-18798",
+              "cwe": "CWE-415",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-18798",
+            "versionConstraint": "< 3.5.7-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.7-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "cf134a9a6df777ae",
+        "name": "libssl3t64",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/libssl3t64/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/libssl3t64/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/libssl3t64:amd64.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:libssl3t64:libssl3t64:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/libssl3t64@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-18798",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-18798",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object when channel creation fails for initial packet.  Impact summary: Double free leads to heap corruption, which typically results in  termination of QUIC server process, leading to Denial of Service. There is so far no evidence that this double free is exploitable for remote code execution, thus it is considered highly improbable.  CWE: CWE-415: Double Free  Description: In order to validate initial packet, OpenSSL QUIC stack default packet handler (port_default_packet_handler()) creates a so-called QRX object. If the initial packet validates successfully with QRX object, the default packet handler proceeds to channel (connection object) creation. The QRX object used for packet validation is passed to port_bind_channel(), so it becomes part of the newly created connection. If port_bind_channel() fails, then it also frees the QRX object. Once port_bind_channel() returns, the port_default_packet_handler() detects the failure and proceeds to the error branch, where the same QRX object is freed for the second time.  The failure in port_bind_channel() function can be induced with a relatively low effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet carries DCID (destination connection ID) which is shorter than 8 bytes, then port_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid() detects that the DCID has invalid length.  FIPS impact: no The FIPS module is not affected, as the QUIC implementation is outside of the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "metrics": {
+              "baseScore": 7.5,
+              "exploitabilityScore": 3.9,
+              "impactScore": 3.6
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-18798",
+            "epss": 0.01731,
+            "percentile": 0.78211,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-18798",
+            "cwe": "CWE-415",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.7-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.7-1~deb13u2",
+              "date": "2026-08-25",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6465-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6465-1"
+          }
+        ],
+        "risk": 1.29825
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-18798",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-18798",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/70cebd74d3592f5272945501b58a60374c4e13af",
+            "https://github.com/openssl/openssl/commit/967582d5037f01a26b6d19beae19af62a1b15c3c",
+            "https://github.com/openssl/openssl/commit/a14a1deac403522fbeafabcb198503cf6caa7dc4",
+            "https://openssl-library.org/news/secadv/20260825.txt"
+          ],
+          "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object\nwhen channel creation fails for initial packet.\n\nImpact summary: Double free leads to heap corruption, which typically results in \ntermination of QUIC server process, leading to Denial of Service. There is so\nfar no evidence that this double free is exploitable for remote code execution,\nthus it is considered highly improbable.\n\nCWE: CWE-415: Double Free\n\nDescription: In order to validate initial packet, OpenSSL QUIC stack default\npacket handler (port_default_packet_handler()) creates a so-called QRX object.\nIf the initial packet validates successfully with QRX object, the default packet\nhandler proceeds to channel (connection object) creation. The QRX object used\nfor packet validation is passed to port_bind_channel(), so it becomes part of\nthe newly created connection. If port_bind_channel() fails, then it also frees\nthe QRX object. Once port_bind_channel() returns, the port_default_packet_handler()\ndetects the failure and proceeds to the error branch, where the same QRX object is\nfreed for the second time.\n\nThe failure in port_bind_channel() function can be induced with a relatively\nlow effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet\ncarries DCID (destination connection ID) which is shorter than 8 bytes, then\nport_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid()\ndetects that the DCID has invalid length.\n\nFIPS impact: no\nThe FIPS module is not affected, as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "metrics": {
+                "baseScore": 7.5,
+                "exploitabilityScore": 3.9,
+                "impactScore": 3.6
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-18798",
+              "epss": 0.01731,
+              "percentile": 0.78211,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-18798",
+              "cwe": "CWE-415",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-18798",
+            "versionConstraint": "< 3.5.7-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.7-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "f72f3ab0ac4376bd",
+        "name": "openssl",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl/copyright",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/usr/share/doc/openssl/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.conffiles",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.conffiles",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.md5sums",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.list",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.list"
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl.postinst",
+            "layerID": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+            "accessPath": "/var/lib/dpkg/info/openssl.postinst"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl:openssl:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1",
+        "upstreams": []
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-18798",
+        "dataSource": "https://security-tracker.debian.org/tracker/CVE-2026-18798",
+        "namespace": "debian:distro:debian:13",
+        "severity": "High",
+        "urls": [],
+        "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object when channel creation fails for initial packet.  Impact summary: Double free leads to heap corruption, which typically results in  termination of QUIC server process, leading to Denial of Service. There is so far no evidence that this double free is exploitable for remote code execution, thus it is considered highly improbable.  CWE: CWE-415: Double Free  Description: In order to validate initial packet, OpenSSL QUIC stack default packet handler (port_default_packet_handler()) creates a so-called QRX object. If the initial packet validates successfully with QRX object, the default packet handler proceeds to channel (connection object) creation. The QRX object used for packet validation is passed to port_bind_channel(), so it becomes part of the newly created connection. If port_bind_channel() fails, then it also frees the QRX object. Once port_bind_channel() returns, the port_default_packet_handler() detects the failure and proceeds to the error branch, where the same QRX object is freed for the second time.  The failure in port_bind_channel() function can be induced with a relatively low effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet carries DCID (destination connection ID) which is shorter than 8 bytes, then port_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid() detects that the DCID has invalid length.  FIPS impact: no The FIPS module is not affected, as the QUIC implementation is outside of the OpenSSL FIPS module boundary.",
+        "cvss": [
+          {
+            "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+            "type": "Secondary",
+            "version": "3.1",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "metrics": {
+              "baseScore": 7.5,
+              "exploitabilityScore": 3.9,
+              "impactScore": 3.6
+            },
+            "vendorMetadata": {}
+          }
+        ],
+        "epss": [
+          {
+            "cve": "CVE-2026-18798",
+            "epss": 0.01731,
+            "percentile": 0.78211,
+            "date": "2026-11-23"
+          }
+        ],
+        "cwes": [
+          {
+            "cve": "CVE-2026-18798",
+            "cwe": "CWE-415",
+            "source": "openssl-security@openssl.org",
+            "type": "Secondary"
+          }
+        ],
+        "fix": {
+          "versions": [
+            "3.5.7-1~deb13u2"
+          ],
+          "state": "fixed",
+          "available": [
+            {
+              "version": "3.5.7-1~deb13u2",
+              "date": "2026-08-25",
+              "kind": "advisory"
+            }
+          ]
+        },
+        "advisories": [
+          {
+            "id": "DSA-6465-1",
+            "link": "https://security-tracker.debian.org/tracker/DSA-6465-1"
+          }
+        ],
+        "risk": 1.29825
+      },
+      "relatedVulnerabilities": [
+        {
+          "id": "CVE-2026-18798",
+          "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-18798",
+          "namespace": "nvd:cpe",
+          "severity": "High",
+          "urls": [
+            "https://github.com/openssl/openssl/commit/70cebd74d3592f5272945501b58a60374c4e13af",
+            "https://github.com/openssl/openssl/commit/967582d5037f01a26b6d19beae19af62a1b15c3c",
+            "https://github.com/openssl/openssl/commit/a14a1deac403522fbeafabcb198503cf6caa7dc4",
+            "https://openssl-library.org/news/secadv/20260825.txt"
+          ],
+          "description": "Issue summary: QUIC server may double free QRX (QUIC record layer RX) object\nwhen channel creation fails for initial packet.\n\nImpact summary: Double free leads to heap corruption, which typically results in \ntermination of QUIC server process, leading to Denial of Service. There is so\nfar no evidence that this double free is exploitable for remote code execution,\nthus it is considered highly improbable.\n\nCWE: CWE-415: Double Free\n\nDescription: In order to validate initial packet, OpenSSL QUIC stack default\npacket handler (port_default_packet_handler()) creates a so-called QRX object.\nIf the initial packet validates successfully with QRX object, the default packet\nhandler proceeds to channel (connection object) creation. The QRX object used\nfor packet validation is passed to port_bind_channel(), so it becomes part of\nthe newly created connection. If port_bind_channel() fails, then it also frees\nthe QRX object. Once port_bind_channel() returns, the port_default_packet_handler()\ndetects the failure and proceeds to the error branch, where the same QRX object is\nfreed for the second time.\n\nThe failure in port_bind_channel() function can be induced with a relatively\nlow effort by a malformed (non RFC 9000 compliant) INITIAL packet. If the packet\ncarries DCID (destination connection ID) which is shorter than 8 bytes, then\nport_bind_channel() jumps to the error path after ossl_quic_lcidm_enrol_odcid()\ndetects that the DCID has invalid length.\n\nFIPS impact: no\nThe FIPS module is not affected, as the QUIC implementation is outside of\nthe OpenSSL FIPS module boundary.",
+          "cvss": [
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "version": "3.1",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "metrics": {
+                "baseScore": 7.5,
+                "exploitabilityScore": 3.9,
+                "impactScore": 3.6
+              },
+              "vendorMetadata": {}
+            }
+          ],
+          "epss": [
+            {
+              "cve": "CVE-2026-18798",
+              "epss": 0.01731,
+              "percentile": 0.78211,
+              "date": "2026-11-23"
+            }
+          ],
+          "cwes": [
+            {
+              "cve": "CVE-2026-18798",
+              "cwe": "CWE-415",
+              "source": "openssl-security@openssl.org",
+              "type": "Secondary"
+            }
+          ]
+        }
+      ],
+      "matchDetails": [
+        {
+          "type": "exact-indirect-match",
+          "matcher": "dpkg-matcher",
+          "searchedBy": {
+            "distro": {
+              "type": "debian",
+              "version": "13.1"
+            },
+            "package": {
+              "name": "openssl",
+              "version": "3.5.1-1+deb13u1"
+            },
+            "namespace": "debian:distro:debian:13"
+          },
+          "found": {
+            "vulnerabilityID": "CVE-2026-18798",
+            "versionConstraint": "< 3.5.7-1~deb13u2 (deb)"
+          },
+          "fix": {
+            "suggestedVersion": "3.5.7-1~deb13u2"
+          }
+        }
+      ],
+      "artifact": {
+        "id": "7ad51bf71f0987bd",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.1-1+deb13u1",
+        "type": "deb",
+        "locations": [
+          {
+            "path": "/var/lib/dpkg/status",
+            "layerID": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+            "accessPath": "/var/lib/dpkg/status",
+            "annotations": {
+              "evidence": "primary"
+            }
+          },
+          {
+            "path": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/usr/share/doc/openssl-provider-legacy/copyright",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.md5sums",
+            "annotations": {
+              "evidence": "supporting"
+            }
+          },
+          {
+            "path": "/var/lib/dpkg/info/openssl-provider-legacy.list",
+            "layerID": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+            "accessPath": "/var/lib/dpkg/info/openssl-provider-legacy.list"
+          }
+        ],
+        "language": "",
+        "licenses": [
+          "Apache-2.0",
+          "Artistic",
+          "GPL-1",
+          "GPL-1+"
+        ],
+        "cpes": [
+          "cpe:2.3:a:openssl-provider-legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider-legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider_legacy:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl-provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl_provider:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl-provider-legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*",
+          "cpe:2.3:a:openssl:openssl_provider_legacy:3.5.1-1\\+deb13u1:*:*:*:*:*:*:*"
+        ],
+        "purl": "pkg:deb/debian/openssl-provider-legacy@3.5.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.1&upstream=openssl",
+        "upstreams": [
+          {
+            "name": "openssl"
+          }
+        ]
+      }
+    }
+  ],
+  "source": {
+    "type": "image",
+    "target": {
+      "userInput": "python:3.9-slim",
+      "imageID": "sha256:085da638e1b8a449514c3fda83ff50a3bffae4418b050cfacd87e5722071f497",
+      "manifestDigest": "sha256:724e5fa7015745e77b166ce411d9853c6282fdd471eec7548e2ba8746eae6849",
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "tags": [
+        "python:3.9-slim"
+      ],
+      "imageSize": 121945814,
+      "layers": [
+        {
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "digest": "sha256:d7c97cb6f1fe7cae982649e9f55efe201212e8acaa64bd668c083b204e4efd4c",
+          "size": 78613114
+        },
+        {
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "digest": "sha256:4f237755fbae41472cb9e0f874fa97abb8d684f8fdcc6bd485edc8b6267a9c93",
+          "size": 3792651
+        },
+        {
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "digest": "sha256:298992e09a0315a8f26375a553f216f5fad3decf392956fd2de5ef7aa1f8dfea",
+          "size": 39540049
+        },
+        {
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "digest": "sha256:c8f6b54339a8b44071408bd33dd69a9dc7db2ed9cdbf7c533ba09efecda5f33f",
+          "size": 0
+        }
+      ],
+      "manifest": "eyJzY2hlbWFWZXJzaW9uIjoyLCJtZWRpYVR5cGUiOiJhcHBsaWNhdGlvbi92bmQuZG9ja2VyLmRpc3RyaWJ1dGlvbi5tYW5pZmVzdC52Mitqc29uIiwiY29uZmlnIjp7Im1lZGlhVHlwZSI6ImFwcGxpY2F0aW9uL3ZuZC5kb2NrZXIuY29udGFpbmVyLmltYWdlLnYxK2pzb24iLCJzaXplIjo1NDAwLCJkaWdlc3QiOiJzaGEyNTY6MDg1ZGE2MzhlMWI4YTQ0OTUxNGMzZmRhODNmZjUwYTNiZmZhZTQ0MThiMDUwY2ZhY2Q4N2U1NzIyMDcxZjQ5NyJ9LCJsYXllcnMiOlt7Im1lZGlhVHlwZSI6ImFwcGxpY2F0aW9uL3ZuZC5kb2NrZXIuaW1hZ2Uucm9vdGZzLmRpZmYudGFyLmd6aXAiLCJzaXplIjoyOTc3NzkyNCwiZGlnZXN0Ijoic2hhMjU2OmQ3Yzk3Y2I2ZjFmZTdjYWU5ODI2NDllOWY1NWVmZTIwMTIxMmU4YWNhYTY0YmQ2NjhjMDgzYjIwNGU0ZWZkNGMifSx7Im1lZGlhVHlwZSI6ImFwcGxpY2F0aW9uL3ZuZC5kb2NrZXIuaW1hZ2Uucm9vdGZzLmRpZmYudGFyLmd6aXAiLCJzaXplIjoxMjkyOTUzLCJkaWdlc3QiOiJzaGEyNTY6NGYyMzc3NTVmYmFlNDE0NzJjYjllMGY4NzRmYTk3YWJiOGQ2ODRmOGZkY2M2YmQ0ODVlZGM4YjYyNjdhOWM5MyJ9LHsibWVkaWFUeXBlIjoiYXBwbGljYXRpb24vdm5kLmRvY2tlci5pbWFnZS5yb290ZnMuZGlmZi50YXIuZ3ppcCIsInNpemUiOjEzODg0ODE2LCJkaWdlc3QiOiJzaGEyNTY6Mjk4OTkyZTA5YTAzMTVhOGYyNjM3NWE1NTNmMjE2ZjVmYWQzZGVjZjM5Mjk1NmZkMmRlNWVmN2FhMWY4ZGZlYSJ9LHsibWVkaWFUeXBlIjoiYXBwbGljYXRpb24vdm5kLmRvY2tlci5pbWFnZS5yb290ZnMuZGlmZi50YXIuZ3ppcCIsInNpemUiOjI1MSwiZGlnZXN0Ijoic2hhMjU2OmM4ZjZiNTQzMzlhOGI0NDA3MTQwOGJkMzNkZDY5YTlkYzdkYjJlZDljZGJmN2M1MzNiYTA5ZWZlY2RhNWYzM2YifV19",
+      "config": "eyJhcmNoaXRlY3R1cmUiOiJhbWQ2NCIsImNvbmZpZyI6eyJFbnYiOlsiUEFUSD0vdXNyL2xvY2FsL2JpbjovdXNyL2xvY2FsL3NiaW46L3Vzci9sb2NhbC9iaW46L3Vzci9zYmluOi91c3IvYmluOi9zYmluOi9iaW4iLCJMQU5HPUMuVVRGLTgiLCJHUEdfS0VZPUUzRkYyODM5QzA0OEIyNUMwODRERUJFOUIyNjk5NUUzMTAyNTA1NjgiLCJQWVRIT05fVkVSU0lPTj0zLjkuMjUiLCJQWVRIT05fU0hBMjU2PTAwZTA3ZDdjMGYyZjBjYzAwMjQzMmQxZWU4NGQyYTQwZGFlNDA0YTk5MzAzZTNmOTc3MDFjMTA5NjZjOTE4MzQiXSwiQ21kIjpbInB5dGhvbjMiXX0sImNyZWF0ZWQiOiIyMDI1LTEwLTMxVDIzOjE3OjIzLjA1Mjc4NzU4OFoiLCJoaXN0b3J5IjpbeyJjcmVhdGVkIjoiMjAyNS0xMC0yMFQwMDowMDowMFoiLCJjcmVhdGVkX2J5IjoiIyBkZWJpYW4uc2ggLS1hcmNoICdhbWQ2NCcgb3V0LyAndHJpeGllJyAnQDE3NjA5MTg0MDAnIiwiY29tbWVudCI6ImRlYnVlcnJlb3R5cGUgMC4xNiJ9LHsiY3JlYXRlZCI6IjIwMjUtMTAtMzFUMjM6MTQ6MjYuMzEyNjA5MTU0WiIsImNyZWF0ZWRfYnkiOiJFTlYgUEFUSD0vdXNyL2xvY2FsL2JpbjovdXNyL2xvY2FsL3NiaW46L3Vzci9sb2NhbC9iaW46L3Vzci9zYmluOi91c3IvYmluOi9zYmluOi9iaW4iLCJjb21tZW50IjoiYnVpbGRraXQuZG9ja2VyZmlsZS52MCIsImVtcHR5X2xheWVyIjp0cnVlfSx7ImNyZWF0ZWQiOiIyMDI1LTEwLTMxVDIzOjE0OjI2LjMxMjYwOTE1NFoiLCJjcmVhdGVkX2J5IjoiRU5WIExBTkc9Qy5VVEYtOCIsImNvbW1lbnQiOiJidWlsZGtpdC5kb2NrZXJmaWxlLnYwIiwiZW1wdHlfbGF5ZXIiOnRydWV9LHsiY3JlYXRlZCI6IjIwMjUtMTAtMzFUMjM6MTQ6MjYuMzEyNjA5MTU0WiIsImNyZWF0ZWRfYnkiOiJSVU4gL2Jpbi9zaCAtYyBzZXQgLWV1eDsgXHRhcHQtZ2V0IHVwZGF0ZTsgXHRhcHQtZ2V0IGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgXHRcdGNhLWNlcnRpZmljYXRlcyBcdFx0bmV0YmFzZSBcdFx0dHpkYXRhIFx0OyBcdGFwdC1nZXQgZGlzdC1jbGVhbiAjIGJ1aWxka2l0IiwiY29tbWVudCI6ImJ1aWxka2l0LmRvY2tlcmZpbGUudjAifSx7ImNyZWF0ZWQiOiIyMDI1LTEwLTMxVDIzOjE0OjI2LjMxMjYwOTE1NFoiLCJjcmVhdGVkX2J5IjoiRU5WIEdQR19LRVk9RTNGRjI4MzlDMDQ4QjI1QzA4NERFQkU5QjI2OTk1RTMxMDI1MDU2OCIsImNvbW1lbnQiOiJidWlsZGtpdC5kb2NrZXJmaWxlLnYwIiwiZW1wdHlfbGF5ZXIiOnRydWV9LHsiY3JlYXRlZCI6IjIwMjUtMTAtMzFUMjM6MTQ6MjYuMzEyNjA5MTU0WiIsImNyZWF0ZWRfYnkiOiJFTlYgUFlUSE9OX1ZFUlNJT049My45LjI1IiwiY29tbWVudCI6ImJ1aWxka2l0LmRvY2tlcmZpbGUudjAiLCJlbXB0eV9sYXllciI6dHJ1ZX0seyJjcmVhdGVkIjoiMjAyNS0xMC0zMVQyMzoxNDoyNi4zMTI2MDkxNTRaIiwiY3JlYXRlZF9ieSI6IkVOViBQWVRIT05fU0hBMjU2PTAwZTA3ZDdjMGYyZjBjYzAwMjQzMmQxZWU4NGQyYTQwZGFlNDA0YTk5MzAzZTNmOTc3MDFjMTA5NjZjOTE4MzQiLCJjb21tZW50IjoiYnVpbGRraXQuZG9ja2VyZmlsZS52MCIsImVtcHR5X2xheWVyIjp0cnVlfSx7ImNyZWF0ZWQiOiIyMDI1LTEwLTMxVDIzOjE3OjIyLjkzNDU3ODQ2NVoiLCJjcmVhdGVkX2J5IjoiUlVOIC9iaW4vc2ggLWMgc2V0IC1ldXg7IFx0XHRzYXZlZEFwdE1hcms9XCIkKGFwdC1tYXJrIHNob3dtYW51YWwpXCI7IFx0YXB0LWdldCB1cGRhdGU7IFx0YXB0LWdldCBpbnN0YWxsIC15IC0tbm8taW5zdGFsbC1yZWNvbW1lbmRzIFx0XHRkcGtnLWRldiBcdFx0Z2NjIFx0XHRnbnVwZyBcdFx0bGliYmx1ZXRvb3RoLWRldiBcdFx0bGliYnoyLWRldiBcdFx0bGliYzYtZGV2IFx0XHRsaWJkYi1kZXYgXHRcdGxpYmZmaS1kZXYgXHRcdGxpYmdkYm0tZGV2IFx0XHRsaWJsem1hLWRldiBcdFx0bGlibmN1cnNlc3c1LWRldiBcdFx0bGlicmVhZGxpbmUtZGV2IFx0XHRsaWJzcWxpdGUzLWRldiBcdFx0bGlic3NsLWRldiBcdFx0bWFrZSBcdFx0dGstZGV2IFx0XHR1dWlkLWRldiBcdFx0d2dldCBcdFx0eHotdXRpbHMgXHRcdHpsaWIxZy1kZXYgXHQ7IFx0XHR3Z2V0IC1PIHB5dGhvbi50YXIueHogXCJodHRwczovL3d3dy5weXRob24ub3JnL2Z0cC9weXRob24vJHtQWVRIT05fVkVSU0lPTiUlW2Etel0qfS9QeXRob24tJFBZVEhPTl9WRVJTSU9OLnRhci54elwiOyBcdGVjaG8gXCIkUFlUSE9OX1NIQTI1NiAqcHl0aG9uLnRhci54elwiIHwgc2hhMjU2c3VtIC1jIC07IFx0d2dldCAtTyBweXRob24udGFyLnh6LmFzYyBcImh0dHBzOi8vd3d3LnB5dGhvbi5vcmcvZnRwL3B5dGhvbi8ke1BZVEhPTl9WRVJTSU9OJSVbYS16XSp9L1B5dGhvbi0kUFlUSE9OX1ZFUlNJT04udGFyLnh6LmFzY1wiOyBcdEdOVVBHSE9NRT1cIiQobWt0ZW1wIC1kKVwiOyBleHBvcnQgR05VUEdIT01FOyBcdGdwZyAtLWJhdGNoIC0ta2V5c2VydmVyIGhrcHM6Ly9rZXlzLm9wZW5wZ3Aub3JnIC0tcmVjdi1rZXlzIFwiJEdQR19LRVlcIjsgXHRncGcgLS1iYXRjaCAtLXZlcmlmeSBweXRob24udGFyLnh6LmFzYyBweXRob24udGFyLnh6OyBcdGdwZ2NvbmYgLS1raWxsIGFsbDsgXHRybSAtcmYgXCIkR05VUEdIT01FXCIgcHl0aG9uLnRhci54ei5hc2M7IFx0bWtkaXIgLXAgL3Vzci9zcmMvcHl0aG9uOyBcdHRhciAtLWV4dHJhY3QgLS1kaXJlY3RvcnkgL3Vzci9zcmMvcHl0aG9uIC0tc3RyaXAtY29tcG9uZW50cz0xIC0tZmlsZSBweXRob24udGFyLnh6OyBcdHJtIHB5dGhvbi50YXIueHo7IFx0XHRjZCAvdXNyL3NyYy9weXRob247IFx0Z251QXJjaD1cIiQoZHBrZy1hcmNoaXRlY3R1cmUgLS1xdWVyeSBERUJfQlVJTERfR05VX1RZUEUpXCI7IFx0Li9jb25maWd1cmUgXHRcdC0tYnVpbGQ9XCIkZ251QXJjaFwiIFx0XHQtLWVuYWJsZS1sb2FkYWJsZS1zcWxpdGUtZXh0ZW5zaW9ucyBcdFx0LS1lbmFibGUtb3B0aW1pemF0aW9ucyBcdFx0LS1lbmFibGUtb3B0aW9uLWNoZWNraW5nPWZhdGFsIFx0XHQtLWVuYWJsZS1zaGFyZWQgXHRcdC0td2l0aC1lbnN1cmVwaXAgXHQ7IFx0bnByb2M9XCIkKG5wcm9jKVwiOyBcdEVYVFJBX0NGTEFHUz1cIiQoZHBrZy1idWlsZGZsYWdzIC0tZ2V0IENGTEFHUylcIjsgXHRMREZMQUdTPVwiJChkcGtnLWJ1aWxkZmxhZ3MgLS1nZXQgTERGTEFHUylcIjsgXHRMREZMQUdTPVwiJHtMREZMQUdTOi0tV2x9LC0tc3RyaXAtYWxsXCI7IFx0bWFrZSAtaiBcIiRucHJvY1wiIFx0XHRcIkVYVFJBX0NGTEFHUz0ke0VYVFJBX0NGTEFHUzotfVwiIFx0XHRcIkxERkxBR1M9JHtMREZMQUdTOi19XCIgXHQ7IFx0cm0gcHl0aG9uOyBcdG1ha2UgLWogXCIkbnByb2NcIiBcdFx0XCJFWFRSQV9DRkxBR1M9JHtFWFRSQV9DRkxBR1M6LX1cIiBcdFx0XCJMREZMQUdTPSR7TERGTEFHUzotLVdsfSwtcnBhdGg9J1xcJFxcJE9SSUdJTi8uLi9saWInXCIgXHRcdHB5dGhvbiBcdDsgXHRtYWtlIGluc3RhbGw7IFx0XHRjZCAvOyBcdHJtIC1yZiAvdXNyL3NyYy9weXRob247IFx0XHRmaW5kIC91c3IvbG9jYWwgLWRlcHRoIFx0XHRcXCggXHRcdFx0XFwoIC10eXBlIGQgLWEgXFwoIC1uYW1lIHRlc3QgLW8gLW5hbWUgdGVzdHMgLW8gLW5hbWUgaWRsZV90ZXN0IFxcKSBcXCkgXHRcdFx0LW8gXFwoIC10eXBlIGYgLWEgXFwoIC1uYW1lICcqLnB5YycgLW8gLW5hbWUgJyoucHlvJyAtbyAtbmFtZSAnbGlicHl0aG9uKi5hJyBcXCkgXFwpIFx0XHRcXCkgLWV4ZWMgcm0gLXJmICd7fScgKyBcdDsgXHRcdGxkY29uZmlnOyBcdFx0YXB0LW1hcmsgYXV0byAnLionIFx1MDAzZSAvZGV2L251bGw7IFx0YXB0LW1hcmsgbWFudWFsICRzYXZlZEFwdE1hcms7IFx0ZmluZCAvdXNyL2xvY2FsIC10eXBlIGYgLWV4ZWN1dGFibGUgLW5vdCBcXCggLW5hbWUgJyp0a2ludGVyKicgXFwpIC1leGVjIGxkZCAne30nICc7JyBcdFx0fCBhd2sgJy89XHUwMDNlLyB7IHNvID0gJChORi0xKTsgaWYgKGluZGV4KHNvLCBcIi91c3IvbG9jYWwvXCIpID09IDEpIHsgbmV4dCB9OyBnc3ViKFwiXi8odXNyLyk/XCIsIFwiXCIsIHNvKTsgcHJpbnRmIFwiKiVzXFxuXCIsIHNvIH0nIFx0XHR8IHNvcnQgLXUgXHRcdHwgeGFyZ3MgLXJ0IGRwa2ctcXVlcnkgLS1zZWFyY2ggXHRcdHwgYXdrICdzdWIoXCI6JFwiLCBcIlwiLCAkMSkgeyBwcmludCAkMSB9JyBcdFx0fCBzb3J0IC11IFx0XHR8IHhhcmdzIC1yIGFwdC1tYXJrIG1hbnVhbCBcdDsgXHRhcHQtZ2V0IHB1cmdlIC15IC0tYXV0by1yZW1vdmUgLW8gQVBUOjpBdXRvUmVtb3ZlOjpSZWNvbW1lbmRzSW1wb3J0YW50PWZhbHNlOyBcdGFwdC1nZXQgZGlzdC1jbGVhbjsgXHRcdGV4cG9ydCBQWVRIT05ET05UV1JJVEVCWVRFQ09ERT0xOyBcdHB5dGhvbjMgLS12ZXJzaW9uOyBcdFx0cGlwMyBpbnN0YWxsIFx0XHQtLWRpc2FibGUtcGlwLXZlcnNpb24tY2hlY2sgXHRcdC0tbm8tY2FjaGUtZGlyIFx0XHQtLW5vLWNvbXBpbGUgXHRcdCdzZXR1cHRvb2xzPT03OS4wLjEnIFx0XHQnd2hlZWxcdTAwM2MwLjQ2JyBcdDsgXHRwaXAzIC0tdmVyc2lvbiAjIGJ1aWxka2l0IiwiY29tbWVudCI6ImJ1aWxka2l0LmRvY2tlcmZpbGUudjAifSx7ImNyZWF0ZWQiOiIyMDI1LTEwLTMxVDIzOjE3OjIzLjA1Mjc4NzU4OFoiLCJjcmVhdGVkX2J5IjoiUlVOIC9iaW4vc2ggLWMgc2V0IC1ldXg7IFx0Zm9yIHNyYyBpbiBpZGxlMyBwaXAzIHB5ZG9jMyBweXRob24zIHB5dGhvbjMtY29uZmlnOyBkbyBcdFx0ZHN0PVwiJChlY2hvIFwiJHNyY1wiIHwgdHIgLWQgMylcIjsgXHRcdFsgLXMgXCIvdXNyL2xvY2FsL2Jpbi8kc3JjXCIgXTsgXHRcdFsgISAtZSBcIi91c3IvbG9jYWwvYmluLyRkc3RcIiBdOyBcdFx0bG4gLXN2VCBcIiRzcmNcIiBcIi91c3IvbG9jYWwvYmluLyRkc3RcIjsgXHRkb25lICMgYnVpbGRraXQiLCJjb21tZW50IjoiYnVpbGRraXQuZG9ja2VyZmlsZS52MCJ9LHsiY3JlYXRlZCI6IjIwMjUtMTAtMzFUMjM6MTc6MjMuMDUyNzg3NTg4WiIsImNyZWF0ZWRfYnkiOiJDTUQgW1wicHl0aG9uM1wiXSIsImNvbW1lbnQiOiJidWlsZGtpdC5kb2NrZXJmaWxlLnYwIiwiZW1wdHlfbGF5ZXIiOnRydWV9XSwib3MiOiJsaW51eCIsInJvb3RmcyI6eyJ0eXBlIjoibGF5ZXJzIiwiZGlmZl9pZHMiOlsic2hhMjU2OmQ3Yzk3Y2I2ZjFmZTdjYWU5ODI2NDllOWY1NWVmZTIwMTIxMmU4YWNhYTY0YmQ2NjhjMDgzYjIwNGU0ZWZkNGMiLCJzaGEyNTY6NGYyMzc3NTVmYmFlNDE0NzJjYjllMGY4NzRmYTk3YWJiOGQ2ODRmOGZkY2M2YmQ0ODVlZGM4YjYyNjdhOWM5MyIsInNoYTI1NjoyOTg5OTJlMDlhMDMxNWE4ZjI2Mzc1YTU1M2YyMTZmNWZhZDNkZWNmMzkyOTU2ZmQyZGU1ZWY3YWExZjhkZmVhIiwic2hhMjU2OmM4ZjZiNTQzMzlhOGI0NDA3MTQwOGJkMzNkZDY5YTlkYzdkYjJlZDljZGJmN2M1MzNiYTA5ZWZlY2RhNWYzM2YiXX19",
+      "repoDigests": [
+        "python@sha256:2d97f6910b16bd338d3060f261f53f144965f755599aab1acda1e13cf1731b1b"
+      ],
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "distro": {
+    "name": "debian",
+    "version": "13.1",
+    "idLike": []
+  },
+  "descriptor": {
+    "name": "grype",
+    "version": "0.122.1",
+    "configuration": {
+      "output": [
+        "json"
+      ],
+      "file": "",
+      "pretty": false,
+      "distro": "",
+      "add-cpes-if-none": false,
+      "output-template-file": "",
+      "check-for-app-update": true,
+      "only-fixed": false,
+      "only-notfixed": false,
+      "ignore-wontfix": "",
+      "platform": "",
+      "search": {
+        "scope": "squashed",
+        "unindexed-archives": false,
+        "indexed-archives": true
+      },
+      "ignore": [
+        {
+          "vulnerability": "",
+          "include-aliases": false,
+          "reason": "",
+          "namespace": "",
+          "fix-state": "",
+          "package": {
+            "name": "kernel-headers",
+            "version": "",
+            "language": "",
+            "type": "rpm",
+            "location": "",
+            "upstream-name": "kernel"
+          },
+          "vex-status": "",
+          "vex-justification": "",
+          "match-type": "exact-indirect-match"
+        },
+        {
+          "vulnerability": "",
+          "include-aliases": false,
+          "reason": "",
+          "namespace": "",
+          "fix-state": "",
+          "package": {
+            "name": "linux(-.*)?-headers-.*",
+            "version": "",
+            "language": "",
+            "type": "deb",
+            "location": "",
+            "upstream-name": "linux.*"
+          },
+          "vex-status": "",
+          "vex-justification": "",
+          "match-type": "exact-indirect-match"
+        },
+        {
+          "vulnerability": "",
+          "include-aliases": false,
+          "reason": "",
+          "namespace": "",
+          "fix-state": "",
+          "package": {
+            "name": "linux-libc-dev",
+            "version": "",
+            "language": "",
+            "type": "deb",
+            "location": "",
+            "upstream-name": "linux"
+          },
+          "vex-status": "",
+          "vex-justification": "",
+          "match-type": "exact-indirect-match"
+        },
+        {
+          "vulnerability": "",
+          "include-aliases": false,
+          "reason": "",
+          "namespace": "",
+          "fix-state": "",
+          "package": {
+            "name": "linux-kbuild-.*",
+            "version": "",
+            "language": "",
+            "type": "deb",
+            "location": "",
+            "upstream-name": "linux.*"
+          },
+          "vex-status": "",
+          "vex-justification": "",
+          "match-type": "exact-indirect-match"
+        }
+      ],
+      "exclude": [],
+      "externalSources": {
+        "enable": false,
+        "maven": {
+          "searchUpstreamBySha1": true,
+          "baseUrl": "https://search.maven.org/solrsearch/select",
+          "rateLimit": 300000000
+        }
+      },
+      "match": {
+        "java": {
+          "using-cpes": false
+        },
+        "jvm": {
+          "using-cpes": true
+        },
+        "dotnet": {
+          "using-cpes": false
+        },
+        "golang": {
+          "using-cpes": false,
+          "always-use-cpe-for-stdlib": false,
+          "allow-main-module-pseudo-version-comparison": false
+        },
+        "javascript": {
+          "using-cpes": false
+        },
+        "python": {
+          "using-cpes": false
+        },
+        "ruby": {
+          "using-cpes": false
+        },
+        "rust": {
+          "using-cpes": false
+        },
+        "hex": {
+          "using-cpes": false
+        },
+        "stock": {
+          "using-cpes": true
+        },
+        "dpkg": {
+          "using-cpes": false,
+          "missing-epoch-strategy": "zero",
+          "use-cpes-for-eol": false
+        },
+        "rpm": {
+          "using-cpes": false,
+          "missing-epoch-strategy": "auto",
+          "use-cpes-for-eol": false
+        }
+      },
+      "fail-on-severity": "",
+      "registry": {
+        "insecure-skip-tls-verify": false,
+        "insecure-use-http": false,
+        "ca-cert": ""
+      },
+      "show-suppressed": false,
+      "include-matcher-suppressions": false,
+      "by-cve": false,
+      "SortBy": {
+        "sort-by": "risk"
+      },
+      "name": "",
+      "default-image-pull-source": "",
+      "from": null,
+      "vex-documents": [],
+      "vex-add": [],
+      "match-upstream-kernel-headers": false,
+      "fix-channel": {
+        "redhat-eus": {
+          "apply": "auto",
+          "versions": ">= 8.0"
+        },
+        "ubuntu-esm": {
+          "apply": "auto",
+          "versions": ""
+        }
+      },
+      "timestamp": true,
+      "alerts": {
+        "enable-eol-distro-warnings": true
+      },
+      "db": {
+        "cache-dir": "/grype-db",
+        "update-url": "https://grype.anchore.io/databases",
+        "ca-cert": "",
+        "auto-update": false,
+        "validate-by-hash-on-start": true,
+        "validate-age": true,
+        "max-allowed-built-age": 432000000000000,
+        "require-update-check": false,
+        "update-available-timeout": 30000000000,
+        "update-download-timeout": 300000000000,
+        "max-update-check-frequency": 7200000000000
+      },
+      "exp": {},
+      "dev": {
+        "db": {
+          "debug": false
+        }
+      }
+    },
+    "db": {
+      "status": {
+        "schemaVersion": "v6.1.10",
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-11-24T00:20:31Z_1795501325.tar.zst?checksum=sha256%3Afdf0cdec0b112f6769c3fd38cd5f992a3bb6162a4ab2fe30d639d14ae41ea8a9",
+        "built": "2026-11-24T06:22:05Z",
+        "path": "/grype-db/6/vulnerability.db",
+        "valid": true
+      },
+      "providers": {
+        "alma": {
+          "captured": "2026-11-24T00:20:56Z",
+          "input": "xxh64:a180306c12e1d339"
+        },
+        "alpine": {
+          "captured": "2026-11-24T00:20:35Z",
+          "input": "xxh64:2eeb219779f42b6f"
+        },
+        "amazon": {
+          "captured": "2026-11-24T00:21:06Z",
+          "input": "xxh64:438f7e80d05fcd53"
+        },
+        "arch": {
+          "captured": "2026-11-24T00:20:40Z",
+          "input": "xxh64:a8599839332d1869"
+        },
+        "bitnami": {
+          "captured": "2026-11-24T00:21:04Z",
+          "input": "xxh64:d540bd80761c0dff"
+        },
+        "chainguard": {
+          "captured": "2026-11-24T00:20:46Z",
+          "input": "xxh64:46e316d6dac178ea"
+        },
+        "chainguard-libraries": {
+          "captured": "2026-11-24T00:20:42Z",
+          "input": "xxh64:a422c58f5e8ce55e"
+        },
+        "debian": {
+          "captured": "2026-11-24T00:21:18Z",
+          "input": "xxh64:513b631109244bfa"
+        },
+        "dhi": {
+          "captured": "2026-11-24T00:20:55Z",
+          "input": "xxh64:225397d91aa617f4"
+        },
+        "echo": {
+          "captured": "2026-11-24T00:20:33Z",
+          "input": "xxh64:48a73d9e82983a8f"
+        },
+        "eol": {
+          "captured": "2026-11-24T00:20:39Z",
+          "input": "xxh64:a245ba94d9412197"
+        },
+        "epss": {
+          "captured": "2026-11-24T00:20:47Z",
+          "input": "xxh64:1a514e12a94b918b"
+        },
+        "fedora": {
+          "captured": "2026-11-24T00:20:37Z",
+          "input": "xxh64:bd29d0db8fbc91a5"
+        },
+        "github": {
+          "captured": "2026-11-24T00:20:59Z",
+          "input": "xxh64:91710fc1f56d2f2e"
+        },
+        "govulndb": {
+          "captured": "2026-11-24T00:20:36Z",
+          "input": "xxh64:4f09d57c80eb1d10"
+        },
+        "hummingbird": {
+          "captured": "2026-11-24T00:23:39Z",
+          "input": "xxh64:7eb7c7de72eb2c07"
+        },
+        "kev": {
+          "captured": "2026-11-24T00:20:55Z",
+          "input": "xxh64:c1fbaf39ed03910f"
+        },
+        "mariner": {
+          "captured": "2026-11-24T00:20:43Z",
+          "input": "xxh64:e3b99f7f64ce1bbc"
+        },
+        "minimos": {
+          "captured": "2026-11-24T00:20:43Z",
+          "input": "xxh64:f7b4accff97f8836"
+        },
+        "nvd": {
+          "captured": "2026-11-24T00:22:15Z",
+          "input": "xxh64:65a21a341aa251d8"
+        },
+        "oracle": {
+          "captured": "2026-11-24T00:20:51Z",
+          "input": "xxh64:1d942cb121627409"
+        },
+        "photon": {
+          "captured": "2026-11-24T00:20:58Z",
+          "input": "xxh64:85a27d35b0c8d398"
+        },
+        "rhel": {
+          "captured": "2026-11-24T01:30:04Z",
+          "input": "xxh64:43f66c5def1f3892"
+        },
+        "secureos": {
+          "captured": "2026-11-24T00:20:31Z",
+          "input": "xxh64:f5220e63c18dc227"
+        },
+        "sles": {
+          "captured": "2026-11-24T00:23:07Z",
+          "input": "xxh64:1a689fb9d5ef0c7f"
+        },
+        "ubuntu": {
+          "captured": "2026-11-24T00:21:58Z",
+          "input": "xxh64:f32cc237cba244d1"
+        },
+        "wolfi": {
+          "captured": "2026-11-24T00:20:45Z",
+          "input": "xxh64:3710b2196c520792"
+        }
+      }
+    },
+    "timestamp": "2026-11-24T08:52:01.238587471Z"
+  }
+}

@@ -1,3 +1,4 @@
+
 name: InfraScan Audit
 
 on:
@@ -10,14 +11,38 @@ permissions:
   contents: read
 
 jobs:
-  infrascan:
+  tests:
+    name: Run unit tests
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q
+
+  infrascan:
+    name: Run InfraScan audit
+    needs: tests
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # action.yml runs the image released with it; a release bumps that tag
-      # together with __version__, so a mismatch means one was missed.
+      # Ensure that action.yml uses the matching CLI image version.
       - name: Check the action's image matches the CLI version
         run: |
           version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' cli.py)
@@ -26,11 +51,10 @@ jobs:
             exit 1
           fi
 
-      # Scan with the image built from this branch, not the released one
+      # Build the image only after all unit tests pass.
       - name: Build InfraScan image from current branch
         run: docker build -t soldevelo/infrascan:ci .
 
-      # ── Scan ─────────────────────────────────────────────────────────────────
       - name: Run InfraScan
         uses: ./
         with:
@@ -44,7 +68,6 @@ jobs:
           max-pr-findings: 10
           min-cost-delta: 0
 
-      # ── Upload full HTML report ─────────────────────────────────────────────
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         if: always()
@@ -52,4 +75,3 @@ jobs:
           name: infrascan-report
           path: infrascan-report.html
           retention-days: 14
-

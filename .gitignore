@@ -62,3 +62,11 @@ scan_results/
 data/feedback.json
 data/subscribers.json
 
+# Python and pytest cache directories
+__pycache__/
+.pytest_cache/
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
