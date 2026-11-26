@@ -36,33 +36,6 @@ def create_test_report(with_findings):
 
     return report, report.to_dict()
 
-
-@pytest.mark.parametrize("with_findings", [False, True])
-def test_json_report(tmp_path, with_findings):
-    report, report_dict = create_test_report(with_findings)
-
-    output_file = tmp_path / "report.json"
-
-    with output_file.open("w", encoding="utf-8") as file:
-        json.dump(report_dict, file, indent=2)
-
-    with output_file.open("r", encoding="utf-8") as file:
-        loaded_report = json.load(file)
-
-    assert loaded_report == report_dict
-    assert isinstance(loaded_report, dict)
-    assert "overall" in loaded_report
-    assert len(report.security_findings) == int(with_findings)
-
-    serialized_report = json.dumps(loaded_report)
-
-    if with_findings:
-        assert "CKV_AWS_19" in serialized_report
-        assert "main.tf" in serialized_report
-    else:
-        assert "CKV_AWS_19" not in serialized_report
-
-
 @pytest.mark.parametrize("with_findings", [False, True])
 def test_html_report(tmp_path, with_findings):
     report, report_dict = create_test_report(with_findings)

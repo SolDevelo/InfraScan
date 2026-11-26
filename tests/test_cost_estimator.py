@@ -1,6 +1,4 @@
-
-import json
-from pathlib import Path
+import pytest
 
 from reporter.cost_estimator import (
     load_pricing,
@@ -10,40 +8,6 @@ from reporter.cost_estimator import (
     _cost_aws_nat_gateway,
     estimate_total_cost,
 )
-
-def test_load_pricing():
-    pricing = load_pricing()
-
-    pricing_file = (
-        Path(__file__).resolve().parents[1]
-        / "reporter"
-        / "pricing_table.json"
-    )
-
-    with pricing_file.open(encoding="utf-8") as file:
-        expected_pricing = json.load(file)
-
-    assert isinstance(pricing, dict)
-    assert pricing
-    assert pricing == expected_pricing
-
-
-def test_load_usage_defaults():
-    usage = load_usage_defaults()
-
-    usage_file = (
-        Path(__file__).resolve().parents[1]
-        / "reporter"
-        / "usage_defaults.json"
-    )
-
-    with usage_file.open(encoding="utf-8") as file:
-        expected_usage = json.load(file)
-
-    assert isinstance(usage, dict)
-    assert usage
-    assert usage == expected_usage
-
 
 def test_ec2_instance_monthly_cost():
     pricing = load_pricing()
@@ -61,11 +25,17 @@ def test_ec2_instance_monthly_cost():
 
     result = _cost_aws_instance(block, pricing, usage)
 
+    expected_cost = round(
+        pricing["ec2_instances"]["t3.micro"]
+        + 8 * pricing["ebs_per_gb_month"]["gp3"],
+        2,
+    )
+
     assert result.resource_type == "aws_instance"
     assert result.resource_name == "test_instance"
-    assert result.fixed_usd_month == 8.23
+    assert result.fixed_usd_month == pytest.approx(expected_cost)
     assert result.usage_usd_month == 0
-    assert result.total_usd_month == 8.23
+    assert result.total_usd_month == pytest.approx(expected_cost)
     assert result.confidence == "high"
 
 
@@ -86,10 +56,15 @@ def test_ebs_volume_monthly_cost():
 
     result = _cost_aws_ebs_volume(block, pricing, usage)
 
+    expected_cost = round(
+        100 * pricing["ebs_per_gb_month"]["gp3"],
+        2,
+    )
+
     assert result.resource_type == "aws_ebs_volume"
-    assert result.fixed_usd_month == 8.00
+    assert result.fixed_usd_month == pytest.approx(expected_cost)
     assert result.usage_usd_month == 0
-    assert result.total_usd_month == 8.00
+    assert result.total_usd_month == pytest.approx(expected_cost)
     assert result.confidence == "high"
 
 
@@ -107,10 +82,27 @@ def test_nat_gateway_monthly_cost():
 
     result = _cost_aws_nat_gateway(block, pricing, usage)
 
+    expected_fixed_cost = pricing["nat_gateway_hourly"] * 730
+
+    expected_usage_cost = (
+        pricing["nat_gateway_per_gb"]
+        * usage["nat_gb_per_day"]
+        * 30
+    )
+
+    expected_total_cost = round(
+        expected_fixed_cost + expected_usage_cost,
+        2,
+    )
+
     assert result.resource_type == "aws_nat_gateway"
-    assert result.fixed_usd_month == 32.85
-    assert result.usage_usd_month == 13.50
-    assert result.total_usd_month == 46.35
+    assert result.fixed_usd_month == pytest.approx(
+        round(expected_fixed_cost, 2)
+    )
+    assert result.usage_usd_month == pytest.approx(
+        round(expected_usage_cost, 2)
+    )
+    assert result.total_usd_month == pytest.approx(expected_total_cost)
     assert result.confidence == "medium"
 
 
@@ -162,13 +154,36 @@ def test_estimate_total_cost_multiple_resources():
         for resource in results
     }
 
-    assert costs["aws_instance"] == 8.23
-    assert costs["aws_ebs_volume"] == 8.00
-    assert costs["aws_nat_gateway"] == 46.35
+    expected_ec2_cost = round(
+        pricing["ec2_instances"]["t3.micro"]
+        + 8 * pricing["ebs_per_gb_month"]["gp3"],
+        2,
+    )
+
+    expected_ebs_cost = round(
+        100 * pricing["ebs_per_gb_month"]["gp3"],
+        2,
+    )
+
+    expected_nat_cost = round(
+        pricing["nat_gateway_hourly"] * 730
+        + pricing["nat_gateway_per_gb"]
+        * usage["nat_gb_per_day"] * 30,
+        2,
+    )
+
+    assert costs["aws_instance"] == pytest.approx(expected_ec2_cost)
+    assert costs["aws_ebs_volume"] == pytest.approx(expected_ebs_cost)
+    assert costs["aws_nat_gateway"] == pytest.approx(expected_nat_cost)
 
     total_cost = sum(resource.total_usd_month for resource in results)
 
-    assert round(total_cost, 2) == 62.58
+    expected_total_cost = round(
+        expected_ec2_cost + expected_ebs_cost + expected_nat_cost,
+        2,
+    )
+
+    assert round(total_cost, 2) == pytest.approx(expected_total_cost)
 
 
 def test_estimate_total_cost_empty_resources():

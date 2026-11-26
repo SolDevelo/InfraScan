@@ -10,15 +10,42 @@ def make_args(fail_on):
     return SimpleNamespace(fail_on=fail_on)
 
 
-def make_finding(rule_id, severity):
+def make_finding(rule_id, severity, file="main.tf", line=1):
     return {
         "rule_id": rule_id,
         "severity": severity,
+        "file": file,
+        "line": line,
     }
-
 
 def make_report(letter="A"):
     return {"overall": {"letter": letter}}
+
+def make_baseline(security=(), container=(), cost=()):
+    """Create a baseline matching the stored JSON report structure."""
+    return {
+        "overall": {"letter": "B"},
+        "findings": {
+            "security": list(security),
+            "container": list(container),
+            "cost": list(cost),
+        },
+    }
+
+
+REPORT = make_report()
+
+BASELINE = make_baseline(
+    security=[
+        make_finding("CKV_AWS_19", "High", "main.tf", line=10)
+    ],
+    container=[
+        make_finding("CVE-2025-0001", "Critical", "compose.yml", line=3)
+    ],
+    cost=[
+        make_finding("COST-009", "Medium", "storage.tf", line=7)
+    ],
+)
 
 
 @pytest.mark.parametrize("findings", [
@@ -110,46 +137,119 @@ def test_fail_on_new_without_baseline(fail_on):
 
 
 @pytest.mark.parametrize(
-    "fail_on, rule_id, severity, expected",
+    "fail_on, finding, expected",
     [
-        ("new_any", "OLD-001", "Critical", False),
-        ("new_any", "NEW-001", "Low", True),
-        ("new_high_critical", "NEW-001", "Medium", False),
-        ("new_high_critical", "NEW-001", "High", True),
-        ("new_critical", "NEW-001", "High", False),
-        ("new_critical", "NEW-001", "Critical", True),
-        ("new_critical", "OLD-001", "Critical", False),
+        # Same rule and file: not new, even if the line changed.
+        (
+            "new_any",
+            make_finding("CKV_AWS_19", "High", "main.tf", line=42),
+            False,
+        ),
+
+        # Existing findings in other report categories.
+        (
+            "new_any",
+            make_finding("CVE-2025-0001", "Critical", "compose.yml"),
+            False,
+        ),
+        (
+            "new_any",
+            make_finding("COST-009", "Medium", "storage.tf"),
+            False,
+        ),
+
+        # Same rule in a different file is a new finding.
+        (
+            "new_any",
+            make_finding("CKV_AWS_19", "High", "other.tf"),
+            True,
+        ),
+
+        # Unknown rule in an existing file is a new finding.
+        (
+            "new_any",
+            make_finding("CKV_AWS_20", "Low", "main.tf"),
+            True,
+        ),
+
+        # Severity thresholds apply to new findings.
+        (
+            "new_high_critical",
+            make_finding("CKV_AWS_20", "Medium", "main.tf"),
+            False,
+        ),
+        (
+            "new_high_critical",
+            make_finding("CKV_AWS_20", "HIGH", "main.tf"),
+            True,
+        ),
+        (
+            "new_critical",
+            make_finding("CKV_AWS_20", "High", "main.tf"),
+            False,
+        ),
+        (
+            "new_critical",
+            make_finding("CKV_AWS_20", "critical", "main.tf"),
+            True,
+        ),
+
+        # An existing critical finding must not fail new_critical.
+        (
+            "new_critical",
+            make_finding("CVE-2025-0001", "Critical", "compose.yml"),
+            False,
+        ),
     ],
 )
-def test_fail_on_new_findings(
-    monkeypatch, fail_on, rule_id, severity, expected
-):
-    from reporter import cost_estimator
-
-    monkeypatch.setattr(
-        cost_estimator,
-        "finding_key",
-        lambda finding: finding["rule_id"],
-    )
-
-    monkeypatch.setattr(
-        cost_estimator,
-        "baseline_finding_keys",
-        lambda baseline: set(baseline["keys"]),
-    )
-
-    baseline = {"keys": ["OLD-001"]}
-    findings = [make_finding(rule_id, severity)]
-
+def test_fail_on_new_findings(fail_on, finding, expected):
     result = should_fail(
         make_args(fail_on),
-        make_report(),
-        findings,
-        baseline=baseline,
+        REPORT,
+        [finding],
+        baseline=BASELINE,
     )
 
     assert result is expected
 
+
+def test_fail_on_new_uses_check_id_when_rule_id_missing():
+    baseline = make_baseline(
+        security=[
+            {
+                "check_id": "CKV_AWS_19",
+                "file": "main.tf",
+            }
+        ]
+    )
+
+    finding = {
+        "check_id": "CKV_AWS_19",
+        "file": "main.tf",
+        "severity": "Critical",
+    }
+
+    result = should_fail(
+        make_args("new_any"),
+        REPORT,
+        [finding],
+        baseline=baseline,
+    )
+
+    assert result is False
+
+
+def test_fail_on_new_with_clean_baseline_treats_everything_as_new():
+    finding = make_finding("CKV_AWS_19", "Low")
+
+    result = should_fail(
+        make_args("new_any"),
+        REPORT,
+        [finding],
+        baseline=make_baseline(),
+    )
+
+    assert result is True
 
 @pytest.mark.parametrize("severity, expected", [
     ("Critical", True),
