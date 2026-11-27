@@ -17,3 +17,7 @@ feedback/
 .env
 .env.*
 report.html
+
+# Exclude unit test files from the production Docker image
+tests/
+pytest.ini
